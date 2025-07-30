@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bike, LayoutDashboard, Shield, ShoppingCart, Store, MessageSquare } from "lucide-react";
+import { Bike, LayoutDashboard, Shield, ShoppingCart, Store, MessageSquare, Heart } from "lucide-react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
@@ -26,6 +26,10 @@ export default function AppLayout({
     { href: "/messages", label: "Messages", icon: MessageSquare },
   ];
 
+  const secondaryNavItems = [
+     { href: "/buyer/wishlist", label: "Wishlist", icon: Heart },
+  ]
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen">
@@ -42,7 +46,7 @@ export default function AppLayout({
                     <SidebarMenuItem key={item.href}>
                         <Link href={item.href}>
                             <SidebarMenuButton 
-                                isActive={getIsActive(item.href)} 
+                                isActive={getIsActive(item.href) && item.href !== '/buyer' || pathname === '/buyer'} 
                                 tooltip={{ children: item.label, side: "right", align: "center" }}
                             >
                                 <item.icon />
@@ -50,6 +54,19 @@ export default function AppLayout({
                             </SidebarMenuButton>
                         </Link>
                     </SidebarMenuItem>
+                    ))}
+                    {secondaryNavItems.map((item) => (
+                        <SidebarMenuItem key={item.href}>
+                            <Link href={item.href}>
+                                <SidebarMenuButton 
+                                    isActive={getIsActive(item.href)}
+                                    tooltip={{ children: item.label, side: "right", align: "center" }}
+                                >
+                                    <item.icon />
+                                    <span>{item.label}</span>
+                                </SidebarMenuButton>
+                            </Link>
+                        </SidebarMenuItem>
                     ))}
                 </SidebarMenu>
                 <SidebarFooter>

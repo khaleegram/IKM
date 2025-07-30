@@ -1,9 +1,10 @@
 
 'use client';
 
+import React, { useState } from 'react';
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Star, Minus, Plus, ShoppingCart, MessageSquare } from "lucide-react";
+import { ArrowLeft, Star, Minus, Plus, ShoppingCart, MessageSquare, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
@@ -15,11 +16,20 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 export default function ProductDetailPage({ params }: { params: { id: string } }) {
 
   const { toast } = useToast();
+  const [isWishlisted, setIsWishlisted] = useState(false);
 
   const handleAddToCart = () => {
     toast({
       title: "✅ Item added to cart!",
       duration: 3000,
+    });
+  }
+  
+  const handleWishlistToggle = () => {
+    setIsWishlisted(!isWishlisted);
+    toast({
+        title: !isWishlisted ? "❤️ Added to Wishlist" : "Removed from Wishlist",
+        duration: 2000,
     });
   }
 
@@ -138,7 +148,13 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                   </Button>
                 </div>
               </div>
-              <Button size="lg" className="w-full mt-auto" onClick={handleAddToCart}>Add to Cart</Button>
+              <div className="flex gap-2 mt-auto">
+                <Button size="lg" className="w-full" onClick={handleAddToCart}>Add to Cart</Button>
+                <Button size="lg" variant="outline" onClick={handleWishlistToggle}>
+                  <Heart className={`mr-2 h-5 w-5 transition-colors ${isWishlisted ? "text-destructive fill-destructive" : "text-muted-foreground"}`} />
+                  Save
+                </Button>
+              </div>
             </div>
           </div>
           
