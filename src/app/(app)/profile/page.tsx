@@ -47,12 +47,14 @@ export default function ProfileSettingsPage() {
                 <CardTitle className="font-headline text-xl">Bolu Adekunle</CardTitle>
                 <CardDescription>bolu.adekunle@example.com</CardDescription>
               </div>
-              <Button variant="ghost" size="icon">
-                <Edit className="h-5 w-5" />
-              </Button>
+              <Link href="/profile/edit">
+                <Button variant="ghost" size="icon">
+                  <Edit className="h-5 w-5" />
+                </Button>
+              </Link>
             </CardHeader>
             <CardContent>
-              <Badge variant="secondary">Buyer</Badge>
+              <Badge variant="secondary">Seller</Badge>
             </CardContent>
           </Card>
 

@@ -34,6 +34,7 @@ const adminApprovalsPrompts = ["✔️ Run automated background check?", "🔎 F
 const orderHistoryPrompts = ["💬 I have an issue with an order", "📦 Track my ongoing order", "🧾 Get an invoice for this purchase."];
 const salesHistoryPrompts = ["📈 Analyze my revenue this month", "💰 Which product is most profitable?", "📦 Print shipping label."];
 const profileSettingsPrompts = ["🔐 Secure my account", "🔔 Customize my notifications", "❓ I have a question about my data."];
+const editProfilePrompts = ["💡 Tips for a good profile photo", "✍️ Help write my store bio"];
 
 
 export function CoPilotChat() {
@@ -61,6 +62,7 @@ export function CoPilotChat() {
     if (pathname.startsWith("/buyer/cart")) return cartPrompts;
     if (pathname.startsWith("/buyer/checkout")) return checkoutPrompts;
     if (pathname.startsWith("/buyer/orders")) return orderHistoryPrompts;
+    if (pathname.startsWith("/profile/edit")) return editProfilePrompts;
     if (pathname.startsWith("/profile")) return profileSettingsPrompts;
     return buyerPrompts;
   };
@@ -89,6 +91,7 @@ export function CoPilotChat() {
             break;
           case "✍️ Help write a product description":
           case "✍️ Help write a compelling title":
+          case "✍️ Help write my store bio":
             setCurrentAction(prompt);
             setFormModalOpen(true);
             return; // Don't add a default response yet
@@ -125,11 +128,11 @@ export function CoPilotChat() {
     startTransition(async () => {
         try {
             let response: React.ReactNode = "I'm sorry, I can't help with that yet.";
-            if (prompt === "✍️ Help write a product description" || prompt === "✍️ Help write a compelling title") {
-                const productName = formData.get('productName') as string;
-                const productCategory = formData.get('productCategory') as string;
-                const keyFeatures = formData.get('keyFeatures') as string;
-                const targetAudience = formData.get('targetAudience') as string;
+            if (prompt === "✍️ Help write a product description" || prompt === "✍️ Help write a compelling title" || prompt === "✍️ Help write my store bio") {
+                const productName = formData.get('productName') as string || formData.get('storeName') as string;
+                const productCategory = formData.get('productCategory') as string || 'Seller Profile';
+                const keyFeatures = formData.get('keyFeatures') as string || formData.get('storeBio') as string;
+                const targetAudience = formData.get('targetAudience') as string || 'Customers';
                 response = await getProductDescription({ productName, productCategory, keyFeatures, targetAudience });
             }
             setMessages(prev => [...prev, { role: "assistant", content: response as string }]);
@@ -169,6 +172,19 @@ export function CoPilotChat() {
                 <div className="space-y-2">
                   <Label htmlFor="targetAudience">Target Audience</Label>
                   <Input id="targetAudience" name="targetAudience" placeholder="e.g., Design-conscious professionals" />
+                </div>
+              </div>
+            );
+        case '✍️ Help write my store bio':
+             return (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="storeName">Store Name</Label>
+                  <Input id="storeName" name="storeName" placeholder="e.g., The Artisan Shop" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="storeBio">Current Bio / Key points</Label>
+                  <Textarea id="storeBio" name="storeBio" placeholder="e.g., Handmade goods, African-inspired, modern design" />
                 </div>
               </div>
             );
