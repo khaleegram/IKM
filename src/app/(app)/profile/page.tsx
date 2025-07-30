@@ -14,7 +14,7 @@ const settingsSections = [
         items: [
             { label: "Manage Addresses", href: "#" },
             { label: "Payment & Payouts", href: "#" },
-            { label: "Change Password", href: "#" },
+            { label: "Change Password", href: "/profile/change-password" },
         ]
     },
     {

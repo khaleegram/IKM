@@ -39,6 +39,7 @@ const financialReportsPrompts = ["📈 Forecast next month's revenue", "📊 Com
 const manageUsersPrompts = ["👥 Show users with no activity in 90 days", "🚩 Find all users with multiple accounts."];
 const userDetailPrompts = ["📜 Pull full activity log", "⚖️ Any prior warnings for this user?"];
 const allOrdersPrompts = ["⚠️ Show all disputed orders", "💰 What is the average order value?"];
+const changePasswordPrompts = ["🔐 Generate a strong password for me", "💡 What makes a password strong?"];
 
 
 export function CoPilotChat() {
@@ -71,6 +72,7 @@ export function CoPilotChat() {
     if (pathname.startsWith("/buyer/checkout")) return checkoutPrompts;
     if (pathname.startsWith("/buyer/orders")) return orderHistoryPrompts;
     if (pathname.startsWith("/profile/edit")) return editProfilePrompts;
+    if (pathname.startsWith("/profile/change-password")) return changePasswordPrompts;
     if (pathname.startsWith("/profile")) return profileSettingsPrompts;
     return buyerPrompts;
   };
