@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bike, LayoutDashboard, Shield, ShoppingCart, Store } from "lucide-react";
+import { Bike, LayoutDashboard, Shield, ShoppingCart, Store, User } from "lucide-react";
 
-import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset } from "@/components/ui/sidebar";
+import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
 import { CoPilotWidget } from "@/components/copilot-widget";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export default function AppLayout({
   children,
@@ -49,6 +50,23 @@ export default function AppLayout({
                     </SidebarMenuItem>
                     ))}
                 </SidebarMenu>
+                <SidebarFooter>
+                    <SidebarMenu>
+                        <SidebarMenuItem>
+                             <Link href="/profile">
+                                <SidebarMenuButton 
+                                    isActive={getIsActive("/profile")}
+                                    tooltip={{ children: "Profile & Settings", side: "right", align: "center" }}
+                                >
+                                    <Avatar className="w-7 h-7">
+                                        <AvatarFallback>B</AvatarFallback>
+                                    </Avatar>
+                                    <span>Profile</span>
+                                </SidebarMenuButton>
+                            </Link>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
+                </SidebarFooter>
             </div>
         </Sidebar>
         <SidebarInset className="flex-1">

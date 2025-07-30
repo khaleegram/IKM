@@ -33,6 +33,7 @@ const activeDeliveryPrompts = ["🚧 Report traffic?", "💬 Send ETA update to 
 const adminApprovalsPrompts = ["✔️ Run automated background check?", "🔎 Flag any issues with these documents?", "💬 Send 'More Info Required' message."];
 const orderHistoryPrompts = ["💬 I have an issue with an order", "📦 Track my ongoing order", "🧾 Get an invoice for this purchase."];
 const salesHistoryPrompts = ["📈 Analyze my revenue this month", "💰 Which product is most profitable?", "📦 Print shipping label."];
+const profileSettingsPrompts = ["🔐 Secure my account", "🔔 Customize my notifications", "❓ I have a question about my data."];
 
 
 export function CoPilotChat() {
@@ -60,6 +61,7 @@ export function CoPilotChat() {
     if (pathname.startsWith("/buyer/cart")) return cartPrompts;
     if (pathname.startsWith("/buyer/checkout")) return checkoutPrompts;
     if (pathname.startsWith("/buyer/orders")) return orderHistoryPrompts;
+    if (pathname.startsWith("/profile")) return profileSettingsPrompts;
     return buyerPrompts;
   };
 
