@@ -1,3 +1,4 @@
+
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -23,6 +24,8 @@ const buyerPrompts = ["🔍 Find a product for me", "📦 Track my order", "⚖�
 const sellerPrompts = ["✍️ Help write a product description", "📈 Analyze my sales", "💡 Suggest a price"];
 const riderPrompts = ["💵 Summarize my earnings", "🗺️ Find the fastest route", "📊 Show peak hours in my area"];
 const adminPrompts = ["🚩 Flag suspicious activity", "💹 Summarize platform revenue"];
+const productDetailPrompts = ["🤔 Any discounts for this item?", "⭐ Summarize the reviews", "↔️ Show me similar products"];
+
 
 export function CoPilotChat() {
   const pathname = usePathname();
@@ -41,6 +44,7 @@ export function CoPilotChat() {
     if (pathname.startsWith("/seller")) return sellerPrompts;
     if (pathname.startsWith("/rider")) return riderPrompts;
     if (pathname.startsWith("/admin")) return adminPrompts;
+    if (pathname.startsWith("/buyer/product/")) return productDetailPrompts;
     return buyerPrompts;
   };
 

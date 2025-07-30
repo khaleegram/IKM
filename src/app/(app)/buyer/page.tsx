@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -77,25 +78,27 @@ export default function BuyerPage() {
       <main className="flex-1 overflow-auto p-4 sm:p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {products.map((product) => (
-            <Card key={product.id} className="overflow-hidden transition-shadow hover:shadow-lg">
-              <CardHeader className="p-0">
-                <Image
-                  src={product.image}
-                  alt={product.name}
-                  width={600}
-                  height={400}
-                  className="object-cover w-full h-48"
-                  data-ai-hint={product.hint}
-                />
-              </CardHeader>
-              <CardContent className="p-4">
-                <CardTitle className="text-lg font-semibold font-headline">{product.name}</CardTitle>
-              </CardContent>
-              <CardFooter className="p-4 pt-0 flex justify-between items-center">
-                <p className="font-semibold text-primary">{product.price}</p>
-                <Button>Add to Cart</Button>
-              </CardFooter>
-            </Card>
+            <Link key={product.id} href={`/buyer/product/${product.id}`}>
+              <Card className="overflow-hidden transition-shadow hover:shadow-lg h-full flex flex-col">
+                <CardHeader className="p-0">
+                  <Image
+                    src={product.image}
+                    alt={product.name}
+                    width={600}
+                    height={400}
+                    className="object-cover w-full h-48"
+                    data-ai-hint={product.hint}
+                  />
+                </CardHeader>
+                <CardContent className="p-4 flex-grow">
+                  <CardTitle className="text-lg font-semibold font-headline">{product.name}</CardTitle>
+                </CardContent>
+                <CardFooter className="p-4 pt-0 flex justify-between items-center">
+                  <p className="font-semibold text-primary">{product.price}</p>
+                  <Button onClick={(e) => { e.preventDefault(); /* Add to cart logic */ }}>Add to Cart</Button>
+                </CardFooter>
+              </Card>
+            </Link>
           ))}
         </div>
       </main>
