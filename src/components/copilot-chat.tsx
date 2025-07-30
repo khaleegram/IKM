@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -31,6 +32,7 @@ const addProductPrompts = ["✍️ Help write a compelling title", "💡 Suggest
 const activeDeliveryPrompts = ["🚧 Report traffic?", "💬 Send ETA update to buyer?", "🆘 I need help with this delivery."];
 const adminApprovalsPrompts = ["✔️ Run automated background check?", "🔎 Flag any issues with these documents?", "💬 Send 'More Info Required' message."];
 const orderHistoryPrompts = ["💬 I have an issue with an order", "📦 Track my ongoing order", "🧾 Get an invoice for this purchase."];
+const salesHistoryPrompts = ["📈 Analyze my revenue this month", "💰 Which product is most profitable?", "📦 Print shipping label."];
 
 
 export function CoPilotChat() {
@@ -50,6 +52,7 @@ export function CoPilotChat() {
     if (pathname.startsWith("/admin/pending-approvals")) return adminApprovalsPrompts;
     if (pathname.startsWith("/rider/active-delivery")) return activeDeliveryPrompts;
     if (pathname.startsWith("/seller/add-product")) return addProductPrompts;
+    if (pathname.startsWith("/seller/sales-history")) return salesHistoryPrompts;
     if (pathname.startsWith("/seller")) return sellerPrompts;
     if (pathname.startsWith("/rider")) return riderPrompts;
     if (pathname.startsWith("/admin")) return adminPrompts;
