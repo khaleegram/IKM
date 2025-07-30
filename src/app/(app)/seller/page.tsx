@@ -1,4 +1,5 @@
 
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DollarSign, Package, PlusCircle, BarChart2 } from "lucide-react";
@@ -23,10 +24,12 @@ export default async function SellerPage() {
             <h1 className="text-2xl font-bold font-headline">Seller Hub: The Artisan Shop</h1>
             <p className="text-muted-foreground">Your command center for managing your products and sales.</p>
           </div>
-          <Button>
-            <PlusCircle className="mr-2" />
-            Add New Product
-          </Button>
+          <Link href="/seller/add-product">
+            <Button>
+              <PlusCircle className="mr-2" />
+              Add New Product
+            </Button>
+          </Link>
         </div>
       </header>
       <main className="flex-1 overflow-auto p-4 sm:p-6">
