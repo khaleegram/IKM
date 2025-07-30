@@ -1,12 +1,24 @@
 
+'use client';
+
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Star, Minus, Plus } from "lucide-react";
+import { ArrowLeft, Star, Minus, Plus, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProductDetailPage({ params }: { params: { id: string } }) {
+
+  const { toast } = useToast();
+
+  const handleAddToCart = () => {
+    toast({
+      title: "✅ Item added to cart!",
+      duration: 3000,
+    });
+  }
 
   // Mock data - in a real app, you'd fetch this based on params.id
   const product = {
@@ -26,13 +38,21 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
 
   return (
     <div className="flex flex-col h-full">
-      <header className="p-4 sm:p-6 border-b flex items-center gap-4">
-        <Link href="/buyer">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft />
-          </Button>
-        </Link>
-        <h1 className="text-xl font-bold font-headline">Product Details</h1>
+      <header className="p-4 sm:p-6 border-b flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/buyer">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft />
+              </Button>
+            </Link>
+            <h1 className="text-xl font-bold font-headline">Product Details</h1>
+          </div>
+          <Link href="/buyer/cart">
+            <Button variant="ghost" size="icon">
+                <ShoppingCart />
+                <span className="sr-only">Shopping Cart</span>
+            </Button>
+          </Link>
       </header>
       <main className="flex-1 overflow-auto p-4 sm:p-6">
         <div className="max-w-4xl mx-auto">
@@ -91,7 +111,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                   </Button>
                 </div>
               </div>
-              <Button size="lg" className="w-full mt-auto">Add to Cart</Button>
+              <Button size="lg" className="w-full mt-auto" onClick={handleAddToCart}>Add to Cart</Button>
             </div>
           </div>
         </div>

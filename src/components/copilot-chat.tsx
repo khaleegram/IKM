@@ -25,6 +25,7 @@ const sellerPrompts = ["✍️ Help write a product description", "📈 Analyze 
 const riderPrompts = ["💵 Summarize my earnings", "🗺️ Find the fastest route", "📊 Show peak hours in my area"];
 const adminPrompts = ["🚩 Flag suspicious activity", "💹 Summarize platform revenue"];
 const productDetailPrompts = ["🤔 Any discounts for this item?", "⭐ Summarize the reviews", "↔️ Show me similar products"];
+const cartPrompts = ["💸 Can I apply a coupon?", "🚚 Estimate delivery fee?", "🤔 Help me with my order."];
 
 
 export function CoPilotChat() {
@@ -45,6 +46,7 @@ export function CoPilotChat() {
     if (pathname.startsWith("/rider")) return riderPrompts;
     if (pathname.startsWith("/admin")) return adminPrompts;
     if (pathname.startsWith("/buyer/product/")) return productDetailPrompts;
+    if (pathname.startsWith("/buyer/cart")) return cartPrompts;
     return buyerPrompts;
   };
 
