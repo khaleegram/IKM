@@ -42,6 +42,7 @@ const allOrdersPrompts = ["⚠️ Show all disputed orders", "💰 What is the a
 const changePasswordPrompts = ["🔐 Generate a strong password for me", "💡 What makes a password strong?"];
 const orderDetailsPrompts = ["📨 Email a copy of this invoice", "⭐ Rate this seller & rider", "🔄 I need to return an item."];
 const messagesPrompts = ["✍️ Suggest a reply", "✅ Is this a good price to offer?", "❓ Ask about shipping"];
+const writeReviewPrompts = ["💡 What makes a good review?", "✍️ Help me describe the quality", "✅ Check my review for clarity."];
 
 
 export function CoPilotChat() {
@@ -58,6 +59,7 @@ export function CoPilotChat() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const getPrompts = () => {
+    if (pathname.startsWith("/buyer/write-review")) return writeReviewPrompts;
     if (pathname.startsWith("/messages")) return messagesPrompts;
     if (pathname.startsWith("/buyer/orders/")) return orderDetailsPrompts;
     if (pathname.startsWith("/admin/manage-users/")) return userDetailPrompts;

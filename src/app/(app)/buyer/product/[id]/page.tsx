@@ -5,9 +5,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Star, Minus, Plus, ShoppingCart, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { useToast } from "@/hooks/use-toast";
+import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 
 export default function ProductDetailPage({ params }: { params: { id: string } }) {
 
@@ -36,6 +39,23 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       "https://placehold.co/600x600.png",
     ]
   };
+
+  const reviews = [
+      {
+          id: 1,
+          author: 'Binta A.',
+          rating: 5,
+          date: '2 weeks ago',
+          text: 'Absolutely love this watch! The quality is amazing for the price. It looks even better in person. Shipping was fast too.'
+      },
+      {
+          id: 2,
+          author: 'Chinedu E.',
+          rating: 4,
+          date: '1 month ago',
+          text: 'Great watch, very stylish and comfortable. The leather strap is a bit stiff at first but softens up nicely. Good value.'
+      }
+  ]
 
   return (
     <div className="flex flex-col h-full">
@@ -121,6 +141,45 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
               <Button size="lg" className="w-full mt-auto" onClick={handleAddToCart}>Add to Cart</Button>
             </div>
           </div>
+          
+          <Separator className="my-8" />
+
+          <Card>
+            <CardHeader>
+                <CardTitle className="font-headline text-xl">Ratings & Reviews</CardTitle>
+                <div className="flex items-center gap-2 pt-2">
+                    <div className="flex items-center gap-0.5">
+                    {[...Array(5)].map((_, i) => (
+                        <Star key={i} className={`w-5 h-5 ${i < Math.floor(product.rating) ? 'text-accent fill-accent' : 'text-muted-foreground/50'}`} />
+                    ))}
+                    </div>
+                    <span className="text-muted-foreground text-sm">Overall {product.rating} from {product.reviews} reviews</span>
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                {reviews.map((review) => (
+                    <div key={review.id} className="grid gap-4">
+                        <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                                <AvatarFallback>{review.author.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                                <p className="font-semibold">{review.author}</p>
+                                <div className="flex items-center gap-2">
+                                     <div className="flex items-center gap-0.5">
+                                        {[...Array(5)].map((_, i) => (
+                                            <Star key={i} className={`w-4 h-4 ${i < review.rating ? 'text-accent fill-accent' : 'text-muted-foreground/50'}`} />
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">{review.date}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{review.text}</p>
+                    </div>
+                ))}
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>

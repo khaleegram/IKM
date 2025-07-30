@@ -4,7 +4,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Download, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Download, HelpCircle, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -25,6 +25,7 @@ const orderData = {
   vatRate: 0.075,
   paymentMethod: 'Visa',
   paymentCard: '**** 4242',
+  status: 'Completed'
 };
 
 export default function OrderDetailsPage({ params }: { params: { id: string } }) {
@@ -124,7 +125,13 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
                     <Button variant="outline" className="w-full sm:w-auto">
                         <HelpCircle className="mr-2" /> Get Help With Order
                     </Button>
-                    <Button className="w-full sm:w-auto ml-auto" variant="secondary">Rate this transaction</Button>
+                     {orderData.status === 'Completed' && (
+                        <Link href={`/buyer/write-review/${orderData.id}`} className="w-full sm:w-auto ml-auto">
+                            <Button className="w-full sm:w-auto">
+                                <Star className="mr-2 h-4 w-4" /> Rate & Review This Order
+                            </Button>
+                        </Link>
+                    )}
                 </CardFooter>
             </Card>
             </div>
