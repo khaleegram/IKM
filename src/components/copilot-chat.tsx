@@ -40,6 +40,7 @@ const manageUsersPrompts = ["👥 Show users with no activity in 90 days", "🚩
 const userDetailPrompts = ["📜 Pull full activity log", "⚖️ Any prior warnings for this user?"];
 const allOrdersPrompts = ["⚠️ Show all disputed orders", "💰 What is the average order value?"];
 const changePasswordPrompts = ["🔐 Generate a strong password for me", "💡 What makes a password strong?"];
+const orderDetailsPrompts = ["📨 Email a copy of this invoice", "⭐ Rate this seller & rider", "🔄 I need to return an item."];
 
 
 export function CoPilotChat() {
@@ -56,6 +57,7 @@ export function CoPilotChat() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const getPrompts = () => {
+    if (pathname.startsWith("/buyer/orders/")) return orderDetailsPrompts;
     if (pathname.startsWith("/admin/manage-users/")) return userDetailPrompts;
     if (pathname.startsWith("/admin/manage-users")) return manageUsersPrompts;
     if (pathname.startsWith("/admin/all-orders")) return allOrdersPrompts;

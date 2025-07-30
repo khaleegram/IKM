@@ -44,10 +44,12 @@ const SaleCard = ({ sale }: { sale: Sale }) => (
         <p className="font-bold text-lg text-primary">Your Payout: ₦{parseInt(sale.payout).toLocaleString()}</p>
     </CardContent>
     <CardFooter className="p-4 pt-0">
-      <Button variant="outline" className="w-full">
-        <FileText className="mr-2 h-4 w-4" />
-        View Order Details
-      </Button>
+      <Link href={`/buyer/orders/${sale.id}`} className="w-full">
+        <Button variant="outline" className="w-full">
+            <FileText className="mr-2 h-4 w-4" />
+            View Order Details
+        </Button>
+      </Link>
     </CardFooter>
   </Card>
 );
