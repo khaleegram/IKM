@@ -59,8 +59,8 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                     </CarouselItem>
                   ))}
                 </CarouselContent>
-                <CarouselPrevious className="left-2" />
-                <CarouselNext className="right-2" />
+                <CarouselPrevious className="hidden md:flex" />
+                <CarouselNext className="hidden md:flex" />
               </Carousel>
             </div>
             <div className="flex flex-col gap-4">
