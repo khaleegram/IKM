@@ -15,7 +15,7 @@ const quickActions = [
     { label: "Manage Users", icon: Users, href: "#" },
     { label: "Approve Sellers/Riders", icon: UserPlus, href: "/admin/pending-approvals" },
     { label: "View All Orders", icon: Package, href: "#" },
-    { label: "Financial Reports", icon: FileText, href: "#" },
+    { label: "Financial Reports", icon: FileText, href: "/admin/financial-reports" },
 ]
 
 const activityFeed = [

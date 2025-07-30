@@ -35,6 +35,7 @@ const orderHistoryPrompts = ["💬 I have an issue with an order", "📦 Track m
 const salesHistoryPrompts = ["📈 Analyze my revenue this month", "💰 Which product is most profitable?", "📦 Print shipping label."];
 const profileSettingsPrompts = ["🔐 Secure my account", "🔔 Customize my notifications", "❓ I have a question about my data."];
 const editProfilePrompts = ["💡 Tips for a good profile photo", "✍️ Help write my store bio"];
+const financialReportsPrompts = ["📈 Forecast next month's revenue", "📊 Compare this period to the last one", "⚠️ Any unusual transaction patterns?"];
 
 
 export function CoPilotChat() {
@@ -51,6 +52,7 @@ export function CoPilotChat() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const getPrompts = () => {
+    if (pathname.startsWith("/admin/financial-reports")) return financialReportsPrompts;
     if (pathname.startsWith("/admin/pending-approvals")) return adminApprovalsPrompts;
     if (pathname.startsWith("/rider/active-delivery")) return activeDeliveryPrompts;
     if (pathname.startsWith("/seller/add-product")) return addProductPrompts;
