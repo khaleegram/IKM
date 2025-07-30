@@ -23,7 +23,7 @@ type Message = {
 const buyerPrompts = ["🔍 Find a product for me", "📦 Track my order", "⚖️ Compare prices"];
 const sellerPrompts = ["📈 Which product is my bestseller?", "📉 Which items are low in stock?", "💡 How can I improve my listings?"];
 const riderPrompts = ["🗺️ Show profitable 'hotspot' areas now?", "⛽ Estimate fuel cost for this trip?", "⏰ What are today's peak hours?"];
-const adminPrompts = ["🚩 Flag suspicious activity", "💹 Summarize platform revenue"];
+const adminPrompts = ["📈 Summarize daily performance", "🚩 Flag suspicious activity", "⚠️ Check platform health"];
 const productDetailPrompts = ["🤔 Any discounts for this item?", "⭐ Summarize the reviews", "↔️ Show me similar products"];
 const cartPrompts = ["💸 Can I apply a coupon?", "🚚 Estimate delivery fee?", "🤔 Help me with my order."];
 const checkoutPrompts = ["🔒 Is this payment secure?", "📜 What's the return policy?", "📞 Contact Support."];
@@ -71,7 +71,8 @@ export function CoPilotChat() {
             response = await getRiderEarningsSummary({ riderId: 'rider-123', period: 'last week' });
             break;
           case "💹 Summarize platform revenue":
-            response = await getPlatformRevenueSummary({ timePeriod: 'last quarter' });
+          case "📈 Summarize daily performance":
+            response = await getPlatformRevenueSummary({ timePeriod: 'today' });
             break;
           case "🚩 Flag suspicious activity":
             const activity = await getSuspiciousActivity({ activityDetails: 'Multiple login failures for user "test-user" followed by a successful login from a new IP address.' });

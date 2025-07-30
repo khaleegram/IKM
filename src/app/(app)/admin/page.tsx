@@ -1,18 +1,32 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, ShoppingCart, AlertTriangle, ShieldCheck } from "lucide-react";
-import { flagSuspiciousActivity } from "@/ai/flows/admin-suspicious-activity-flagging";
+import { Button } from "@/components/ui/button";
+import { DollarSign, Users, Package, CheckCircle, UserPlus, FileText, Settings, Bell } from "lucide-react";
+import Link from "next/link";
 
-export default async function AdminPage() {
+const kpis = [
+    { title: "Revenue (Today)", value: "₦1,250,000", icon: DollarSign, urgent: false },
+    { title: "New Users (Today)", value: "82", icon: UserPlus, urgent: false },
+    { title: "Orders in Progress", value: "45", icon: Package, urgent: false },
+    { title: "Pending Approvals", value: "12", icon: CheckCircle, urgent: true },
+];
 
-    const suspiciousActivities = await Promise.all([
-        flagSuspiciousActivity({ activityDetails: 'User "fraudster99" attempted 15 transactions in 2 minutes with different credit cards.' }),
-        flagSuspiciousActivity({ activityDetails: 'A new seller account "SuperDeals" listed 50 high-value electronics at 90% below market price within 1 hour of account creation.' }),
-        flagSuspiciousActivity({ activityDetails: 'A regular user "jane_doe" logged in from their usual location and placed an order.' }),
-    ]);
+const quickActions = [
+    { label: "Manage Users", icon: Users, href: "#" },
+    { label: "Approve Sellers/Riders", icon: UserPlus, href: "#" },
+    { label: "View All Orders", icon: Package, href: "#" },
+    { label: "Financial Reports", icon: FileText, href: "#" },
+]
 
-    const flaggedActivities = suspiciousActivities.filter(a => a.isSuspicious);
+const activityFeed = [
+    { id: 1, text: "New Order #54321 placed by user B.Adekunle.", time: "2m ago" },
+    { id: 2, text: "Rider J.Okoro accepted delivery #54321.", time: "5m ago" },
+    { id: 3, text: "Seller 'ShoeHaven' added a new product: 'Leather Sandals'.", time: "10m ago" },
+    { id: 4, text: "New user 'amina.b' signed up as a buyer.", time: "12m ago" },
+    { id: 5, text: "Seller 'KicksRepublic' has requested verification.", time: "25m ago" },
+];
 
+export default function AdminDashboardPage() {
   return (
     <div className="flex flex-col h-full bg-muted/40">
       <header className="p-4 sm:p-6 bg-background border-b">
@@ -22,56 +36,55 @@ export default async function AdminPage() {
         </div>
       </header>
       <main className="flex-1 overflow-auto p-4 sm:p-6">
-        <div className="grid gap-6 md:grid-cols-2">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                <div className="text-2xl font-bold">10,245</div>
-                <p className="text-xs text-muted-foreground">+150 this week</p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                <div className="text-2xl font-bold">25,832</div>
-                <p className="text-xs text-muted-foreground">+1,204 this week</p>
-                </CardContent>
-            </Card>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {kpis.map((kpi, index) => (
+                <Card key={index} className={`${kpi.urgent ? 'bg-destructive/10 border-destructive' : ''}`}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className={`text-sm font-medium ${kpi.urgent ? 'text-destructive' : ''}`}>{kpi.title}</CardTitle>
+                        <kpi.icon className={`h-4 w-4 ${kpi.urgent ? 'text-destructive' : 'text-muted-foreground'}`} />
+                    </CardHeader>
+                    <CardContent>
+                        <div className={`text-2xl font-bold ${kpi.urgent ? 'text-destructive' : ''}`}>{kpi.value}</div>
+                    </CardContent>
+                </Card>
+            ))}
         </div>
 
         <Card className="mt-6">
             <CardHeader>
-                <CardTitle className="font-headline">Co-Pilot Security Alerts</CardTitle>
-                <CardDescription>AI-detected suspicious activities requiring your attention.</CardDescription>
+                <CardTitle className="font-headline">Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {quickActions.map(action => (
+                     <Link key={action.label} href={action.href}>
+                        <Button variant="outline" className="w-full h-24 flex-col gap-2">
+                            <action.icon className="h-6 w-6" />
+                            <span>{action.label}</span>
+                        </Button>
+                    </Link>
+                ))}
+            </CardContent>
+        </Card>
+
+        <Card className="mt-6">
+            <CardHeader>
+                <CardTitle className="font-headline">Live Platform Activity</CardTitle>
+                <CardDescription>A real-time feed of key events happening across the marketplace.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="space-y-4">
-                    {flaggedActivities.length > 0 ? (
-                        flaggedActivities.map((activity, index) => (
-                            <div key={index} className="flex items-start gap-4 p-4 rounded-lg border border-destructive/50 bg-destructive/10">
-                                <AlertTriangle className="h-6 w-6 text-destructive flex-shrink-0 mt-1" />
-                                <div>
-                                    <h3 className="font-semibold text-destructive">Suspicious Activity Flagged</h3>
-                                    <p className="text-sm text-destructive/90">{activity.reason}</p>
-                                </div>
+                <ul className="space-y-4">
+                    {activityFeed.map(item => (
+                        <li key={item.id} className="flex items-start gap-4">
+                             <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                <Bell className="w-4 h-4 text-primary" />
                             </div>
-                        ))
-                    ) : (
-                         <div className="flex items-center gap-4 p-4 rounded-lg border border-green-500/50 bg-green-500/10">
-                            <ShieldCheck className="h-6 w-6 text-green-500 flex-shrink-0" />
-                            <div>
-                                <h3 className="font-semibold text-green-500">All Clear</h3>
-                                <p className="text-sm text-green-500/90">No suspicious activities detected by Co-Pilot.</p>
+                            <div className="flex-grow">
+                                <p className="text-sm">{item.text}</p>
+                                <p className="text-xs text-muted-foreground">{item.time}</p>
                             </div>
-                        </div>
-                    )}
-                </div>
+                        </li>
+                    ))}
+                </ul>
             </CardContent>
         </Card>
       </main>
