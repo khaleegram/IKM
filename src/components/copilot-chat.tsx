@@ -21,7 +21,7 @@ type Message = {
 };
 
 const buyerPrompts = ["🔍 Find a product for me", "📦 Track my order", "⚖️ Compare prices"];
-const sellerPrompts = ["✍️ Help write a product description", "📈 Analyze my sales", "💡 Suggest a price"];
+const sellerPrompts = ["📈 Which product is my bestseller?", "📉 Which items are low in stock?", "💡 How can I improve my listings?"];
 const riderPrompts = ["💵 Summarize my earnings", "🗺️ Find the fastest route", "📊 Show peak hours in my area"];
 const adminPrompts = ["🚩 Flag suspicious activity", "💹 Summarize platform revenue"];
 const productDetailPrompts = ["🤔 Any discounts for this item?", "⭐ Summarize the reviews", "↔️ Show me similar products"];
@@ -76,6 +76,7 @@ export function CoPilotChat() {
             response = `${activity.isSuspicious ? 'Suspicious Activity Flagged:' : 'Activity not suspicious.'} ${activity.reason}`;
             break;
           case "✍️ Help write a product description":
+          case "✍️ Help write a compelling title":
             setCurrentAction(prompt);
             setFormModalOpen(true);
             return; // Don't add a default response yet
@@ -96,12 +97,23 @@ export function CoPilotChat() {
   const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const prompt = currentAction;
     setFormModalOpen(false);
+    setCurrentAction(null);
+
+    let userMessageContent = `For my product, `;
+    const fields = Array.from(formData.entries()).map(([key, value]) => {
+        userMessageContent += `${key}: "${value}", `;
+        return {key, value};
+    });
+    userMessageContent = userMessageContent.slice(0, -2);
+    
+    setMessages(prev => [...prev, {role: 'user', content: userMessageContent}]);
 
     startTransition(async () => {
         try {
             let response: React.ReactNode = "I'm sorry, I can't help with that yet.";
-            if (currentAction === "✍️ Help write a product description") {
+            if (prompt === "✍️ Help write a product description" || prompt === "✍️ Help write a compelling title") {
                 const productName = formData.get('productName') as string;
                 const productCategory = formData.get('productCategory') as string;
                 const keyFeatures = formData.get('keyFeatures') as string;
@@ -123,6 +135,36 @@ export function CoPilotChat() {
   }, [messages]);
 
   const suggestedPrompts = getPrompts();
+
+  const getFormForAction = (action: string | null) => {
+    switch(action) {
+        case '✍️ Help write a product description':
+        case '✍️ Help write a compelling title':
+            return (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="productName">Product Name</Label>
+                  <Input id="productName" name="productName" placeholder="e.g., Artisan Leather Wallet" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="productCategory">Product Category</Label>
+                  <Input id="productCategory" name="productCategory" placeholder="e.g., Accessories" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="keyFeatures">Key Features (comma-separated)</Label>
+                  <Textarea id="keyFeatures" name="keyFeatures" placeholder="e.g., Hand-stitched, Full-grain leather, RFID blocking" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="targetAudience">Target Audience</Label>
+                  <Input id="targetAudience" name="targetAudience" placeholder="e.g., Design-conscious professionals" />
+                </div>
+              </div>
+            );
+        default: 
+            return null;
+    }
+  }
+
 
   return (
     <div className="flex h-full flex-col">
@@ -226,26 +268,7 @@ export function CoPilotChat() {
             <DialogDescription>Please provide the following details.</DialogDescription>
           </DialogHeader>
           <form ref={formRef} onSubmit={handleFormSubmit}>
-            {currentAction === '✍️ Help write a product description' && (
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="productName">Product Name</Label>
-                  <Input id="productName" name="productName" placeholder="e.g., Artisan Leather Wallet" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="productCategory">Product Category</Label>
-                  <Input id="productCategory" name="productCategory" placeholder="e.g., Accessories" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="keyFeatures">Key Features (comma-separated)</Label>
-                  <Textarea id="keyFeatures" name="keyFeatures" placeholder="e.g., Hand-stitched, Full-grain leather, RFID blocking" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="targetAudience">Target Audience</Label>
-                  <Input id="targetAudience" name="targetAudience" placeholder="e.g., Design-conscious professionals" />
-                </div>
-              </div>
-            )}
+            {getFormForAction(currentAction)}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setFormModalOpen(false)}>Cancel</Button>
               <Button type="submit">Generate</Button>
