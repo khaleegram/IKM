@@ -1,20 +1,50 @@
 
-"use client";
+'use client';
 
-import Image from "next/image";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import React, { useState } from 'react';
+import Image from 'next/image';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+
+type DeliveryJob = {
+  id: string;
+  from: string;
+  to: string;
+  fee: number;
+  mapImage: string;
+};
+
+const deliveryJobs: DeliveryJob[] = [
+  {
+    id: 'job1',
+    from: 'Wuse Market, Zone 5',
+    to: '123 Adetokunbo Ademola Cres, Wuse II',
+    fee: 1500,
+    mapImage: 'https://placehold.co/800x400.png',
+  },
+  {
+    id: 'job2',
+    from: 'Jabi Lake Mall',
+    to: '456 Aminu Kano Cres, Wuse II',
+    fee: 1800,
+    mapImage: 'https://placehold.co/800x400.png',
+  },
+];
+
 
 export default function RiderPage() {
+    const [isOnline, setIsOnline] = useState(false);
+
   return (
     <div className="flex flex-col h-full bg-muted/40">
       <header className="p-4 sm:p-6 bg-background border-b">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-4">
             <Avatar className="h-12 w-12">
-              <AvatarImage src="https://placehold.co/100x100.png" alt="Rider Alex" />
+              <AvatarImage src="https://placehold.co/100x100.png" alt="Rider Alex" data-ai-hint="person portrait" />
               <AvatarFallback>RA</AvatarFallback>
             </Avatar>
             <div>
@@ -23,45 +53,68 @@ export default function RiderPage() {
             </div>
           </div>
           <div className="flex items-center space-x-2 self-end sm:self-center">
-            <Label htmlFor="online-status" className="font-medium text-sm">Offline</Label>
-            <Switch id="online-status" />
-            <Label htmlFor="online-status" className="font-medium text-green-600 text-sm">Online</Label>
+            <Label htmlFor="online-status" className={`font-medium text-sm ${!isOnline ? 'text-foreground' : 'text-muted-foreground'}`}>Offline</Label>
+            <Switch id="online-status" checked={isOnline} onCheckedChange={setIsOnline} />
+            <Label htmlFor="online-status" className={`font-medium text-sm ${isOnline ? 'text-support' : 'text-muted-foreground'}`}>Online</Label>
           </div>
         </div>
       </header>
       <main className="flex-1 overflow-auto p-4 sm:p-6">
-        <div className="grid gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline">Co-Pilot Route Suggestion</CardTitle>
-              <CardDescription>Your next optimal delivery route is ready.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col md:flex-row gap-6">
-                <div className="w-full md:w-1/3">
-                  <h3 className="font-semibold">Next Pickup:</h3>
-                  <p>The Grind Coffee House</p>
-                  <p className="text-sm text-muted-foreground">123 Cafe Lane</p>
-                  <h3 className="font-semibold mt-4">Destination:</h3>
-                  <p>Jane Doe</p>
-                  <p className="text-sm text-muted-foreground">456 Apartment Ave</p>
-                  <p className="mt-4 text-sm">Estimated Time: <span className="font-bold text-primary">12 mins</span></p>
-                  <p className="text-sm">Distance: <span className="font-bold text-primary">2.1 miles</span></p>
-                </div>
-                <div className="w-full md:w-2/3 rounded-lg overflow-hidden aspect-video md:aspect-auto">
-                    <Image
-                        src="https://placehold.co/800x600.png"
-                        alt="Mini-map of route"
-                        width={800}
-                        height={600}
-                        className="object-cover w-full h-full"
-                        data-ai-hint="map city"
-                    />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {isOnline ? (
+            <div className="grid gap-6">
+                <h2 className="text-lg font-semibold font-headline">New Delivery Requests</h2>
+                {deliveryJobs.map((job) => (
+                    <Card key={job.id} className="overflow-hidden">
+                        <div className="relative h-40">
+                             <Image
+                                src={job.mapImage}
+                                alt="Route map"
+                                layout="fill"
+                                objectFit="cover"
+                                data-ai-hint="map city"
+                            />
+                        </div>
+                        <CardContent className="p-4 space-y-4">
+                             <div>
+                                <p className="text-xs font-semibold uppercase text-muted-foreground">FROM:</p>
+                                <p>{job.from}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold uppercase text-muted-foreground">TO:</p>
+                                <p>{job.to}</p>
+                            </div>
+                             <div className="text-center py-2">
+                                <p className="text-sm text-muted-foreground">Your Fee</p>
+                                <p className="text-2xl font-bold text-primary">₦{job.fee.toLocaleString()}</p>
+                            </div>
+                             <div className="grid grid-cols-2 gap-3 pt-2">
+                                <Button variant="outline" size="lg">Decline</Button>
+                                <Button variant="default" size="lg">Accept</Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        ) : (
+             <Card className="text-center">
+                <CardHeader>
+                    <CardTitle className="font-headline">You are Offline</CardTitle>
+                    <CardDescription>Toggle the switch above to go online and see new delivery requests.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="w-full aspect-video rounded-lg overflow-hidden flex items-center justify-center bg-muted">
+                        <Image
+                            src="https://placehold.co/800x600.png"
+                            alt="Map illustration"
+                            width={400}
+                            height={300}
+                            className="object-contain"
+                            data-ai-hint="map waiting"
+                        />
+                    </div>
+                </CardContent>
+            </Card>
+        )}
       </main>
     </div>
   );
