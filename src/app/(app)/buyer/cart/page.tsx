@@ -35,7 +35,7 @@ export default function ShoppingCartPage() {
   return (
     <div className="flex flex-col h-full">
       <header className="p-4 sm:p-6 border-b flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
             <Link href="/buyer">
             <Button variant="ghost" size="icon">
                 <ArrowLeft />
@@ -49,8 +49,8 @@ export default function ShoppingCartPage() {
       </header>
       <main className="flex-1 overflow-auto p-4 sm:p-6">
         <div className="max-w-4xl mx-auto">
-            <div className="grid md:grid-cols-3 gap-8">
-                <div className="md:col-span-2">
+            <div className="grid lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2">
                     <Card>
                         <CardContent className="p-0">
                            <ul className="divide-y divide-border">
@@ -68,11 +68,11 @@ export default function ShoppingCartPage() {
                                         <p className="font-semibold">{item.name}</p>
                                         <p className="text-sm text-primary">₦{item.price.toLocaleString()}</p>
                                     </div>
-                                    <div className="flex items-center gap-2 border rounded-md">
+                                    <div className="flex items-center gap-1 border rounded-md">
                                         <Button variant="ghost" size="icon" className="h-8 w-8">
                                             <Minus className="h-4 w-4" />
                                         </Button>
-                                        <span className="w-8 text-center">{item.quantity}</span>
+                                        <span className="w-6 text-center text-sm">{item.quantity}</span>
                                         <Button variant="ghost" size="icon" className="h-8 w-8">
                                             <Plus className="h-4 w-4" />
                                         </Button>
@@ -86,7 +86,7 @@ export default function ShoppingCartPage() {
                         </CardContent>
                     </Card>
                 </div>
-                <div className="md:col-span-1">
+                <div className="lg:col-span-1">
                     <Card>
                         <CardHeader>
                             <CardTitle>Order Summary</CardTitle>

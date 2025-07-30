@@ -1,3 +1,4 @@
+
 "use client";
 
 import Image from "next/image";
@@ -10,7 +11,7 @@ export default function RiderPage() {
   return (
     <div className="flex flex-col h-full bg-muted/40">
       <header className="p-4 sm:p-6 bg-background border-b">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-4">
             <Avatar className="h-12 w-12">
               <AvatarImage src="https://placehold.co/100x100.png" alt="Rider Alex" />
@@ -21,10 +22,10 @@ export default function RiderPage() {
               <p className="text-muted-foreground">Ready to hit the road and make deliveries.</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <Label htmlFor="online-status" className="font-medium">Offline</Label>
+          <div className="flex items-center space-x-2 self-end sm:self-center">
+            <Label htmlFor="online-status" className="font-medium text-sm">Offline</Label>
             <Switch id="online-status" />
-            <Label htmlFor="online-status" className="font-medium text-green-600">Online</Label>
+            <Label htmlFor="online-status" className="font-medium text-green-600 text-sm">Online</Label>
           </div>
         </div>
       </header>
@@ -47,7 +48,7 @@ export default function RiderPage() {
                   <p className="mt-4 text-sm">Estimated Time: <span className="font-bold text-primary">12 mins</span></p>
                   <p className="text-sm">Distance: <span className="font-bold text-primary">2.1 miles</span></p>
                 </div>
-                <div className="w-full md:w-2/3 rounded-lg overflow-hidden">
+                <div className="w-full md:w-2/3 rounded-lg overflow-hidden aspect-video md:aspect-auto">
                     <Image
                         src="https://placehold.co/800x600.png"
                         alt="Mini-map of route"

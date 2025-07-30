@@ -50,11 +50,11 @@ export default function CheckoutPage() {
             <ArrowLeft />
           </Button>
         </Link>
-        <h1 className="text-xl font-bold font-headline ml-4">Checkout</h1>
+        <h1 className="text-xl font-bold font-headline ml-2 sm:ml-4">Checkout</h1>
       </header>
       <main className="flex-1 overflow-auto p-4 sm:p-6">
-        <div className="max-w-4xl mx-auto grid md:grid-cols-3 gap-8 items-start">
-          <div className="md:col-span-2 space-y-8">
+        <div className="max-w-4xl mx-auto grid lg:grid-cols-3 gap-8 items-start">
+          <div className="lg:col-span-2 space-y-8">
             {/* Section 1: Delivery Information */}
             <Card>
               <CardHeader>
@@ -143,7 +143,7 @@ export default function CheckoutPage() {
           </div>
 
           {/* Order Summary */}
-          <div className="md:col-span-1 sticky top-6">
+          <div className="lg:col-span-1 lg:sticky top-6">
             <Card>
               <CardHeader>
                 <CardTitle>Order Summary</CardTitle>

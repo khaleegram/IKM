@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DollarSign, Package, PlusCircle, BarChart2 } from "lucide-react";
@@ -17,7 +18,7 @@ export default async function SellerPage() {
   return (
     <div className="flex flex-col h-full bg-muted/40">
       <header className="p-4 sm:p-6 bg-background border-b">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold font-headline">Seller Hub: The Artisan Shop</h1>
             <p className="text-muted-foreground">Your command center for managing your products and sales.</p>

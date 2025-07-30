@@ -94,13 +94,13 @@ export default function BuyerPage() {
                 </Button>
             </Link>
         </div>
-        <div className="relative mt-4 max-w-lg">
+        <div className="relative mt-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input placeholder="Search for products..." className="pl-10" />
         </div>
       </header>
       <main className="flex-1 overflow-auto p-4 sm:p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {products.map((product) => (
             <Link key={product.id} href={`/buyer/product/${product.id}`} className="flex">
               <Card className="overflow-hidden transition-shadow hover:shadow-lg w-full flex flex-col">
@@ -117,7 +117,7 @@ export default function BuyerPage() {
                 <CardContent className="p-4 flex-grow">
                   <CardTitle className="text-lg font-semibold font-headline">{product.name}</CardTitle>
                 </CardContent>
-                <CardFooter className="p-4 pt-0 flex justify-between items-center mt-auto">
+                <CardFooter className="p-4 pt-0 flex justify-between items-center">
                   <p className="font-semibold text-primary">{product.price}</p>
                   <Button onClick={handleAddToCart}>Add to Cart</Button>
                 </CardFooter>

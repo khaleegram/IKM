@@ -1,7 +1,7 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, ShoppingCart, AlertTriangle, ShieldCheck } from "lucide-react";
 import { flagSuspiciousActivity } from "@/ai/flows/admin-suspicious-activity-flagging";
-import { Badge } from "@/components/ui/badge";
 
 export default async function AdminPage() {
 
@@ -63,11 +63,11 @@ export default async function AdminPage() {
                             </div>
                         ))
                     ) : (
-                         <div className="flex items-center gap-4 p-4 rounded-lg border border-support/50 bg-support/10">
-                            <ShieldCheck className="h-6 w-6 text-support flex-shrink-0" />
+                         <div className="flex items-center gap-4 p-4 rounded-lg border border-green-500/50 bg-green-500/10">
+                            <ShieldCheck className="h-6 w-6 text-green-500 flex-shrink-0" />
                             <div>
-                                <h3 className="font-semibold text-support">All Clear</h3>
-                                <p className="text-sm text-support/90">No suspicious activities detected by Co-Pilot.</p>
+                                <h3 className="font-semibold text-green-500">All Clear</h3>
+                                <p className="text-sm text-green-500/90">No suspicious activities detected by Co-Pilot.</p>
                             </div>
                         </div>
                     )}

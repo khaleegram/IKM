@@ -39,13 +39,13 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   return (
     <div className="flex flex-col h-full">
       <header className="p-4 sm:p-6 border-b flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             <Link href="/buyer">
               <Button variant="ghost" size="icon">
                 <ArrowLeft />
               </Button>
             </Link>
-            <h1 className="text-xl font-bold font-headline">Product Details</h1>
+            <h1 className="text-lg font-bold font-headline truncate">Product Details</h1>
           </div>
           <Link href="/buyer/cart">
             <Button variant="ghost" size="icon">
@@ -77,17 +77,17 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                     </CarouselItem>
                   ))}
                 </CarouselContent>
-                <CarouselPrevious className="hidden md:flex" />
-                <CarouselNext className="hidden md:flex" />
+                <CarouselPrevious className="left-2" />
+                <CarouselNext className="right-2" />
               </Carousel>
             </div>
             <div className="flex flex-col gap-4">
-              <h2 className="text-3xl font-bold font-headline">{product.name}</h2>
-              <p className="text-3xl font-semibold text-primary">{product.price}</p>
+              <h2 className="text-2xl sm:text-3xl font-bold font-headline">{product.name}</h2>
+              <p className="text-2xl sm:text-3xl font-semibold text-primary">{product.price}</p>
               <div className="text-sm text-muted-foreground">
                 Sold by: <Link href="#" className="text-accent hover:underline">{product.seller}</Link>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-0.5">
                   {[...Array(5)].map((_, i) => (
                     <Star key={i} className={`w-5 h-5 ${i < Math.floor(product.rating) ? 'text-accent fill-accent' : 'text-muted-foreground'}`} />
