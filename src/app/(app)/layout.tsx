@@ -1,8 +1,9 @@
+
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bike, LayoutDashboard, Shield, ShoppingCart, Store, User } from "lucide-react";
+import { Bike, LayoutDashboard, Shield, ShoppingCart, Store, MessageSquare } from "lucide-react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
@@ -22,6 +23,7 @@ export default function AppLayout({
     { href: "/seller", label: "Seller Hub", icon: Store },
     { href: "/rider", label: "Rider Zone", icon: Bike },
     { href: "/admin", label: "Admin Panel", icon: Shield },
+    { href: "/messages", label: "Messages", icon: MessageSquare },
   ];
 
   return (

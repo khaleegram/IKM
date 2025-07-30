@@ -3,7 +3,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Star, Minus, Plus, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Star, Minus, Plus, ShoppingCart, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
@@ -26,6 +26,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     name: "Classic Leather Watch",
     price: "₦18,500",
     seller: "KicksRepublic",
+    sellerId: "seller123",
     rating: 4.5,
     reviews: 128,
     description: "Discover timeless elegance with the Classic Leather Watch. Featuring a genuine leather strap and a precision quartz movement, this watch is the perfect accessory for any occasion. Its minimalist dial and stainless steel case offer a sophisticated look that never goes out of style. Water-resistant and durable, it's designed for everyday wear.",
@@ -87,6 +88,12 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
               <div className="text-sm text-muted-foreground">
                 Sold by: <Link href="#" className="text-accent hover:underline">{product.seller}</Link>
               </div>
+               <Link href={`/messages/${product.sellerId}`}>
+                <Button variant="outline" className="w-full sm:w-auto">
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  Chat with Seller
+                </Button>
+              </Link>
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-0.5">
                   {[...Array(5)].map((_, i) => (
