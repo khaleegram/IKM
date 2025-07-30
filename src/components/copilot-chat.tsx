@@ -28,6 +28,7 @@ const productDetailPrompts = ["🤔 Any discounts for this item?", "⭐ Summariz
 const cartPrompts = ["💸 Can I apply a coupon?", "🚚 Estimate delivery fee?", "🤔 Help me with my order."];
 const checkoutPrompts = ["🔒 Is this payment secure?", "📜 What's the return policy?", "📞 Contact Support."];
 const addProductPrompts = ["✍️ Help write a compelling title", "💡 Suggest a competitive price", "🖼️ What kind of images work best?"];
+const activeDeliveryPrompts = ["🚧 Report traffic?", "💬 Send ETA update to buyer?", "🆘 I need help with this delivery."];
 
 
 export function CoPilotChat() {
@@ -44,6 +45,7 @@ export function CoPilotChat() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const getPrompts = () => {
+    if (pathname.startsWith("/rider/active-delivery")) return activeDeliveryPrompts;
     if (pathname.startsWith("/seller/add-product")) return addProductPrompts;
     if (pathname.startsWith("/seller")) return sellerPrompts;
     if (pathname.startsWith("/rider")) return riderPrompts;

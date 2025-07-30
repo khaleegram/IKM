@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -89,7 +90,9 @@ export default function RiderPage() {
                             </div>
                              <div className="grid grid-cols-2 gap-3 pt-2">
                                 <Button variant="outline" size="lg">Decline</Button>
-                                <Button variant="default" size="lg">Accept</Button>
+                                <Link href={`/rider/active-delivery?jobId=${job.id}`} className="w-full">
+                                    <Button variant="default" size="lg" className="w-full">Accept</Button>
+                                </Link>
                             </div>
                         </CardContent>
                     </Card>
