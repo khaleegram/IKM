@@ -36,6 +36,9 @@ const salesHistoryPrompts = ["📈 Analyze my revenue this month", "💰 Which p
 const profileSettingsPrompts = ["🔐 Secure my account", "🔔 Customize my notifications", "❓ I have a question about my data."];
 const editProfilePrompts = ["💡 Tips for a good profile photo", "✍️ Help write my store bio"];
 const financialReportsPrompts = ["📈 Forecast next month's revenue", "📊 Compare this period to the last one", "⚠️ Any unusual transaction patterns?"];
+const manageUsersPrompts = ["👥 Show users with no activity in 90 days", "🚩 Find all users with multiple accounts."];
+const userDetailPrompts = ["📜 Pull full activity log", "⚖️ Any prior warnings for this user?"];
+const allOrdersPrompts = ["⚠️ Show all disputed orders", "💰 What is the average order value?"];
 
 
 export function CoPilotChat() {
@@ -52,6 +55,9 @@ export function CoPilotChat() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const getPrompts = () => {
+    if (pathname.startsWith("/admin/manage-users/")) return userDetailPrompts;
+    if (pathname.startsWith("/admin/manage-users")) return manageUsersPrompts;
+    if (pathname.startsWith("/admin/all-orders")) return allOrdersPrompts;
     if (pathname.startsWith("/admin/financial-reports")) return financialReportsPrompts;
     if (pathname.startsWith("/admin/pending-approvals")) return adminApprovalsPrompts;
     if (pathname.startsWith("/rider/active-delivery")) return activeDeliveryPrompts;
@@ -147,7 +153,10 @@ export function CoPilotChat() {
 
   useEffect(() => {
     if (scrollAreaRef.current) {
-        scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
+        const scrollDiv = scrollAreaRef.current.querySelector('div');
+        if (scrollDiv) {
+          scrollDiv.scrollTo({ top: scrollDiv.scrollHeight, behavior: 'smooth' });
+        }
     }
   }, [messages]);
 

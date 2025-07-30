@@ -5,16 +5,16 @@ import { DollarSign, Users, Package, CheckCircle, UserPlus, FileText, Settings, 
 import Link from "next/link";
 
 const kpis = [
-    { title: "Revenue (Today)", value: "₦1,250,000", icon: DollarSign, urgent: false, href: "#" },
-    { title: "New Users (Today)", value: "82", icon: UserPlus, urgent: false, href: "#" },
-    { title: "Orders in Progress", value: "45", icon: Package, urgent: false, href: "#" },
+    { title: "Revenue (Today)", value: "₦1,250,000", icon: DollarSign, urgent: false, href: "/admin/financial-reports" },
+    { title: "New Users (Today)", value: "82", icon: UserPlus, urgent: false, href: "/admin/manage-users" },
+    { title: "Orders in Progress", value: "45", icon: Package, urgent: false, href: "/admin/all-orders" },
     { title: "Pending Approvals", value: "12", icon: CheckCircle, urgent: true, href: "/admin/pending-approvals" },
 ];
 
 const quickActions = [
-    { label: "Manage Users", icon: Users, href: "#" },
+    { label: "Manage Users", icon: Users, href: "/admin/manage-users" },
     { label: "Approve Sellers/Riders", icon: UserPlus, href: "/admin/pending-approvals" },
-    { label: "View All Orders", icon: Package, href: "#" },
+    { label: "View All Orders", icon: Package, href: "/admin/all-orders" },
     { label: "Financial Reports", icon: FileText, href: "/admin/financial-reports" },
 ]
 
