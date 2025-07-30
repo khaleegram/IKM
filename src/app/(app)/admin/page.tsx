@@ -5,15 +5,15 @@ import { DollarSign, Users, Package, CheckCircle, UserPlus, FileText, Settings, 
 import Link from "next/link";
 
 const kpis = [
-    { title: "Revenue (Today)", value: "₦1,250,000", icon: DollarSign, urgent: false },
-    { title: "New Users (Today)", value: "82", icon: UserPlus, urgent: false },
-    { title: "Orders in Progress", value: "45", icon: Package, urgent: false },
-    { title: "Pending Approvals", value: "12", icon: CheckCircle, urgent: true },
+    { title: "Revenue (Today)", value: "₦1,250,000", icon: DollarSign, urgent: false, href: "#" },
+    { title: "New Users (Today)", value: "82", icon: UserPlus, urgent: false, href: "#" },
+    { title: "Orders in Progress", value: "45", icon: Package, urgent: false, href: "#" },
+    { title: "Pending Approvals", value: "12", icon: CheckCircle, urgent: true, href: "/admin/pending-approvals" },
 ];
 
 const quickActions = [
     { label: "Manage Users", icon: Users, href: "#" },
-    { label: "Approve Sellers/Riders", icon: UserPlus, href: "#" },
+    { label: "Approve Sellers/Riders", icon: UserPlus, href: "/admin/pending-approvals" },
     { label: "View All Orders", icon: Package, href: "#" },
     { label: "Financial Reports", icon: FileText, href: "#" },
 ]
@@ -38,15 +38,17 @@ export default function AdminDashboardPage() {
       <main className="flex-1 overflow-auto p-4 sm:p-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {kpis.map((kpi, index) => (
-                <Card key={index} className={`${kpi.urgent ? 'bg-destructive/10 border-destructive' : ''}`}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className={`text-sm font-medium ${kpi.urgent ? 'text-destructive' : ''}`}>{kpi.title}</CardTitle>
-                        <kpi.icon className={`h-4 w-4 ${kpi.urgent ? 'text-destructive' : 'text-muted-foreground'}`} />
-                    </CardHeader>
-                    <CardContent>
-                        <div className={`text-2xl font-bold ${kpi.urgent ? 'text-destructive' : ''}`}>{kpi.value}</div>
-                    </CardContent>
-                </Card>
+                <Link href={kpi.href} key={index}>
+                    <Card className={`${kpi.urgent ? 'bg-destructive/10 border-destructive hover:bg-destructive/20' : 'hover:bg-muted'}`}>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className={`text-sm font-medium ${kpi.urgent ? 'text-destructive' : ''}`}>{kpi.title}</CardTitle>
+                            <kpi.icon className={`h-4 w-4 ${kpi.urgent ? 'text-destructive' : 'text-muted-foreground'}`} />
+                        </CardHeader>
+                        <CardContent>
+                            <div className={`text-2xl font-bold ${kpi.urgent ? 'text-destructive' : ''}`}>{kpi.value}</div>
+                        </CardContent>
+                    </Card>
+                </Link>
             ))}
         </div>
 
