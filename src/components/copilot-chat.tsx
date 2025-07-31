@@ -21,7 +21,7 @@ type Message = {
   content: React.ReactNode;
 };
 
-const buyerPrompts = ["🔍 Find a product for me", "📦 Track my order", "⚖️ Compare prices"];
+const buyerPrompts = ["🔭 Show me something new", "🔥 What's trending right now?", "🛍️ Personalize my feed"];
 const sellerPrompts = ["📈 Which product is my bestseller?", "📉 Which items are low in stock?", "💡 How can I improve my listings?"];
 const riderPrompts = ["🗺️ Show profitable 'hotspot' areas now?", "⛽ Estimate fuel cost for this trip?", "⏰ What are today's peak hours?"];
 const adminPrompts = ["📈 Summarize daily performance", "🚩 Flag suspicious activity", "⚠️ Check platform health"];
@@ -82,6 +82,7 @@ export function CoPilotChat() {
     if (pathname.startsWith("/profile/edit")) return editProfilePrompts;
     if (pathname.startsWith("/profile/change-password")) return changePasswordPrompts;
     if (pathname.startsWith("/profile")) return profileSettingsPrompts;
+    if (pathname.startsWith("/buyer")) return buyerPrompts;
     return buyerPrompts;
   };
 
