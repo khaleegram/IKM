@@ -33,6 +33,7 @@ const activeDeliveryPrompts = ["🚧 Report traffic?", "💬 Send ETA update to 
 const adminApprovalsPrompts = ["✔️ Run automated background check?", "🔎 Flag any issues with these documents?", "💬 Send 'More Info Required' message."];
 const orderHistoryPrompts = ["💬 I have an issue with an order", "📦 Track my ongoing order", "🧾 Get an invoice for this purchase."];
 const salesHistoryPrompts = ["📈 Analyze my revenue this month", "💰 Which product is most profitable?", "📦 Print shipping label."];
+const sellerAnalyticsPrompts = ["📈 Which of my products gets the most views but fewest sales?", "💡 How can I improve my conversion rate?", "💰 Forecast my sales for next month."];
 const profileSettingsPrompts = ["🔐 Secure my account", "🔔 Customize my notifications", "❓ I have a question about my data."];
 const editProfilePrompts = ["💡 Tips for a good profile photo", "✍️ Help write my store bio"];
 const financialReportsPrompts = ["📈 Forecast next month's revenue", "📊 Compare this period to the last one", "⚠️ Any unusual transaction patterns?"];
@@ -73,6 +74,7 @@ export function CoPilotChat() {
     if (pathname.startsWith("/rider/active-delivery")) return activeDeliveryPrompts;
     if (pathname.startsWith("/seller/add-product")) return addProductPrompts;
     if (pathname.startsWith("/seller/sales-history")) return salesHistoryPrompts;
+    if (pathname.startsWith("/seller/analytics")) return sellerAnalyticsPrompts;
     if (pathname.startsWith("/seller")) return sellerPrompts;
     if (pathname.startsWith("/rider")) return riderPrompts;
     if (pathname.startsWith("/admin")) return adminPrompts;

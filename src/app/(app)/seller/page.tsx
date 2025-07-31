@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Package, Plus, Pencil, BarChart2, Edit } from "lucide-react";
+import { DollarSign, Package, Plus, Pencil, BarChart2, Edit, TrendingUp } from "lucide-react";
 import { analyzeSales } from "@/ai/flows/seller-sales-analysis";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
@@ -25,8 +25,8 @@ const products = [
 
 const quickActions = [
     { label: "Add New Product", icon: Plus, href: "/seller/add-product" },
-    { label: "View Sales", icon: BarChart2, href: "/seller/sales-history" },
-    { label: "Edit Storefront", icon: Edit, href: "/profile/edit" },
+    { label: "Sales History", icon: BarChart2, href: "/seller/sales-history" },
+    { label: "View Analytics", icon: TrendingUp, href: "/seller/analytics" },
 ]
 
 export default async function SellerPage() {
