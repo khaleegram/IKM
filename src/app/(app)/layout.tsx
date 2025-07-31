@@ -34,7 +34,7 @@ export default function AppLayout({
     <SidebarProvider>
       <div className="flex min-h-screen">
         <Sidebar collapsible="icon" className="border-r">
-            <div className="flex flex-col h-full p-2">
+            <div id="sidebar-menu" className="flex flex-col h-full p-2">
                 <div className="p-2 pb-4">
                   <Link href="/buyer">
                     <IkmLogo className="w-auto h-7 group-data-[collapsible=icon]:hidden" />
@@ -91,7 +91,9 @@ export default function AppLayout({
         <SidebarInset className="flex-1">
           {children}
         </SidebarInset>
-        <CoPilotWidget />
+        <div id="copilot-widget">
+          <CoPilotWidget />
+        </div>
       </div>
     </SidebarProvider>
   );

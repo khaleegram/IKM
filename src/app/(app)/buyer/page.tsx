@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { OnboardingTour } from "@/components/onboarding-tour";
 
 const initialProducts = [
   {
@@ -88,6 +89,7 @@ export default function BuyerPage() {
 
   return (
     <div className="flex flex-col h-full bg-muted/40">
+      <OnboardingTour />
       <header className="p-4 sm:p-6 bg-background border-b sticky top-0 z-20">
         <div className="flex justify-between items-center">
             <div>
@@ -112,7 +114,7 @@ export default function BuyerPage() {
           </Link>
         </div>
       </header>
-      <main className="flex-1 overflow-auto">
+      <main id="main-feed" className="flex-1 overflow-auto">
         
         {/* Banner Carousel */}
         <section className="p-4 sm:p-6">
