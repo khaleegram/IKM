@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Package, Plus, Pencil, BarChart2 } from "lucide-react";
+import { DollarSign, Package, Plus, Pencil, BarChart2, Edit } from "lucide-react";
 import { analyzeSales } from "@/ai/flows/seller-sales-analysis";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
@@ -17,11 +17,17 @@ const salesData = JSON.stringify([
 ]);
 
 const products = [
-    { id: 'p001', name: 'Artisan Coffee Beans', image: 'https://placehold.co/100x100.png', stock: 82, active: true },
-    { id: 'p002', name: 'Handmade Ceramic Mug', image: 'https://placehold.co/100x100.png', stock: 15, active: true },
-    { id: 'p003', name: 'Organic Tea Selection', image: 'https://placehold.co/100x100.png', stock: 40, active: false },
-    { id: 'p004', name: 'Gourmet Chocolate Bar', image: 'https://placehold.co/100x100.png', stock: 120, active: true },
+    { id: 'p001', name: 'Artisan Coffee Beans', image: 'https://placehold.co/100x100.png', hint: "coffee beans", stock: 82, active: true },
+    { id: 'p002', name: 'Handmade Ceramic Mug', image: 'https://placehold.co/100x100.png', hint: "mug", stock: 15, active: true },
+    { id: 'p003', name: 'Organic Tea Selection', image: 'https://placehold.co/100x100.png', hint: "tea box", stock: 40, active: false },
+    { id: 'p004', name: 'Gourmet Chocolate Bar', image: 'https://placehold.co/100x100.png', hint: "chocolate", stock: 120, active: true },
 ];
+
+const quickActions = [
+    { label: "Add New Product", icon: Plus, href: "/seller/add-product" },
+    { label: "View Sales", icon: BarChart2, href: "/seller/sales-history" },
+    { label: "Edit Storefront", icon: Edit, href: "/profile/edit" },
+]
 
 export default async function SellerPage() {
   const insights = await analyzeSales({ salesData });
@@ -40,34 +46,50 @@ export default async function SellerPage() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Sales (30d)</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">$16,250.00</div>
+              <div className="text-2xl font-bold">₦1,625,000</div>
               <p className="text-xs text-muted-foreground">+18.2% from last month</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{products.length}</div>
-              <p className="text-xs text-muted-foreground">3 active</p>
-            </CardContent>
-          </Card>
-          <Card className="md:col-span-2 lg:col-span-1">
-             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Active Orders</CardTitle>
-              <BarChart2 className="h-4 w-4 text-muted-foreground" />
+              <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">12</div>
               <p className="text-xs text-muted-foreground">5 waiting for shipment</p>
             </CardContent>
           </Card>
+          <Card className="md:col-span-2 lg:col-span-1">
+             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+               <div className="text-2xl font-bold">{products.length}</div>
+              <p className="text-xs text-muted-foreground">3 active</p>
+            </CardContent>
+          </Card>
+
+           <Card className="md:col-span-2 lg:col-span-3">
+            <CardHeader>
+                <CardTitle className="font-headline">Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {quickActions.map(action => (
+                     <Link key={action.label} href={action.href}>
+                        <Button variant="outline" className="w-full h-20 flex-col gap-2">
+                            <action.icon className="h-5 w-5" />
+                            <span>{action.label}</span>
+                        </Button>
+                    </Link>
+                ))}
+            </CardContent>
+        </Card>
 
           <Card className="md:col-span-2 lg:col-span-3">
             <CardHeader>
@@ -100,6 +122,7 @@ export default async function SellerPage() {
                                 width={60}
                                 height={60}
                                 className="rounded-md object-cover"
+                                data-ai-hint={product.hint}
                             />
                             <div className="flex-grow">
                                 <p className="font-semibold">{product.name}</p>
@@ -116,14 +139,8 @@ export default async function SellerPage() {
                 </ul>
             </CardContent>
           </Card>
-
         </div>
       </main>
-      <Link href="/seller/add-product" className="fixed bottom-6 right-6">
-        <Button size="icon" className="h-14 w-14 rounded-full shadow-lg">
-          <Plus className="h-6 w-6" />
-        </Button>
-      </Link>
     </div>
   );
 }

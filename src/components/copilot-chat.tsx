@@ -22,7 +22,7 @@ type Message = {
 };
 
 const buyerPrompts = ["🔭 Show me something new", "🔥 What's trending right now?", "🛍️ Personalize my feed"];
-const sellerPrompts = ["📈 Which product is my bestseller?", "📉 Which items are low in stock?", "💡 How can I improve my listings?"];
+const sellerPrompts = ["📈 Analyze my revenue this month", "💰 Which product is most profitable?", "📦 Print a shipping label."];
 const riderPrompts = ["🗺️ Show profitable 'hotspot' areas now?", "⛽ Estimate fuel cost for this trip?", "⏰ What are today's peak hours?"];
 const adminPrompts = ["📈 Summarize daily performance", "🚩 Flag suspicious activity", "⚠️ Check platform health"];
 const productDetailPrompts = ["🤔 Any discounts for this item?", "⭐ Summarize the reviews", "↔️ Show me similar products"];

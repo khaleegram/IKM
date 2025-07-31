@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Camera } from 'lucide-react';
+import { ArrowLeft, Camera, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -24,7 +24,7 @@ export default function AddNewProductPage() {
 
   return (
     <div className="flex flex-col h-full bg-muted/40">
-      <header className="p-4 sm:p-6 bg-background border-b flex items-center gap-4">
+      <header className="p-4 sm:p-6 bg-background border-b flex items-center gap-4 sticky top-0 z-10">
         <Link href="/seller">
           <Button variant="outline" size="icon" className="h-8 w-8">
             <ArrowLeft className="h-4 w-4" />
@@ -51,7 +51,7 @@ export default function AddNewProductPage() {
                         <p className="mb-2 text-sm text-muted-foreground">
                           <span className="font-semibold">Click to upload</span> or drag and drop
                         </p>
-                        <p className="text-xs text-muted-foreground">SVG, PNG, JPG or GIF (MAX. 800x400px)</p>
+                        <p className="text-xs text-muted-foreground">High-resolution images work best</p>
                       </div>
                       <input id="dropzone-file" type="file" className="hidden" multiple />
                     </Label>
@@ -66,6 +66,10 @@ export default function AddNewProductPage() {
                 <div className="space-y-2">
                   <Label htmlFor="product-description">Product Description</Label>
                   <Textarea id="product-description" placeholder="Describe your product in detail..." rows={5} />
+                   <Button variant="ghost" size="sm" className="text-accent hover:text-accent">
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate with AI
+                  </Button>
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-6">
