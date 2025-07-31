@@ -14,7 +14,7 @@ const initialProducts = [
     {
         id: 2,
         name: "Wireless Headphones",
-        price: "$99.99",
+        price: "₦65,500",
         image: "https://placehold.co/600x400.png",
         hint: "headphones",
         isWishlisted: true,
@@ -22,7 +22,7 @@ const initialProducts = [
     {
         id: 6,
         name: "Scented Candle Set",
-        price: "$35.00",
+        price: "₦12,000",
         image: "https://placehold.co/600x400.png",
         hint: "home decor",
         isWishlisted: true,

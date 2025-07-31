@@ -260,3 +260,4 @@ const ProductCard = ({ product, onWishlistToggle }: { product: typeof initialPro
     );
 }
 
+
