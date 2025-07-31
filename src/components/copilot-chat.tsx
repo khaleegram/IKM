@@ -47,7 +47,7 @@ const writeReviewPrompts = ["💡 What makes a good review?", "✍️ Help me de
 const wishlistPrompts = ["🔔 Notify me if this price drops", "⭐ Which of these has the best reviews?", "🎁 Show me items on my list that are on sale."];
 const paymentMethodsPrompts = ["🏦 How do I add a new payout account?", "🔒 Is my payment information secure?", "💸 What are the platform fees?"];
 const platformHealthPrompts = ["⚠️ Are there any bottlenecks in the user funnel?", "🚀 How can we boost user engagement this week?", "🔎 Identify our most valuable sellers."];
-
+const filterPrompts = ["🔍 Find top-rated fashion items under ₦10,000", "💡 What are the most popular filters?"];
 
 export function CoPilotChat() {
   const pathname = usePathname();
@@ -88,6 +88,7 @@ export function CoPilotChat() {
     if (pathname.startsWith("/profile/edit")) return editProfilePrompts;
     if (pathname.startsWith("/profile/change-password")) return changePasswordPrompts;
     if (pathname.startsWith("/profile")) return profileSettingsPrompts;
+    if (pathname.startsWith("/buyer/filter")) return filterPrompts;
     if (pathname.startsWith("/buyer")) return buyerPrompts;
     return buyerPrompts;
   };

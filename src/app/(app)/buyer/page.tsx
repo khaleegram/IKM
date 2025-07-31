@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, ShoppingCart, Heart, Shirt, Laptop, Home, BookOpen, Star, ChevronRight } from "lucide-react";
+import { Search, ShoppingCart, Heart, Shirt, Laptop, Home, BookOpen, Star, ChevronRight, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
@@ -101,9 +101,15 @@ export default function BuyerPage() {
                 </Button>
             </Link>
         </div>
-        <div className="relative mt-4">
+        <div className="relative mt-4 flex gap-2">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input placeholder="Search for products, sellers, collections..." className="pl-10" />
+           <Link href="/buyer/filter">
+            <Button variant="outline" size="icon">
+                <Filter />
+                <span className="sr-only">Filter</span>
+            </Button>
+          </Link>
         </div>
       </header>
       <main className="flex-1 overflow-auto">
@@ -259,5 +265,3 @@ const ProductCard = ({ product, onWishlistToggle }: { product: typeof initialPro
         </Link>
     );
 }
-
-
