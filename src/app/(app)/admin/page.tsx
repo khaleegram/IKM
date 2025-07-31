@@ -1,7 +1,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Users, Package, CheckCircle, UserPlus, FileText, Settings, Bell } from "lucide-react";
+import { DollarSign, Users, Package, CheckCircle, UserPlus, FileText, Settings, Bell, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
 const kpis = [
@@ -12,8 +12,8 @@ const kpis = [
 ];
 
 const quickActions = [
+    { label: "Platform Health", icon: ShieldCheck, href: "/admin/platform-health" },
     { label: "Manage Users", icon: Users, href: "/admin/manage-users" },
-    { label: "Approve Sellers/Riders", icon: UserPlus, href: "/admin/pending-approvals" },
     { label: "View All Orders", icon: Package, href: "/admin/all-orders" },
     { label: "Financial Reports", icon: FileText, href: "/admin/financial-reports" },
 ]

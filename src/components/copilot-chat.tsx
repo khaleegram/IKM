@@ -46,6 +46,7 @@ const messagesPrompts = ["✍️ Suggest a reply", "✅ Is this a good price to 
 const writeReviewPrompts = ["💡 What makes a good review?", "✍️ Help me describe the quality", "✅ Check my review for clarity."];
 const wishlistPrompts = ["🔔 Notify me if this price drops", "⭐ Which of these has the best reviews?", "🎁 Show me items on my list that are on sale."];
 const paymentMethodsPrompts = ["🏦 How do I add a new payout account?", "🔒 Is my payment information secure?", "💸 What are the platform fees?"];
+const platformHealthPrompts = ["⚠️ Are there any bottlenecks in the user funnel?", "🚀 How can we boost user engagement this week?", "🔎 Identify our most valuable sellers."];
 
 
 export function CoPilotChat() {
@@ -62,6 +63,7 @@ export function CoPilotChat() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const getPrompts = () => {
+    if (pathname.startsWith("/admin/platform-health")) return platformHealthPrompts;
     if (pathname.startsWith("/buyer/wishlist")) return wishlistPrompts;
     if (pathname.startsWith("/buyer/write-review")) return writeReviewPrompts;
     if (pathname.startsWith("/messages")) return messagesPrompts;
