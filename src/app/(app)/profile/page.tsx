@@ -13,7 +13,7 @@ const settingsSections = [
         title: "Account",
         items: [
             { label: "Manage Addresses", href: "#" },
-            { label: "Payment & Payouts", href: "#" },
+            { label: "Payment & Payouts", href: "/profile/payment-methods" },
             { label: "Change Password", href: "/profile/change-password" },
         ]
     },

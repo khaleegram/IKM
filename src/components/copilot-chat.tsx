@@ -44,6 +44,7 @@ const orderDetailsPrompts = ["📨 Email a copy of this invoice", "⭐ Rate this
 const messagesPrompts = ["✍️ Suggest a reply", "✅ Is this a good price to offer?", "❓ Ask about shipping"];
 const writeReviewPrompts = ["💡 What makes a good review?", "✍️ Help me describe the quality", "✅ Check my review for clarity."];
 const wishlistPrompts = ["🔔 Notify me if this price drops", "⭐ Which of these has the best reviews?", "🎁 Show me items on my list that are on sale."];
+const paymentMethodsPrompts = ["🏦 How do I add a new payout account?", "🔒 Is my payment information secure?", "💸 What are the platform fees?"];
 
 
 export function CoPilotChat() {
@@ -79,6 +80,7 @@ export function CoPilotChat() {
     if (pathname.startsWith("/buyer/cart")) return cartPrompts;
     if (pathname.startsWith("/buyer/checkout")) return checkoutPrompts;
     if (pathname.startsWith("/buyer/orders")) return orderHistoryPrompts;
+    if (pathname.startsWith("/profile/payment-methods")) return paymentMethodsPrompts;
     if (pathname.startsWith("/profile/edit")) return editProfilePrompts;
     if (pathname.startsWith("/profile/change-password")) return changePasswordPrompts;
     if (pathname.startsWith("/profile")) return profileSettingsPrompts;
