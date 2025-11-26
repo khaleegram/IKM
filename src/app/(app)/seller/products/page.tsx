@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, MoreHorizontal, FileWarning, Package, Loader2 } from "lucide-react";
+import { Plus, MoreHorizontal, FileWarning, Package, Loader2, Trash2, Edit } from "lucide-react";
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -12,21 +12,62 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { useProductsBySeller } from '@/lib/firebase/firestore/products';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useProductsBySeller, deleteProduct } from '@/lib/firebase/firestore/products';
 import { useFirebase } from '@/firebase';
+import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
 
 
 export default function ProductsPage() {
   const { auth } = useFirebase();
   const user = auth.currentUser;
   const { data: products, isLoading, error } = useProductsBySeller(user?.uid);
+  const { toast } = useToast();
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<string | null>(null);
 
   const hasProducts = products && products.length > 0;
 
   const getStatus = (stock: number) => {
     if (stock > 0) return { text: 'Active', variant: 'support' as const };
     return { text: 'Out of Stock', variant: 'destructive' as const };
+  }
+
+  const handleDeleteClick = (productId: string) => {
+    setProductToDelete(productId);
+    setIsAlertOpen(true);
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!productToDelete || !user) return;
+    try {
+      await deleteProduct(productToDelete, user.uid);
+      toast({
+        title: "Product Deleted",
+        description: "The product has been successfully removed from your store.",
+      });
+    } catch (error) {
+       toast({
+        variant: "destructive",
+        title: "Deletion Failed",
+        description: (error as Error).message,
+      });
+    } finally {
+      setIsAlertOpen(false);
+      setProductToDelete(null);
+    }
   }
 
   return (
@@ -112,9 +153,16 @@ export default function ProductsPage() {
                               </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                              <DropdownMenuItem>Edit</DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/seller/products/edit/${product.id}`}>
+                                    <Edit className="mr-2 h-4 w-4" /> Edit
+                                </Link>
+                              </DropdownMenuItem>
                               <DropdownMenuItem>View Performance</DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteClick(product.id!)}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                              </DropdownMenuItem>
                           </DropdownMenuContent>
                       </DropdownMenu>
                   </CardFooter>
@@ -123,6 +171,22 @@ export default function ProductsPage() {
           </div>
         )}
       </main>
+      <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete this product from your store.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">
+              Yes, delete product
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

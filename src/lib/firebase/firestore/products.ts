@@ -26,6 +26,7 @@ export interface Product extends DocumentData {
   stock: number;
   imageUrl?: string;
   sellerId: string;
+  category?: string;
 }
 
 // Hook to get all products for the storefront
@@ -117,7 +118,10 @@ export const useProduct = (productId: string) => {
   }, [firestore, productId]);
 
   useEffect(() => {
-    if (!productRef) return;
+    if (!productRef) {
+      setIsLoading(false);
+      return;
+    };
 
     const unsubscribe = onSnapshot(
       productRef,

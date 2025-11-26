@@ -1,3 +1,4 @@
+
 'use server';
 
 import { generateProductDescription as genProductDesc, type GenerateProductDescriptionInput } from "@/ai/flows/seller-product-description-assistance";
@@ -28,6 +29,7 @@ const productSchema = z.object({
       (val) => (val === "" ? undefined : Number(val)),
       z.number().int().min(0, "Stock cannot be negative")
     ),
+    category: z.string().optional(),
     imageUrl: z.string().optional(),
 });
 
