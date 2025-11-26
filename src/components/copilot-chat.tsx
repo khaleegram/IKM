@@ -3,13 +3,17 @@
 
 import { usePathname } from "next/navigation";
 import React, { useState, useTransition, useRef, useEffect } from "react";
-import { Bot, Send, Sparkles, User, Loader } from "lucide-react";
+import { Bot, Send, Sparkles, User, Loader, ShoppingCart } from "lucide-react";
+import Link from 'next/link';
+import Image from 'next/image';
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getProductDescription, suggestStoreName } from "@/lib/actions";
+import { personalizeFeed } from "@/ai/flows/personalize-feed";
+import type { Product } from "@/lib/firebase/firestore/products";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "./ui/label";
@@ -20,6 +24,11 @@ type Message = {
   content: React.ReactNode;
 };
 
+type ProductMessage = {
+    role: "assistant";
+    content: Product[];
+}
+
 const sellerDashboardPrompts = ["📈 How do I get my first sale?", "💡 Suggest a name for my store", "💰 How much should I charge for delivery?"];
 const sellerProductsPrompts = ["✍️ Help write a compelling product description", "🖼️ What kind of images work best for [Product]?", "⚖️ How should I price this item?"];
 const buyerCheckoutPrompts = ["🚚 What are the delivery options?", "🔒 Is my payment secure?", "🤔 Can I change my order?"];
@@ -29,12 +38,15 @@ const defaultPrompts = ["🔭 Show me something new", "🔥 What's trending righ
 export function CoPilotChat() {
   const pathname = usePathname();
   const { toast } = useToast();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<(Message | ProductMessage)[]>([]);
   const [input, setInput] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const [isFormModalOpen, setFormModalOpen] = useState(false);
   const [currentAction, setCurrentAction] = useState<string | null>(null);
+  const [isAwaitingInput, setAwaitingInput] = useState(false);
+  const [personalizationTopic, setPersonalizationTopic] = useState('');
+
 
   const formRef = useRef<HTMLFormElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -58,12 +70,20 @@ export function CoPilotChat() {
         if (action.includes("help write") && action.includes("product description")) {
             setCurrentAction("✍️ Help write a compelling product description");
             setFormModalOpen(true);
-            return; // Don't add a default response yet
+            return;
         }
 
         if (action.includes("suggest a name for my store")) {
             setCurrentAction("💡 Suggest a name for my store");
             setFormModalOpen(true);
+            return;
+        }
+
+        if (action.includes("personalize my feed")) {
+            response = "Of course! What are you interested in? For example: 'handmade jewelry', 'men\'s fashion', or 'traditional art'.";
+            setAwaitingInput(true);
+            setPersonalizationTopic('personalize_feed');
+            setMessages(prev => [...prev, { role: "assistant", content: response }]);
             return;
         }
         
@@ -120,9 +140,41 @@ export function CoPilotChat() {
     });
   };
 
+  const handleInputSubmit = (text: string) => {
+    if (!text.trim()) return;
+
+    const newUserMessage: Message = { role: 'user', content: text };
+    setMessages(prev => [...prev, newUserMessage]);
+    setInput('');
+
+    if (isAwaitingInput && personalizationTopic === 'personalize_feed') {
+        setAwaitingInput(false);
+        setPersonalizationTopic('');
+        startTransition(async () => {
+            try {
+                const results = await personalizeFeed({ interests: text });
+                if (Array.isArray(results) && results.length > 0) {
+                     setMessages(prev => [...prev, { role: "assistant", content: results }]);
+                } else if (typeof results === 'string') {
+                    setMessages(prev => [...prev, { role: "assistant", content: results }]);
+                } else {
+                     setMessages(prev => [...prev, { role: "assistant", content: "I couldn't find anything matching that. Try another search?" }]);
+                }
+
+            } catch (error) {
+                 toast({ variant: 'destructive', title: 'An error occurred', description: (error as Error).message });
+                 setMessages(prev => [...prev, { role: "assistant", content: "Sorry, something went wrong while searching." }]);
+            }
+        });
+    } else {
+        handlePromptClick(text);
+    }
+  }
+
+
   useEffect(() => {
     if (scrollAreaRef.current) {
-        const scrollDiv = scrollAreaRef.current.querySelector('div');
+        const scrollDiv = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
         if (scrollDiv) {
           scrollDiv.scrollTo({ top: scrollDiv.scrollHeight, behavior: 'smooth' });
         }
@@ -208,9 +260,33 @@ export function CoPilotChat() {
                     <Bot size={20} />
                   </span>
                 )}
-                <div className={`rounded-lg px-4 py-2 ${m.role === "user" ? "bg-muted" : "bg-transparent"}`}>
-                  {m.content}
-                </div>
+                {Array.isArray(m.content) ? (
+                    <div className="w-full">
+                        <p className="mb-2 text-muted-foreground">Here's what I found for you:</p>
+                        <div className="grid grid-cols-2 gap-2">
+                            {(m as ProductMessage).content.map((product: Product) => (
+                                <Card key={product.id} className="overflow-hidden">
+                                     <Link href={`/product/${product.id}`} target="_blank">
+                                        <Image src={product.imageUrl || `https://picsum.photos/seed/${product.id}/200/200`} alt={product.name} width={200} height={200} className="w-full aspect-square object-cover" />
+                                    </Link>
+                                    <CardHeader className="p-2">
+                                        <CardTitle className="text-sm font-medium line-clamp-2">{product.name}</CardTitle>
+                                    </CardHeader>
+                                    <CardFooter className="p-2 flex justify-between items-center">
+                                        <p className="text-xs font-bold">₦{product.price.toLocaleString()}</p>
+                                        <Button size="icon" variant="ghost" className="h-6 w-6">
+                                            <ShoppingCart className="h-4 w-4" />
+                                        </Button>
+                                    </CardFooter>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                     <div className={`rounded-lg px-4 py-2 ${m.role === "user" ? "bg-muted" : "bg-transparent"}`}>
+                        {m.content}
+                    </div>
+                )}
                 {m.role === "user" && (
                   <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-secondary text-secondary-foreground">
                     <User size={20} />
@@ -236,24 +312,20 @@ export function CoPilotChat() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!input.trim()) return;
-            handlePromptClick(input);
-            setInput("");
+            handleInputSubmit(input);
           }}
         >
           <div className="relative">
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask a question or type a command..."
+              placeholder={isAwaitingInput ? "e.g., 'Handmade jewelry'" : "Ask a question..."}
               className="pr-12"
               rows={1}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  if (!input.trim()) return;
-                  handlePromptClick(input);
-setInput("");
+                  handleInputSubmit(input);
                 }
               }}
             />
