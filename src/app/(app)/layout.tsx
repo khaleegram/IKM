@@ -239,7 +239,7 @@ export default function AppLayout({
             {children}
         </main>
          <footer className="p-6 text-center text-sm text-muted-foreground border-t">
-            <p>&copy; {new Date().getFullYear()} IKM Marketplace. All Rights Reserved.</p>
+            <p>&copy; {new Date().getFullYear()} IK Market Place. All Rights Reserved.</p>
         </footer>
         <CoPilotWidget />
       </div>
