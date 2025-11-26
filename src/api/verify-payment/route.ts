@@ -1,29 +1,9 @@
-
-import 'dotenv/config';
 import { NextRequest, NextResponse } from 'next/server';
-import { collection, addDoc, serverTimestamp, getFirestore } from 'firebase/firestore';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
-import { CartItem } from '@/lib/cart-context';
-import { Order } from '@/lib/firebase/firestore/orders';
+import { getAdminFirestore } from '@/lib/firebase/admin';
+import { serverTimestamp } from 'firebase-admin/firestore';
+import type { CartItem } from '@/lib/cart-context';
+import type { Order } from '@/lib/firebase/firestore/orders';
 import { headers } from 'next/headers';
-
-// Initialize Firebase Admin SDK
-// This is necessary for server-side operations
-try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string);
-    if (!getApps().length) {
-        initializeApp({
-            credential: cert(serviceAccount)
-        });
-    }
-} catch (e) {
-    console.error('Firebase Admin initialization error:', e);
-    // Add a check to ensure this doesn't run on the client-side during build
-    if (typeof window === 'undefined') {
-        console.error("FIREBASE_SERVICE_ACCOUNT_KEY environment variable not set or invalid. Skipping admin initialization.");
-    }
-}
 
 
 export async function POST(req: NextRequest) {
@@ -48,7 +28,7 @@ export async function POST(req: NextRequest) {
              throw new Error(paystackResult.message || 'Paystack verification failed');
         }
 
-        const { status, amount, currency } = paystackResult.data;
+        const { status, amount } = paystackResult.data;
 
         // 2. Check if transaction was successful and amount is correct
         if (status !== 'success' || amount / 100 !== total) {
@@ -56,21 +36,17 @@ export async function POST(req: NextRequest) {
         }
 
         // 3. Create the order in Firestore using Firebase Admin SDK
-        // In a real multi-seller marketplace, group items by seller and create separate orders.
-        // For this MVP, we assume all items come from the first item's seller.
         const sellerId = cartItems[0].sellerId;
-        const customerId = headers().get('X-User-UID'); // We'll need to pass this from the client middleware if needed. For now, it's illustrative.
+        const customerId = headers().get('X-User-UID'); 
 
         if (!customerId) {
             console.warn("X-User-UID header not found. Order will be created without a customerId.");
-            // In a production app, you'd likely want to return an error here.
-            // return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
         }
         
         const orderData: Omit<Order, 'id' | 'createdAt'> = {
-            customerId: customerId || "anonymous", // Fallback for safety
+            customerId: customerId || "anonymous", 
             sellerId: sellerId,
-            items: cartItems.map(({ id, name, price, quantity, sellerId }: any) => ({ id, name, price, quantity, sellerId })),
+            items: cartItems.map(({ id, name, price, quantity }: CartItem) => ({ productId: id, name, price, quantity })),
             total: total,
             status: 'Processing',
             deliveryAddress: deliveryAddress,
@@ -78,8 +54,8 @@ export async function POST(req: NextRequest) {
         };
 
         const db = getAdminFirestore();
-        const ordersCollection = collection(db, 'orders');
-        const orderRef = await addDoc(ordersCollection, {
+        const ordersCollection = db.collection('orders');
+        const orderRef = await ordersCollection.add({
             ...orderData,
             createdAt: serverTimestamp(),
             paystackReference: reference,

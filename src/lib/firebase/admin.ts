@@ -1,31 +1,39 @@
-
-import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
+import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getStorage, Storage } from 'firebase-admin/storage';
+import 'dotenv/config';
 
 let adminApp: App;
 
-function initializeAdminApp() {
+function initializeAdminApp(): App {
+    // If the app is already initialized, return it
     if (getApps().length > 0) {
         return getApps()[0];
     }
+    
+    // Check for all required environment variables
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    // Private keys in .env files often have newline characters escaped as `\n`.
+    // We need to replace them back to actual newlines for the SDK to parse it correctly.
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
-    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    if (!serviceAccountKey) {
-        throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
+    if (!projectId || !clientEmail || !privateKey) {
+        throw new Error(
+            'Missing Firebase Admin SDK credentials. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in your .env file.'
+        );
     }
+    
+    const credential = cert({
+        projectId,
+        clientEmail,
+        privateKey,
+    });
 
-    let serviceAccount;
-    try {
-        serviceAccount = JSON.parse(serviceAccountKey);
-    } catch (e) {
-        console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Make sure it's a valid JSON string.", e);
-        throw new Error('Firebase service account key is malformed.');
-    }
-
+    // Initialize the app
     return initializeApp({
-        credential: cert(serviceAccount),
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+        credential,
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     });
 }
 
