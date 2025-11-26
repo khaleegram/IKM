@@ -5,12 +5,12 @@
 import { FirebaseOptions, initializeApp } from 'firebase/app';
 
 const firebaseConfig: FirebaseOptions = {
-  apiKey: "AIzaSyABk4yPJsRKWpTT0xheXTsi8Cw0s4BPuiE",
-  authDomain: "ikm-marketplace.firebaseapp.com",
-  projectId: "ikm-marketplace",
-  storageBucket: "ikm-marketplace.appspot.com",
-  messagingSenderId: "723822682554",
-  appId: "1:723822682554:web:188fa4303a8b3f8737bd83"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
 export const app = initializeApp(firebaseConfig);
