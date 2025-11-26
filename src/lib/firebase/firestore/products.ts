@@ -62,13 +62,18 @@ export const useAllProducts = (productLimit?: number) => {
 
 
   useEffect(() => {
-    if (!productsQuery) return;
+    if (!productsQuery) {
+        setIsLoading(false);
+        return;
+    }
+    setIsLoading(true);
 
     const unsubscribe = onSnapshot(
       productsQuery,
       (snapshot) => {
         const productsData = snapshot.docs.map(doc => ({ id: doc.id, price: doc.data().initialPrice, ...doc.data() } as Product));
         setProducts(productsData);
+        setError(null);
         setIsLoading(false);
       },
       (err) => {
@@ -99,7 +104,8 @@ export const useProductsBySeller = (sellerId: string | undefined) => {
 
   useEffect(() => {
     if (!sellerProductsQuery) {
-        if (!sellerId) setIsLoading(false);
+        setIsLoading(false);
+        setProducts([]);
         return;
     }
     
@@ -109,6 +115,7 @@ export const useProductsBySeller = (sellerId: string | undefined) => {
       (snapshot) => {
         const productsData = snapshot.docs.map(doc => ({ id: doc.id, price: doc.data().initialPrice, ...doc.data() } as Product));
         setProducts(productsData);
+        setError(null);
         setIsLoading(false);
       },
       (err) => {
@@ -142,6 +149,7 @@ export const useProduct = (productId: string) => {
       return;
     };
 
+    setIsLoading(true);
     const unsubscribe = onSnapshot(
       productRef,
       (doc) => {
@@ -150,6 +158,7 @@ export const useProduct = (productId: string) => {
         } else {
           setProduct(null);
         }
+        setError(null);
         setIsLoading(false);
       },
       (err) => {
@@ -210,3 +219,4 @@ export const deleteProduct = async (firestore: Firestore, productId: string, use
 
     return await deleteDoc(productRef);
 };
+

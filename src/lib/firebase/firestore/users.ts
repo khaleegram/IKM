@@ -56,7 +56,8 @@ export const useUserProfile = (userId: string | undefined) => {
 
   useEffect(() => {
     if (!userRef) {
-      if(!userId) setIsLoading(false);
+      setIsLoading(false);
+      setUserProfile(null);
       return;
     };
 
@@ -65,11 +66,12 @@ export const useUserProfile = (userId: string | undefined) => {
       userRef,
       (doc) => {
         if (doc.exists()) {
-          setUserProfile(prev => ({ ...prev, id: doc.id, ...doc.data() } as UserProfile));
+          setUserProfile(prev => ({ ...(prev || {}), id: doc.id, ...doc.data() } as UserProfile));
         } else {
           setUserProfile(null);
         }
-        setIsLoading(false);
+        setError(null);
+        // Don't set loading to false here, wait for locations
       },
       (err) => {
         console.error("Error fetching user profile:", err);
@@ -84,13 +86,16 @@ export const useUserProfile = (userId: string | undefined) => {
             locationsRef,
             (snapshot) => {
                 const locationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DeliveryLocation));
-                setUserProfile(prev => ({ ...prev, deliveryLocations: locationsData } as UserProfile));
+                setUserProfile(prev => ({ ...(prev || {}), deliveryLocations: locationsData } as UserProfile));
+                setIsLoading(false); // Set loading to false after locations are fetched
             },
             (err) => {
                 console.error("Error fetching delivery locations: ", err);
-                // Not setting main error state as locations might be optional
+                setIsLoading(false); // Also set loading to false on error
             }
         )
+    } else {
+      setIsLoading(false);
     }
 
 
@@ -121,12 +126,14 @@ export const useAllUserProfiles = () => {
         setIsLoading(false);
         return;
     };
+    setIsLoading(true);
 
     const unsubscribe = onSnapshot(
       usersQuery,
       (snapshot) => {
         const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile));
         setUsers(usersData);
+        setError(null);
         setIsLoading(false);
       },
       (err) => {
