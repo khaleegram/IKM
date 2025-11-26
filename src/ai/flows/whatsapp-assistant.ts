@@ -40,25 +40,11 @@ const searchProductsForWhatsApp = ai.defineTool(
       console.log(`[Tool] Searching for products with query: ${input.query}`);
       // This is a bit of a hack. The `findProducts` tool returns a slightly different schema.
       // We'll call the underlying search function directly.
-      const db = (await import('@/lib/firebase/admin')).getAdminFirestore();
-      const productsRef = db.collection('products');
-      const snapshot = await productsRef.get();
-
-      if (snapshot.empty) {
-          return [];
-      }
-
-      const allProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-
-      const lowercasedTerm = input.query.toLowerCase();
-      const filteredProducts = allProducts.filter(product => 
-          product.name.toLowerCase().includes(lowercasedTerm) || 
-          (product.description && product.description.toLowerCase().includes(lowercasedTerm)) ||
-          (product.category && product.category.toLowerCase().includes(lowercasedTerm))
-      );
+      const { searchProducts } = await import('@/lib/actions');
+      const allProducts = await searchProducts(input.query);
       
       // Return the fields needed for negotiation
-      return filteredProducts.map(({ id, name, initialPrice, lastPrice, description, stock }) => ({ id, name, initialPrice, lastPrice, description, stock }));
+      return allProducts.map(({ id, name, initialPrice, lastPrice, description, stock }) => ({ id, name, initialPrice, lastPrice, description, stock }));
     }
 );
 

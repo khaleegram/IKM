@@ -13,20 +13,26 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getProductDescription, suggestStoreName } from "@/lib/actions";
 import { personalizeFeed } from "@/ai/flows/personalize-feed";
-import type { Product } from "@/lib/firebase/firestore/products";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 
+type ChatProduct = {
+    id: string;
+    name: string;
+    price: number;
+    imageUrl?: string;
+}
+
 type Message = {
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant";
   content: React.ReactNode;
 };
 
 type ProductMessage = {
     role: "assistant";
-    content: Product[];
+    content: ChatProduct[];
 }
 
 const sellerDashboardPrompts = ["📈 How do I get my first sale?", "💡 Suggest a name for my store", "💰 How much should I charge for delivery?"];
@@ -153,10 +159,11 @@ export function CoPilotChat() {
         startTransition(async () => {
             try {
                 const results = await personalizeFeed({ interests: text });
-                if (Array.isArray(results) && results.length > 0) {
-                     setMessages(prev => [...prev, { role: "assistant", content: results }]);
-                } else if (typeof results === 'string') {
-                    setMessages(prev => [...prev, { role: "assistant", content: results }]);
+                
+                if (results.type === 'products' && Array.isArray(results.data) && results.data.length > 0) {
+                     setMessages(prev => [...prev, { role: "assistant", content: results.data }]);
+                } else if (results.type === 'message') {
+                    setMessages(prev => [...prev, { role: "assistant", content: results.data }]);
                 } else {
                      setMessages(prev => [...prev, { role: "assistant", content: "I couldn't find anything matching that. Try another search?" }]);
                 }
@@ -264,7 +271,7 @@ export function CoPilotChat() {
                     <div className="w-full">
                         <p className="mb-2 text-muted-foreground">Here's what I found for you:</p>
                         <div className="grid grid-cols-2 gap-2">
-                            {(m as ProductMessage).content.map((product: Product) => (
+                            {(m as ProductMessage).content.map((product: ChatProduct) => (
                                 <Card key={product.id} className="overflow-hidden">
                                      <Link href={`/product/${product.id}`} target="_blank">
                                         <Image src={product.imageUrl || `https://picsum.photos/seed/${product.id}/200/200`} alt={product.name} width={200} height={200} className="w-full aspect-square object-cover" />

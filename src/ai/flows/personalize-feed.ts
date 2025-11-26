@@ -11,7 +11,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { getAdminFirestore } from '@/lib/firebase/admin';
+import { searchProducts } from '@/lib/actions';
 import type { Product } from '@/lib/firebase/firestore/products';
 
 export const PersonalizeFeedInputSchema = z.object({
@@ -29,41 +29,43 @@ export const findProducts = ai.defineTool(
           id: z.string().optional(),
           name: z.string(),
           description: z.string().optional(),
-          price: z.number(),
+          initialPrice: z.number(),
           imageUrl: z.string().optional(),
           sellerId: z.string().optional(),
+          category: z.string().optional(),
       })),
     },
     async (input) => {
-        const db = getAdminFirestore();
-        const productsRef = db.collection('products');
-        const snapshot = await productsRef.get();
-
-        if (snapshot.empty) {
-            return [];
-        }
-
-        const allProducts: Product[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-
-        const lowercasedTerm = input.query.toLowerCase();
-        const filteredProducts = allProducts.filter(product => 
-            product.name.toLowerCase().includes(lowercasedTerm) || 
-            (product.description && product.description.toLowerCase().includes(lowercasedTerm)) ||
-            (product.category && product.category.toLowerCase().includes(lowercasedTerm))
-        ).slice(0, 4); // Return a max of 4 products for the chat
-
-        // Map to the schema, using initialPrice as price
-        return filteredProducts.map(({ id, name, description, initialPrice, imageUrl, sellerId }) => ({
+        console.log(`[Tool] Searching for products with query: ${input.query}`);
+        const products = await searchProducts(input.query);
+        // Map to the schema, ensuring `price` is not included as it is client-side only
+        return products.map(({ id, name, description, initialPrice, imageUrl, sellerId, category }) => ({
             id,
             name,
             description,
-            price: initialPrice,
+            initialPrice,
             imageUrl,
             sellerId,
+            category,
         }));
     }
 );
 
+const personalizeFeedResponseSchema = z.union([
+    z.object({
+        type: z.literal('products'),
+        data: z.array(z.object({
+            id: z.string(),
+            name: z.string(),
+            price: z.number(),
+            imageUrl: z.string().optional(),
+        }))
+    }),
+    z.object({
+        type: z.literal('message'),
+        data: z.string()
+    })
+]);
 
 // Define the main prompt for the personalization flow
 const personalizeFeedPrompt = ai.definePrompt({
@@ -73,7 +75,7 @@ const personalizeFeedPrompt = ai.definePrompt({
     prompt: `You are a personal shopping assistant for IKM Marketplace. A user has told you their interests. Your goal is to find relevant products for them.
 
     1.  Use the 'findProducts' tool to search for products based on the user's interests.
-    2.  The tool will return a list of products. You do not need to say anything else. The system will display the products.
+    2.  The tool will return a list of products. The system will handle displaying these products, so you do not need to say anything further.
     3.  If the tool returns no products, simply tell the user: "I couldn't find any products matching your interests. Try being more specific or browse all products."
 
     User Interests: {{{interests}}}
@@ -85,24 +87,33 @@ export const personalizeFeedFlow = ai.defineFlow(
   {
     name: 'personalizeFeedFlow',
     inputSchema: PersonalizeFeedInputSchema,
-    outputSchema: z.any(), // Can be string or product array
+    outputSchema: personalizeFeedResponseSchema,
   },
   async (input) => {
     const llmResponse = await personalizeFeedPrompt(input);
     
     if (llmResponse.isToolRequest()) {
         const toolResponse = await llmResponse.executeTool();
-        // Return the structured data from the tool
-        return toolResponse.output();
+        const toolOutput = toolResponse.output() as Product[];
+        
+        // Map the full product data to the simplified schema for the chat response
+        const productsForChat = toolOutput.map(p => ({
+            id: p.id!,
+            name: p.name,
+            price: p.initialPrice, // Use initialPrice for display
+            imageUrl: p.imageUrl
+        }));
+        
+        return { type: 'products', data: productsForChat };
     }
     
     // If it's not a tool request, it's a text message (e.g., "no products found")
-    return llmResponse.output();
+    return { type: 'message', data: llmResponse.output() as string };
   }
 );
 
 
 // Wrapper function to be called from the client
-export async function personalizeFeed(input: PersonalizeFeedInput): Promise<any> {
+export async function personalizeFeed(input: PersonalizeFeedInput): Promise<{type: 'products' | 'message', data: any}> {
   return await personalizeFeedFlow(input);
 }
