@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useProductsBySeller, deleteProduct } from '@/lib/firebase/firestore/products';
-import { useFirebase } from '@/firebase';
+import { useFirebase } from '@/firebase/provider';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 

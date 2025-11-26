@@ -14,7 +14,7 @@ import { useState, useTransition, useEffect, useRef } from "react";
 import { getProductDescription } from "@/lib/actions";
 import { updateProduct as updateProductAction } from "@/lib/product-actions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { useFirebase } from "@/firebase";
+import { useFirebase } from "@/firebase/provider";
 import { useProduct } from "@/lib/firebase/firestore/products";
 import Image from "next/image";
 

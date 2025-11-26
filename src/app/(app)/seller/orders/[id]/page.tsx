@@ -32,7 +32,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { useFirebase } from "@/firebase";
+import { useFirebase } from "@/firebase/provider";
 
 const getStatusVariant = (status: Order['status']) => {
     switch (status) {

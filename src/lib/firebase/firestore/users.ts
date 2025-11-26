@@ -14,7 +14,7 @@ import {
   query,
   Firestore
 } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
+import { useFirebase } from '@/firebase/provider';
 
 export interface DeliveryLocation extends DocumentData {
     id: string;

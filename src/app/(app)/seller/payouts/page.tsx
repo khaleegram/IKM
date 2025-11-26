@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { verifyBankAccount, savePayoutDetails } from "@/lib/payout-actions";
 import { useUser } from "@/lib/firebase/auth/use-user";
-import { useFirebase } from "@/firebase";
+import { useFirebase } from "@/firebase/provider";
 import { useUserProfile } from "@/lib/firebase/firestore/users";
 
 
@@ -55,7 +55,7 @@ export default function SellerPayoutsPage() {
     const { toast } = useToast();
     const { user: authUser } = useUser();
     const { firestore } = useFirebase();
-    const { data: userProfile, isLoading: isLoadingProfile } = useUserProfile(authUser?.uid, firestore);
+    const { data: userProfile, isLoading: isLoadingProfile } = useUserProfile(authUser?.uid);
 
     const [isVerifying, startVerifyTransition] = useTransition();
     const [isSaving, startSaveTransition] = useTransition();

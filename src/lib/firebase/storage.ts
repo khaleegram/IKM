@@ -2,7 +2,13 @@
 'use client';
 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { getFirebaseStorage } from '@/firebase';
+import { useFirebase } from '@/firebase/provider';
+import { FirebaseStorage } from 'firebase/storage';
+
+export const getFirebaseStorage = (): FirebaseStorage => {
+    const { storage } = useFirebase();
+    return storage;
+}
 
 export const uploadImage = async (userId: string, file: File): Promise<string> => {
     const storage = getFirebaseStorage();
@@ -18,5 +24,3 @@ export const uploadImage = async (userId: string, file: File): Promise<string> =
 
     return downloadURL;
 };
-
-    

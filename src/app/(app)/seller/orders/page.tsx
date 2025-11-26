@@ -31,7 +31,7 @@ import { useOrdersBySeller, updateOrderStatus, Order } from "@/lib/firebase/fire
 import { useToast } from "@/hooks/use-toast";
 import { format } from 'date-fns';
 import Link from "next/link";
-import { useFirebase } from "@/firebase";
+import { useFirebase } from "@/firebase/provider";
 
 const getStatusVariant = (status: Order['status']) => {
     switch (status) {

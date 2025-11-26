@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Trash2 } from "lucide-react";
-import { useFirebase } from "@/firebase";
+import { useFirebase } from "@/firebase/provider";
 import { useUser } from "@/lib/firebase/auth/use-user";
 import { useUserProfile, updateUserProfile, addDeliveryLocation, deleteDeliveryLocation, DeliveryLocation } from "@/lib/firebase/firestore/users";
 import { useState, useEffect, useTransition } from "react";

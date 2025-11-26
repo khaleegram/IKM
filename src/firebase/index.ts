@@ -1,5 +1,10 @@
+
 'use client';
 
-export * from './provider';
+// This file is the single entrypoint for all client-side Firebase functionality.
+// It exports the necessary providers and hooks for other components to use.
+
 export { FirebaseClientProvider } from './client-provider';
-export type { User } from 'firebase/auth';
+export { useFirebase, FirebaseProvider } from './provider';
+
+    

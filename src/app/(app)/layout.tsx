@@ -10,7 +10,7 @@ import { IkmLogo } from "@/components/icons";
 import { CoPilotWidget } from "@/components/copilot-widget";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/lib/firebase/auth/use-user";
-import { useFirebase } from "@/firebase";
+import { useFirebase } from "@/firebase/provider";
 import { signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useRef } from "react";

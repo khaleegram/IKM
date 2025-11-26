@@ -17,7 +17,7 @@ import {
   orderBy,
   Firestore,
 } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
+import { useFirebase } from '@/firebase/provider';
 import { CartItem } from '@/lib/cart-context';
 
 export interface Order extends DocumentData {

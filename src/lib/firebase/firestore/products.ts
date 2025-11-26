@@ -19,7 +19,7 @@ import {
   getDocs,
   Firestore,
 } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
+import { useFirebase } from '@/firebase/provider';
 
 export interface Product extends DocumentData {
   id?: string;

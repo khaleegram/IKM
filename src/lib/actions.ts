@@ -3,7 +3,6 @@
 
 import { generateProductDescription as genProductDesc, type GenerateProductDescriptionInput } from "@/ai/flows/seller-product-description-assistance";
 import { suggestStoreName as genStoreName, type SuggestStoreNameInput } from "@/ai/flows/store-name-assistance";
-import { getFirestoreInstance } from "@/firebase";
 import { addProduct as addProd, updateProduct as updateProd } from "@/lib/firebase/firestore/products";
 import { uploadImage } from "@/lib/firebase/storage";
 import { z } from "zod";
