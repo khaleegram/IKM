@@ -68,13 +68,18 @@ export async function addProduct(userId: string, data: FormData) {
     const firestore = getAdminFirestore();
     const { image, ...productData } = validation.data;
 
-    await firestore.collection('products').add({
+    const dataToSave: any = {
         ...productData,
         sellerId: userId,
-        imageUrl: imageUrl,
         createdAt: new Date(),
         updatedAt: new Date(),
-    });
+    }
+
+    if (imageUrl) {
+        dataToSave.imageUrl = imageUrl;
+    }
+
+    await firestore.collection('products').add(dataToSave);
 
     revalidatePath('/seller/products');
 }
@@ -106,11 +111,17 @@ export async function updateProduct(productId: string, userId: string, data: For
         imageUrl = await uploadImage(userId, image);
     }
 
-    await productRef.update({
+    const dataToUpdate: any = {
         ...productData,
-        ...(imageUrl && { imageUrl }),
         updatedAt: new Date(),
-    });
+    };
+
+    if (imageUrl) {
+        dataToUpdate.imageUrl = imageUrl;
+    }
+
+
+    await productRef.update(dataToUpdate);
 
     revalidatePath('/seller/products');
     revalidatePath(`/seller/products/edit/${productId}`);

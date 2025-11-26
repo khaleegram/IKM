@@ -148,7 +148,7 @@ export default function NewProductPage() {
                     </Card>
                     <Card>
                         <CardHeader>
-                            <CardTitle>Product Image</CardTitle>
+                            <CardTitle>Product Image (Optional)</CardTitle>
                             <CardDescription>Upload a high-quality image of your product.</CardDescription>
                         </CardHeader>
                         <CardContent>
