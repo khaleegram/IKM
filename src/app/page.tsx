@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Image from 'next/image';
-import { ShoppingCart, Loader2, ArrowRight, Search, Sparkles, Star, Shirt, Brush, Home } from 'lucide-react';
+import { ShoppingCart, Loader2, ArrowRight, Search, Sparkles, Star, Store } from 'lucide-react';
 import { useAllProducts } from '@/lib/firebase/firestore/products';
 import { useCart } from '@/lib/cart-context';
 import { useState, useMemo, useCallback } from 'react';
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Product } from '@/lib/firebase/firestore/products';
+import { IkmLogo } from '@/components/icons';
 
 export default function StoreHomePage() {
   const { data: products, isLoading: isLoadingProducts } = useAllProducts(8);
@@ -28,7 +29,7 @@ export default function StoreHomePage() {
     [products, searchTerm]
   );
 
-  const handleAddToCart = useCallback(async (product: Product) => {
+  const handleAddToCart = useCallback((product: Product) => {
     if (!product.id) return;
     setAddingProductId(product.id);
     try {
@@ -43,34 +44,32 @@ export default function StoreHomePage() {
   
 
   const categoryLinks = [
-    { name: 'Fashion', icon: Shirt, href: '/category/fashion'},
-    { name: 'Art & Crafts', icon: Brush, href: '/category/art-crafts'},
-    { name: 'Home Goods', icon: Home, href: '/category/home-goods'},
+    { name: 'Browse All Stores', icon: Store, href: '/stores'},
   ]
 
   return (
     <>
       {/* Functional Hero Section */}
-      <section className="relative overflow-hidden border-b bg-gradient-to-b from-background via-card to-background">
-         <div className="container relative z-10 mx-auto flex min-h-[40vh] flex-col items-center justify-center space-y-8 px-4 py-16 text-center animate-fade-in-up">
-            <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              Authentic Nigerian Marketplace
-            </h1>
-            <p className="max-w-2xl text-lg text-muted-foreground">
-              Discover unique products from independent sellers and artisans across Nigeria.
+      <section className="relative overflow-hidden border-b bg-gradient-to-b from-background via-card/5 to-background">
+         <div className="container relative z-10 mx-auto flex flex-col items-center justify-center space-y-6 px-4 py-12 text-center animate-fade-in-up">
+            <Link href="/">
+              <IkmLogo className="w-auto h-12" />
+            </Link>
+             <p className="max-w-2xl text-lg text-muted-foreground">
+              Your one-stop marketplace.
             </p>
             <div className="w-full max-w-xl">
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search for products, brands, and more..."
-                  className="h-14 w-full rounded-full bg-background/80 pl-12 pr-4 text-base"
+                  className="h-14 w-full rounded-full bg-card/80 pl-12 pr-4 text-base"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                <span className="text-sm text-muted-foreground">Popular:</span>
+                <span className="text-sm text-muted-foreground">Get started:</span>
                 {categoryLinks.map(link => (
                     <Link href={link.href} key={link.name}>
                         <Button variant="ghost" size="sm" className="rounded-full">
@@ -233,5 +232,3 @@ export default function StoreHomePage() {
     </>
   );
 }
-
-    
