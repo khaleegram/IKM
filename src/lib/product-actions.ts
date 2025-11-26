@@ -1,6 +1,7 @@
 
 'use server';
 
+import 'dotenv/config';
 import { z } from "zod";
 import { getAdminFirestore, getAdminStorage } from "@/lib/firebase/admin";
 import { revalidatePath } from "next/cache";
@@ -41,6 +42,9 @@ async function uploadImage(userId: string, file: File): Promise<string> {
             contentType: file.type,
         },
     });
+
+    // Make the file public to get a public URL
+    await fileUpload.makePublic();
 
     return fileUpload.publicUrl();
 };
