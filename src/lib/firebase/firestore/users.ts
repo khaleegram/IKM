@@ -53,6 +53,7 @@ export const useUserProfile = (userId: string | undefined) => {
       return;
     };
 
+    setIsLoading(true);
     const unsubscribeUser = onSnapshot(
       userRef,
       (doc) => {
@@ -109,7 +110,10 @@ export const useAllUserProfiles = () => {
 
 
   useEffect(() => {
-    if (!usersQuery) return;
+    if (!usersQuery) {
+        setIsLoading(false);
+        return;
+    };
 
     const unsubscribe = onSnapshot(
       usersQuery,

@@ -127,19 +127,16 @@ export default function AppLayout({
     );
   }
 
-  // Fallback for non-seller routes, can be a simple layout
+  // Layout for customer-facing routes
   return (
       <div className="flex flex-col min-h-screen bg-background">
-        <header className="p-4 sm:p-6 flex justify-between items-center border-b">
+        <header className="p-4 sm:p-6 flex justify-between items-center border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
           <Link href="/">
             <IkmLogo className="w-auto h-8" />
           </Link>
           <div className="flex items-center gap-2">
-            <Link href="/login">
+            <Link href="/seller/dashboard">
               <Button variant="ghost">Seller Hub</Button>
-            </Link>
-            <Link href="/wishlist">
-              <Button>My Wishlist</Button>
             </Link>
             <Link href="/cart" className="relative">
               <Button size="icon" variant="outline">
@@ -156,8 +153,9 @@ export default function AppLayout({
             {children}
         </main>
          <footer className="p-6 text-center text-sm text-muted-foreground border-t">
-            <p>&copy; {new Date().getFullYear()} IKM. All Rights Reserved.</p>
+            <p>&copy; {new Date().getFullYear()} IKM Marketplace. All Rights Reserved.</p>
         </footer>
+        <CoPilotWidget />
       </div>
   )
 }

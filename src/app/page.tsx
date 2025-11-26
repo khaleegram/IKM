@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { IkmLogo } from "@/components/icons";
 import Image from 'next/image';
-import { Heart, ShoppingCart, Loader2 } from 'lucide-react';
+import { ShoppingCart, Loader2 } from 'lucide-react';
 import { useAllProducts } from '@/lib/firebase/firestore/products';
 import { useAllUserProfiles } from '@/lib/firebase/firestore/users';
 import { useCart } from '@/lib/cart-context';
@@ -14,35 +14,14 @@ import { useCart } from '@/lib/cart-context';
 export default function StoreHomePage() {
   const { data: products, isLoading: isLoadingProducts } = useAllProducts();
   const { data: users, isLoading: isLoadingUsers } = useAllUserProfiles();
-  const { addToCart } = useCart();
+  const { addToCart, cartCount } = useCart();
 
-  // A simple way to get the first seller's store info as a fallback.
   // In a real multi-seller app, you'd determine which store to show differently.
   const storeInfo = users && users.length > 0 ? users[0] : null;
   const isLoading = isLoadingProducts || isLoadingUsers;
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <header className="p-4 sm:p-6 flex justify-between items-center border-b">
-        <Link href="/">
-          <IkmLogo className="w-auto h-8" />
-        </Link>
-        <div className="flex items-center gap-2">
-          <Link href="/login">
-            <Button variant="ghost">Seller Hub</Button>
-          </Link>
-          <Link href="/wishlist">
-            <Button>My Wishlist</Button>
-          </Link>
-          <Link href="/cart">
-              <Button size="icon" variant="outline">
-                <ShoppingCart className="h-5 w-5" />
-                <span className="sr-only">Shopping Cart</span>
-              </Button>
-            </Link>
-        </div>
-      </header>
-      <main className="flex-1">
+    <>
         <section className="py-12 px-4 sm:px-6">
             <div className="text-center mb-12">
                 <h1 className="text-4xl sm:text-5xl font-bold font-headline">{storeInfo?.storeName || "IKM Marketplace"}</h1>
@@ -90,10 +69,6 @@ export default function StoreHomePage() {
               </div>
             )}
         </section>
-      </main>
-      <footer className="p-6 text-center text-sm text-muted-foreground border-t">
-        <p>&copy; {new Date().getFullYear()} IKM. All Rights Reserved.</p>
-      </footer>
-    </div>
+    </>
   );
 }

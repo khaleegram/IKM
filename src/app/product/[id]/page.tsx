@@ -2,8 +2,7 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { IkmLogo } from "@/components/icons";
-import { Heart, ShoppingCart, Loader2 } from "lucide-react";
+import { ShoppingCart, Loader2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -30,26 +29,6 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <header className="p-4 sm:p-6 flex justify-between items-center border-b">
-        <Link href="/">
-            <IkmLogo className="w-auto h-8" />
-        </Link>
-        <div className="flex items-center gap-2">
-          <Link href="/login">
-            <Button variant="ghost">Seller Hub</Button>
-          </Link>
-          <Link href="/wishlist">
-            <Button>My Wishlist</Button>
-          </Link>
-          <Link href="/cart">
-              <Button size="icon" variant="outline">
-                <ShoppingCart className="h-5 w-5" />
-                <span className="sr-only">Shopping Cart</span>
-              </Button>
-            </Link>
-        </div>
-      </header>
       <main className="flex-1 p-4 sm:p-8">
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
             <div>
@@ -77,17 +56,14 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                         <ShoppingCart className="mr-2"/>
                         Add to Cart
                     </Button>
-                    <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                        <Heart className="mr-2" />
-                        Save to Wishlist
-                    </Button>
+                    <Link href="/cart">
+                        <Button size="lg" variant="outline" className="w-full sm:w-auto">
+                            Go to Cart
+                        </Button>
+                    </Link>
                 </div>
             </div>
         </div>
       </main>
-      <footer className="p-6 text-center text-sm text-muted-foreground border-t">
-        <p>&copy; {new Date().getFullYear()} IKM. All Rights Reserved.</p>
-      </footer>
-    </div>
   );
 }

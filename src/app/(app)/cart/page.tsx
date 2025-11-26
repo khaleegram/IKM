@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Trash2, Plus, Minus, ShoppingCart } from 'lucide-react';
-import { CoPilotWidget } from '@/components/copilot-widget';
 import { useCart } from '@/lib/cart-context';
 
 export default function CartPage() {
@@ -99,7 +98,6 @@ export default function CartPage() {
                     </Link>
                 </div>
             )}
-            <CoPilotWidget />
         </div>
     );
 }
