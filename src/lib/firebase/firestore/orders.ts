@@ -86,6 +86,46 @@ export const useOrdersBySeller = (sellerId: string | undefined) => {
   return { data: orders, isLoading, error };
 };
 
+// Hook to get orders for a specific customer
+export const useOrdersByCustomer = (customerId: string | undefined) => {
+  const { firestore } = useFirebase();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<FirestoreError | null>(null);
+
+  const customerOrdersQuery = useMemo(() => {
+    if (!firestore || !customerId) return null;
+    return query(collection(firestore, 'orders'), where('customerId', '==', customerId), orderBy('createdAt', 'desc'));
+  }, [firestore, customerId]);
+
+  useEffect(() => {
+    if (!customerOrdersQuery) {
+        if (!customerId) setIsLoading(false);
+        return;
+    }
+    
+    setIsLoading(true);
+    const unsubscribe = onSnapshot(
+      customerOrdersQuery,
+      (snapshot) => {
+        const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+        setOrders(ordersData);
+        setIsLoading(false);
+      },
+      (err) => {
+        console.error("Error fetching customer orders: ", err);
+        setError(err);
+        setIsLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [customerId, customerOrdersQuery]);
+
+  return { data: orders, isLoading, error };
+};
+
+
 // Hook to get a single order by ID
 export const useOrder = (orderId: string | undefined) => {
     const { firestore } = useFirebase();

@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut, Wallet, ShoppingCart, Loader2, Store } from "lucide-react";
+import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut, Wallet, ShoppingCart, Loader2, Store, User as UserIcon } from "lucide-react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
@@ -50,10 +50,10 @@ export default function AppLayout({
   const isSellerRoute = pathname.startsWith('/seller');
   
   React.useEffect(() => {
-    if (!isLoading && !user && isSellerRoute) {
+    if (!isLoading && !user && (isSellerRoute || pathname === '/profile')) {
       router.replace('/login');
     }
-  }, [isLoading, user, isSellerRoute, router]);
+  }, [isLoading, user, isSellerRoute, pathname, router]);
 
 
   const getIsActive = (path: string) => pathname === path || (path !== '/seller/dashboard' && pathname.startsWith(path));
@@ -161,6 +161,14 @@ export default function AppLayout({
             <Link href="/seller/dashboard">
               <Button variant="ghost">Seller Hub</Button>
             </Link>
+            {user && (
+              <Link href="/profile">
+                <Button variant="ghost">
+                  <UserIcon className="mr-2 h-4 w-4" />
+                  My Orders
+                </Button>
+              </Link>
+            )}
             <Link href="/cart" className="relative">
               <Button size="icon" variant="outline">
                 <ShoppingCart className="h-5 w-5" />
@@ -170,6 +178,14 @@ export default function AppLayout({
                 <Badge className="absolute -right-2 -top-2 h-5 w-5 justify-center p-0" variant="destructive">{cartCount}</Badge>
               )}
             </Link>
+             {!user && !isLoading && (
+              <Link href="/login">
+                <Button>Login</Button>
+              </Link>
+            )}
+            {user && (
+                 <Button variant="ghost" size="icon" onClick={handleLogout}><LogOut className="h-5 w-5" /></Button>
+            )}
           </div>
         </header>
         <main className="flex-1">
