@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getProductDescription, suggestStoreName } from "@/lib/actions";
 import { personalizeFeed } from "@/ai/flows/personalize-feed";
+import { copilotAssistant } from "@/ai/flows/copilot-assistant";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "./ui/label";
@@ -65,12 +66,11 @@ export function CoPilotChat() {
   };
 
   const handlePromptClick = (prompt: string) => {
-    setMessages(prev => [...prev, { role: "user", content: prompt }]);
+    const newUserMessage = { role: "user", content: prompt };
+    setMessages(prev => [...prev, newUserMessage]);
     
     startTransition(async () => {
       try {
-        let response: React.ReactNode = "I'm sorry, I can't help with that yet. As an AI prototype, my capabilities are still under development.";
-        
         const action = prompt.toLowerCase();
 
         if (action.includes("help write") && action.includes("product description")) {
@@ -86,14 +86,21 @@ export function CoPilotChat() {
         }
 
         if (action.includes("personalize my feed")) {
-            response = "Of course! What are you interested in? For example: 'handmade jewelry', 'men\'s fashion', or 'traditional art'.";
+            const response = "Of course! What are you interested in? For example: 'handmade jewelry', 'men\\'s fashion', or 'traditional art'.";
             setAwaitingInput(true);
             setPersonalizationTopic('personalize_feed');
             setMessages(prev => [...prev, { role: "assistant", content: response }]);
             return;
         }
-        
-        setMessages(prev => [...prev, { role: "assistant", content: response }]);
+
+        // For all other general prompts, call the main assistant
+        const results = await copilotAssistant({ message: prompt });
+        if (results.type === 'products') {
+            setMessages(prev => [...prev, { role: 'assistant', content: results.data }]);
+        } else {
+            setMessages(prev => [...prev, { role: 'assistant', content: results.data }]);
+        }
+
       } catch (error) {
         toast({ variant: 'destructive', title: 'An error occurred', description: (error as Error).message });
         setMessages(prev => [...prev, { role: "assistant", content: "Sorry, something went wrong." }]);
@@ -153,29 +160,29 @@ export function CoPilotChat() {
     setMessages(prev => [...prev, newUserMessage]);
     setInput('');
 
-    if (isAwaitingInput && personalizationTopic === 'personalize_feed') {
-        setAwaitingInput(false);
-        setPersonalizationTopic('');
-        startTransition(async () => {
-            try {
-                const results = await personalizeFeed({ interests: text });
-                
-                if (results.type === 'products' && Array.isArray(results.data) && results.data.length > 0) {
-                     setMessages(prev => [...prev, { role: "assistant", content: results.data }]);
-                } else if (results.type === 'message') {
-                    setMessages(prev => [...prev, { role: "assistant", content: results.data }]);
-                } else {
-                     setMessages(prev => [...prev, { role: "assistant", content: "I couldn't find anything matching that. Try another search?" }]);
-                }
-
-            } catch (error) {
-                 toast({ variant: 'destructive', title: 'An error occurred', description: (error as Error).message });
-                 setMessages(prev => [...prev, { role: "assistant", content: "Sorry, something went wrong while searching." }]);
+    startTransition(async () => {
+        try {
+            let results;
+            if (isAwaitingInput && personalizationTopic === 'personalize_feed') {
+                setAwaitingInput(false);
+                setPersonalizationTopic('');
+                results = await personalizeFeed({ interests: text });
+            } else {
+                results = await copilotAssistant({ message: text });
             }
-        });
-    } else {
-        handlePromptClick(text);
-    }
+
+            if (results.type === 'products' && Array.isArray(results.data) && results.data.length > 0) {
+                 setMessages(prev => [...prev, { role: "assistant", content: results.data }]);
+            } else if (results.type === 'message') {
+                setMessages(prev => [...prev, { role: "assistant", content: results.data }]);
+            } else {
+                 setMessages(prev => [...prev, { role: "assistant", content: "I couldn't find anything matching that. Try another search?" }]);
+            }
+        } catch (error) {
+             toast({ variant: 'destructive', title: 'An error occurred', description: (error as Error).message });
+             setMessages(prev => [...prev, { role: "assistant", content: "Sorry, something went wrong while searching." }]);
+        }
+    });
   }
 
 
