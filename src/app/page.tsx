@@ -52,9 +52,9 @@ export default function StoreHomePage() {
       {/* Functional Hero Section */}
       <section className="relative overflow-hidden border-b bg-gradient-to-b from-background via-card/5 to-background">
          <div className="container relative z-10 mx-auto flex flex-col items-center justify-center space-y-6 px-4 py-12 text-center animate-fade-in-up">
-            <div className="flex items-center gap-4">
-              <IkmLogo className="w-auto h-12" />
-              <h1 className="text-4xl font-bold font-headline tracking-tight">The IK Market Place</h1>
+            <div className="flex items-center gap-2 sm:gap-4">
+              <IkmLogo className="w-auto h-10 sm:h-12" />
+              <h1 className="text-3xl sm:text-4xl font-bold font-headline tracking-tight">The IK Market Place</h1>
             </div>
              <p className="max-w-2xl text-lg text-primary">
               Your trusted Northern market, right on your phone.
@@ -64,7 +64,7 @@ export default function StoreHomePage() {
                 <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search for products, brands, and more..."
-                  className="h-14 w-full rounded-full bg-card/80 pl-12 pr-4 text-base"
+                  className="h-12 sm:h-14 w-full rounded-full bg-card/80 pl-12 pr-4 text-base"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -98,7 +98,7 @@ export default function StoreHomePage() {
 
           {/* Loading State */}
           {isLoadingProducts && (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
               {Array.from({ length: 8 }).map((_, index) => (
                 <Card key={index} className="overflow-hidden border-0 shadow-sm">
                   <CardHeader className="p-0">
@@ -233,3 +233,5 @@ export default function StoreHomePage() {
     </>
   );
 }
+
+    

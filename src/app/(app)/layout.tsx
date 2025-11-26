@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut, Wallet, ShoppingCart, Loader2, Store, User as UserIcon, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut, Wallet, ShoppingCart, Loader2, Store, User as UserIcon, ShieldCheck, Menu } from "lucide-react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
@@ -14,10 +14,17 @@ import { useUser } from "@/lib/firebase/auth/use-user";
 import { useFirebase } from "@/firebase/provider";
 import { signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useCart } from "@/lib/cart-context";
 import { Badge } from "@/components/ui/badge";
 import { useOrdersBySeller } from "@/lib/firebase/firestore/orders";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 
 export default function AppLayout({
@@ -32,6 +39,7 @@ export default function AppLayout({
   const { toast } = useToast();
   const { cartCount } = useCart();
   const { data: orders, isLoading: isLoadingOrders } = useOrdersBySeller(user?.uid);
+  const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const isInitialLoad = useRef(true);
   
@@ -153,7 +161,7 @@ export default function AppLayout({
           <Link href="/">
             <IkmLogo className="w-auto h-8" />
           </Link>
-          <div className="flex items-center gap-2 sm:gap-4">
+          <nav className="hidden md:flex items-center gap-2 sm:gap-4">
             <Link href="/stores">
               <Button variant="ghost">
                 <Store className="mr-2 h-4 w-4" />
@@ -196,7 +204,37 @@ export default function AppLayout({
             {user && (
                  <Button variant="ghost" size="icon" onClick={handleLogout}><LogOut className="h-5 w-5" /></Button>
             )}
-          </div>
+          </nav>
+           <div className="md:hidden flex items-center gap-2">
+                <Link href="/cart" className="relative">
+                  <Button size="icon" variant="outline">
+                    <ShoppingCart className="h-5 w-5" />
+                    <span className="sr-only">Shopping Cart</span>
+                  </Button>
+                  {cartCount > 0 && (
+                    <Badge className="absolute -right-2 -top-2 h-5 w-5 justify-center p-0" variant="destructive">{cartCount}</Badge>
+                  )}
+                </Link>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon">
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                     <DropdownMenuItem asChild><Link href="/stores">All Stores</Link></DropdownMenuItem>
+                     <DropdownMenuItem asChild><Link href="/seller/dashboard">Seller Hub</Link></DropdownMenuItem>
+                    {user && <DropdownMenuItem asChild><Link href="/profile">My Orders</Link></DropdownMenuItem>}
+                    {isAdmin && <DropdownMenuItem asChild><Link href="/admin/dashboard">Admin</Link></DropdownMenuItem>}
+                    <DropdownMenuSeparator />
+                    {user ? (
+                      <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem asChild><Link href="/login">Login</Link></DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
         </header>
         <main className="flex-1">
             {children}
@@ -208,3 +246,5 @@ export default function AppLayout({
       </div>
   )
 }
+
+    
