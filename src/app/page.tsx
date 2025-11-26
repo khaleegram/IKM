@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Image from 'next/image';
-import { ShoppingCart, Loader2, ArrowRight, Search, Sparkles, Star } from 'lucide-react';
+import { ShoppingCart, Loader2, ArrowRight, Search, Sparkles, Star, Shirt, Brush, Home } from 'lucide-react';
 import { useAllProducts } from '@/lib/firebase/firestore/products';
 import { useCart } from '@/lib/cart-context';
 import { useState, useMemo, useCallback } from 'react';
@@ -36,100 +36,58 @@ export default function StoreHomePage() {
     } catch (error) {
       console.error('Failed to add to cart:', error);
     } finally {
-      setAddingProductId(null);
+      // Add a small delay to show the loading state
+      setTimeout(() => setAddingProductId(null), 500);
     }
   }, [addToCart]);
   
-  const placeholderImages = [
-    { src: "https://picsum.photos/seed/fashion/600/800", alt: "Fashion accessory", hint: "fashion accessory" },
-    { src: "https://picsum.photos/seed/crafts/600/800", alt: "Handmade craft", hint: "handmade craft" },
-    { src: "https://picsum.photos/seed/pottery/600/800", alt: "Pottery art", hint: "pottery art" },
-    { src: "https://picsum.photos/seed/art/600/800", alt: "Local art", hint: "local art" },
-  ];
+
+  const categoryLinks = [
+    { name: 'Fashion', icon: Shirt, href: '/category/fashion'},
+    { name: 'Art & Crafts', icon: Brush, href: '/category/art-crafts'},
+    { name: 'Home Goods', icon: Home, href: '/category/home-goods'},
+  ]
 
   return (
     <>
-      {/* Hero Section */}
-      <section className="bg-gradient-to-br from-background to-muted/20 relative overflow-hidden">
-        <div className="container mx-auto grid lg:grid-cols-2 gap-12 items-center py-16 sm:py-24 px-4">
-          <div className="flex flex-col items-center lg:items-start text-center lg:text-left space-y-6 z-10">
-            <div className="space-y-4">
-              <Badge variant="secondary" className="px-4 py-1 text-sm shadow-sm">
-                🎉 100+ Nigerian Artisans
-              </Badge>
-              <h1 className="text-4xl lg:text-6xl font-bold font-headline tracking-tight leading-tight">
-                Unique Finds,
-                <br />
-                <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  Nigerian Hands.
-                </span>
-              </h1>
-              <p className="text-xl text-muted-foreground max-w-lg leading-relaxed">
-                Discover authentic products from independent sellers and talented artisans across Nigeria.
-              </p>
+      {/* Functional Hero Section */}
+      <section className="relative overflow-hidden border-b bg-gradient-to-b from-background via-card to-background">
+         <div className="container relative z-10 mx-auto flex min-h-[40vh] flex-col items-center justify-center space-y-8 px-4 py-16 text-center animate-fade-in-up">
+            <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+              Authentic Nigerian Marketplace
+            </h1>
+            <p className="max-w-2xl text-lg text-muted-foreground">
+              Discover unique products from independent sellers and artisans across Nigeria.
+            </p>
+            <div className="w-full max-w-xl">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search for products, brands, and more..."
+                  className="h-14 w-full rounded-full bg-background/80 pl-12 pr-4 text-base"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <span className="text-sm text-muted-foreground">Popular:</span>
+                {categoryLinks.map(link => (
+                    <Link href={link.href} key={link.name}>
+                        <Button variant="ghost" size="sm" className="rounded-full">
+                            <link.icon className="mr-2 h-4 w-4" />
+                            {link.name}
+                        </Button>
+                    </Link>
+                ))}
             </div>
-            
-            <div className="w-full max-w-md flex flex-col sm:flex-row gap-3">
-              <Link href="/stores" className="flex-1">
-                <Button size="lg" className="w-full h-12 text-base">
-                  <Sparkles className="mr-2 h-5 w-5" />
-                  Explore Stores
-                </Button>
-              </Link>
-              <Link href="/seller/dashboard" className="flex-1">
-                <Button size="lg" variant="outline" className="w-full h-12 text-base">
-                  Become a Seller
-                </Button>
-              </Link>
-            </div>
-
-            {/* Stats */}
-            <div className="flex gap-8 pt-4">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">500+</div>
-                <div className="text-sm text-muted-foreground">Products</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">50+</div>
-                <div className="text-sm text-muted-foreground">Artisans</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary">100%</div>
-                <div className="text-sm text-muted-foreground">Authentic</div>
-              </div>
             </div>
           </div>
-
-          {/* Image Grid */}
-          <div className="hidden lg:grid grid-cols-2 gap-4 relative">
-            {placeholderImages.map((image, index) => (
-              <div 
-                key={index}
-                className={`${index % 2 === 1 ? 'pt-12' : ''} animate-fade-in`}
-                style={{ animationDelay: `${index * 200}ms` }}
-              >
-                <div className="rounded-2xl shadow-lg overflow-hidden group hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
-                  <Image 
-                    src={image.src} 
-                    alt={image.alt}
-                    width={600}
-                    height={800}
-                    className="object-cover aspect-[3/4] group-hover:scale-105 transition-transform duration-500"
-                    priority={index < 2}
-                    data-ai-hint={image.hint}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
 
       {/* Featured Products Section */}
       <section className="py-16 sm:py-24 px-4 sm:px-6 bg-background">
         <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col sm:flex-row justify-between items-center mb-12 gap-6">
-            <div className="text-center sm:text-left">
+          <div className="text-center mb-12">
               <h2 className="text-3xl sm:text-4xl font-bold font-headline mb-2">
                 Featured Products
               </h2>
@@ -137,18 +95,6 @@ export default function StoreHomePage() {
                 Handpicked items from our talented artisans
               </p>
             </div>
-            
-            <div className="relative w-full sm:w-auto min-w-[280px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search products..."
-                className="pl-9 pr-4 h-11 w-full"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                aria-label="Search products"
-              />
-            </div>
-          </div>
 
           {/* Loading State */}
           {isLoadingProducts && (
@@ -219,7 +165,7 @@ export default function StoreHomePage() {
                           disabled={addingProductId === product.id || isAddingToCart}
                           aria-label={`Add ${product.name} to cart`}
                         >
-                          {addingProductId === product.id || (isAddingToCart && addingProductId === product.id) ? (
+                          {addingProductId === product.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
                             <ShoppingCart className="h-4 w-4" />
@@ -287,3 +233,5 @@ export default function StoreHomePage() {
     </>
   );
 }
+
+    
