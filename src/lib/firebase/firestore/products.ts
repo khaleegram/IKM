@@ -18,7 +18,6 @@ import {
   getDocs,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
-import { getAdminFirestore } from '@/lib/firebase/admin';
 
 export interface Product extends DocumentData {
   id?: string;
@@ -31,27 +30,13 @@ export interface Product extends DocumentData {
   category?: string;
 }
 
-// SERVER-SIDE function to search products for the WhatsApp Bot
-export async function searchProducts(searchTerm: string): Promise<Product[]> {
-    const db = getAdminFirestore();
-    const productsRef = db.collection('products');
-    // Note: This is a simple text search. For production, consider a dedicated search service like Algolia or Typesense.
-    const snapshot = await productsRef.get();
-
-    if (snapshot.empty) {
-        return [];
-    }
-
-    const allProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-
-    const lowercasedTerm = searchTerm.toLowerCase();
-    const filteredProducts = allProducts.filter(product => 
-        product.name.toLowerCase().includes(lowercasedTerm) || 
-        (product.description && product.description.toLowerCase().includes(lowercasedTerm)) ||
-        (product.category && product.category.toLowerCase().includes(lowercasedTerm))
-    );
-
-    return filteredProducts;
+// This function is intended for server-side use now, but we keep it here to avoid breaking client-side imports of other functions for now.
+// A better refactor would be to move server-side functions to their own files.
+// The searchProducts logic is now in a server action file / a dedicated server file.
+async function searchProducts(searchTerm: string): Promise<Product[]> {
+    // This is a placeholder. The actual logic is now server-side.
+    console.warn("searchProducts is being called on the client. This should be a server-side call.");
+    return [];
 }
 
 

@@ -6,6 +6,32 @@ import { suggestStoreName as genStoreName, type SuggestStoreNameInput } from "@/
 import { addProduct as addProd, updateProduct as updateProd } from "@/lib/firebase/firestore/products";
 import { uploadImage } from "@/lib/firebase/storage";
 import { z } from "zod";
+import { getAdminFirestore } from '@/lib/firebase/admin';
+import type { Product } from "@/lib/firebase/firestore/products";
+
+
+// Server-side function for the WhatsApp Bot to search products
+export async function searchProducts(searchTerm: string): Promise<Product[]> {
+    const db = getAdminFirestore();
+    const productsRef = db.collection('products');
+    const snapshot = await productsRef.get();
+
+    if (snapshot.empty) {
+        return [];
+    }
+
+    const allProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+
+    const lowercasedTerm = searchTerm.toLowerCase();
+    const filteredProducts = allProducts.filter(product => 
+        product.name.toLowerCase().includes(lowercasedTerm) || 
+        (product.description && product.description.toLowerCase().includes(lowercasedTerm)) ||
+        (product.category && product.category.toLowerCase().includes(lowercasedTerm))
+    );
+
+    return filteredProducts;
+}
+
 
 const productDescriptionSchema = z.object({
   productName: z.string(),

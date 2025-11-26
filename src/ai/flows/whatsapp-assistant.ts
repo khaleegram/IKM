@@ -9,7 +9,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { searchProducts as searchProductsInDb } from '@/lib/firebase/firestore/products';
+import { searchProducts } from '@/lib/actions';
 import { z } from 'genkit';
 
 export const WhatsAppAssistantInputSchema = z.object({
@@ -31,7 +31,7 @@ const findProducts = ai.defineTool(
     },
     async (input) => {
       console.log(`[Tool] Searching for products with query: ${input.query}`);
-      const products = await searchProductsInDb(input.query);
+      const products = await searchProducts(input.query);
       return products.map(({ name, price, description }) => ({ name, price, description }));
     }
 );

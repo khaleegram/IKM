@@ -59,12 +59,15 @@ export async function POST(req: NextRequest) {
         };
 
         const db = getAdminFirestore();
-        const ordersCollection = collection(db, 'orders');
-        const orderRef = await addDoc(ordersCollection, {
+        // Note: The Admin SDK's `collection` function doesn't work like the client one.
+        // We need to get the collection reference differently. This is just for type compatibility.
+        const ordersCollectionRef = db.collection('orders');
+        const orderRef = await ordersCollectionRef.add({
             ...orderData,
             createdAt: serverTimestamp(),
             paystackReference: reference,
         });
+
 
         return NextResponse.json({ success: true, orderId: orderRef.id }, { status: 200 });
 

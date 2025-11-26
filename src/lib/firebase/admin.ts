@@ -1,4 +1,5 @@
-// This file is new
+'use server';
+
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 
