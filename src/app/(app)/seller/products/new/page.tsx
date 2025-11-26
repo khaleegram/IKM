@@ -6,15 +6,66 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, DollarSign } from "lucide-react";
+import { Upload, DollarSign, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import { useState, useTransition } from "react";
+import { getProductDescription } from "@/lib/actions";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 
 export default function NewProductPage() {
     const router = useRouter();
     const { toast } = useToast();
+    const [isPending, startTransition] = useTransition();
+
+    const [isFormModalOpen, setFormModalOpen] = useState(false);
+    const [generatedDescription, setGeneratedDescription] = useState('');
+    const [formData, setFormData] = useState({
+        productName: '',
+        description: '',
+        price: '',
+        stock: '',
+        category: ''
+    });
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { id, value } = e.target;
+        setFormData(prev => ({ ...prev, [id]: value }));
+    };
+
+    const handleGenerateDescription = () => {
+        if (!formData.productName) {
+            toast({
+                variant: "destructive",
+                title: "Product Name Required",
+                description: "Please enter a product name to generate a description.",
+            });
+            return;
+        }
+        setFormModalOpen(true);
+        startTransition(async () => {
+            try {
+                const result = await getProductDescription({
+                    productName: formData.productName,
+                    productCategory: formData.category || 'General',
+                    keyFeatures: '', // You can add a field for this if needed
+                    targetAudience: '' // You can add a field for this if needed
+                });
+                setGeneratedDescription(result);
+            } catch (error) {
+                toast({ variant: 'destructive', title: 'An error occurred', description: (error as Error).message });
+                setGeneratedDescription("Sorry, something went wrong while generating the description.");
+            }
+        });
+    };
+    
+    const handleUseDescription = () => {
+        setFormData(prev => ({ ...prev, description: generatedDescription }));
+        setFormModalOpen(false);
+    };
+
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -46,11 +97,17 @@ export default function NewProductPage() {
                         <CardContent className="space-y-4">
                             <div>
                                 <Label htmlFor="productName">Product Name</Label>
-                                <Input id="productName" placeholder="e.g., Handmade Ankara Bag" />
+                                <Input id="productName" value={formData.productName} onChange={handleInputChange} placeholder="e.g., Handmade Ankara Bag" />
                             </div>
                             <div>
-                                <Label htmlFor="description">Description</Label>
-                                <Textarea id="description" placeholder="Describe the product, its features, materials, and what makes it special." rows={6} />
+                                <div className="flex justify-between items-center mb-1">
+                                    <Label htmlFor="description">Description</Label>
+                                    <Button type="button" variant="ghost" size="sm" onClick={handleGenerateDescription} disabled={isPending}>
+                                        <Sparkles className="mr-2 h-4 w-4" />
+                                        Generate with AI
+                                    </Button>
+                                </div>
+                                <Textarea id="description" value={formData.description} onChange={handleInputChange} placeholder="Describe the product, its features, materials, and what makes it special." rows={6} />
                             </div>
                         </CardContent>
                     </Card>
@@ -77,11 +134,11 @@ export default function NewProductPage() {
                             <div className="relative">
                                 <Label htmlFor="price">Price (₦)</Label>
                                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground mt-2.5" />
-                                <Input id="price" type="number" placeholder="15000" className="pl-8" />
+                                <Input id="price" type="number" value={formData.price} onChange={handleInputChange} placeholder="15000" className="pl-8" />
                             </div>
                              <div>
                                 <Label htmlFor="stock">Stock Quantity</Label>
-                                <Input id="stock" type="number" placeholder="25" />
+                                <Input id="stock" type="number" value={formData.stock} onChange={handleInputChange} placeholder="25" />
                             </div>
                         </CardContent>
                     </Card>
@@ -91,7 +148,7 @@ export default function NewProductPage() {
                         </CardHeader>
                         <CardContent>
                             <Label htmlFor="category">Product Category</Label>
-                            <Input id="category" placeholder="e.g., Fashion, Bags" />
+                            <Input id="category" value={formData.category} onChange={handleInputChange} placeholder="e.g., Fashion, Bags" />
                         </CardContent>
                     </Card>
                 </div>
@@ -103,7 +160,38 @@ export default function NewProductPage() {
                 <Button type="submit">Save Product</Button>
             </div>
         </form>
+
+        <Dialog open={isFormModalOpen} onOpenChange={setFormModalOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>AI-Generated Description</DialogTitle>
+                <DialogDescription>
+                  Here's a description for your product. You can edit it before using it.
+                </DialogDescription>
+              </DialogHeader>
+                {isPending ? (
+                    <div className="py-4 space-y-2">
+                        <div className="animate-pulse bg-muted h-4 w-3/4 rounded"></div>
+                        <div className="animate-pulse bg-muted h-4 w-full rounded"></div>
+                        <div className="animate-pulse bg-muted h-4 w-5/6 rounded"></div>
+                    </div>
+                ) : (
+                    <Textarea 
+                        value={generatedDescription}
+                        onChange={(e) => setGeneratedDescription(e.target.value)}
+                        rows={8}
+                        className="my-4"
+                    />
+                )}
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={() => setFormModalOpen(false)}>Cancel</Button>
+                <Button type="button" onClick={handleUseDescription} disabled={isPending}>Use This Description</Button>
+              </DialogFooter>
+            </DialogContent>
+        </Dialog>
       </main>
     </div>
     )
 }
+
+    
