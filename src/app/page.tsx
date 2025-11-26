@@ -16,7 +16,7 @@ import type { Product } from '@/lib/firebase/firestore/products';
 
 export default function StoreHomePage() {
   const { data: products, isLoading: isLoadingProducts } = useAllProducts(8);
-  const { addToCart } = useCart();
+  const { addToCart, isAddingToCart } = useCart();
   const [searchTerm, setSearchTerm] = useState('');
   const [addingProductId, setAddingProductId] = useState<string | null>(null);
 
@@ -33,12 +33,12 @@ export default function StoreHomePage() {
     setAddingProductId(product.id);
     try {
       // The addToCart function in the context is synchronous, 
-      // but we simulate a small delay to show the loader.
-      await new Promise(res => setTimeout(res, 300));
+      // but we can simulate a small delay if needed.
       addToCart(product);
     } catch (error) {
       console.error('Failed to add to cart:', error);
     } finally {
+      // The loading state can be driven by isAddingToCart from the context if it were async
       setAddingProductId(null);
     }
   }, [addToCart]);
@@ -53,7 +53,7 @@ export default function StoreHomePage() {
   return (
     <>
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-muted/40 to-muted/20 relative overflow-hidden">
+      <section className="bg-gradient-to-br from-background to-muted/20 relative overflow-hidden">
         <div className="container mx-auto grid lg:grid-cols-2 gap-12 items-center py-16 sm:py-24 px-4">
           <div className="flex flex-col items-start text-left space-y-6 z-10">
             <div className="space-y-4">
@@ -63,7 +63,7 @@ export default function StoreHomePage() {
               <h1 className="text-4xl lg:text-6xl font-bold font-headline tracking-tight leading-tight">
                 Unique Finds,
                 <br />
-                <span className="text-primary bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                   Nigerian Hands.
                 </span>
               </h1>
@@ -220,10 +220,10 @@ export default function StoreHomePage() {
                           size="icon" 
                           className="h-9 w-9 rounded-full bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-110"
                           onClick={() => handleAddToCart(product)}
-                          disabled={addingProductId === product.id}
+                          disabled={addingProductId === product.id || isAddingToCart}
                           aria-label={`Add ${product.name} to cart`}
                         >
-                          {addingProductId === product.id ? (
+                          {addingProductId === product.id || (isAddingToCart && addingProductId === product.id) ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
                             <ShoppingCart className="h-4 w-4" />
