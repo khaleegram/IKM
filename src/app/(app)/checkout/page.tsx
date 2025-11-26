@@ -75,7 +75,7 @@ export default function CheckoutPage() {
                     description: "Thank you for your purchase. Your payment was successful.",
                 });
                 clearCart();
-                router.push('/');
+                router.push('/profile');
 
             } catch (error) {
                 toast({ variant: 'destructive', title: 'Order Failed', description: (error as Error).message });

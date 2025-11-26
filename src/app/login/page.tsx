@@ -90,6 +90,11 @@ export default function LoginPage() {
             </Button>
           </CardFooter>
         </Card>
+        <div className="mt-4">
+            <Link href="/">
+                <Button variant="link">Back to Home</Button>
+            </Link>
+        </div>
       </main>
     </div>
   );
