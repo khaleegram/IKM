@@ -15,7 +15,7 @@ import { useUser } from '@/lib/firebase/auth/use-user';
 import { useState, useTransition } from 'react';
 import { usePaystackPayment } from 'react-paystack';
 import type { PaystackProps } from 'react-paystack/dist/types';
-import { verifyPaymentAndCreateOrder } from '@/lib/actions';
+import { verifyPaymentAndCreateOrder } from '@/lib/verify-payment';
 
 export default function CheckoutPage() {
     const router = useRouter();
