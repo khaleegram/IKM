@@ -1,4 +1,6 @@
 
+'use client';
+
 import {
   Card,
   CardContent,
@@ -15,53 +17,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Package } from "lucide-react";
+import { Package, MoreHorizontal, FileWarning, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal } from "lucide-react";
+import { useUser } from "@/lib/firebase/auth/use-user";
+import { useOrdersBySeller, updateOrderStatus, Order } from "@/lib/firebase/firestore/orders";
+import { useToast } from "@/hooks/use-toast";
+import { format } from 'date-fns';
 
-// Mock orders data
-const orders = [
-  {
-    id: "ORD001",
-    customer: "John Doe",
-    date: "2024-07-28",
-    total: "₦27,500",
-    status: "Processing",
-    items: 2,
-  },
-  {
-    id: "ORD002",
-    customer: "Jane Smith",
-    date: "2024-07-27",
-    total: "₦12,000",
-    status: "Shipped",
-    items: 1,
-  },
-  {
-    id: "ORD003",
-    customer: "Bob Johnson",
-    date: "2024-07-26",
-    total: "₦8,500",
-    status: "Delivered",
-    items: 1,
-  },
-    {
-    id: "ORD004",
-    customer: "Alice Williams",
-    date: "2024-07-25",
-    total: "₦40,000",
-    status: "Processing",
-    items: 3,
-  },
-];
-
-const getStatusVariant = (status: string) => {
+const getStatusVariant = (status: Order['status']) => {
     switch (status) {
         case 'Processing': return 'secondary';
         case 'Shipped': return 'accent';
@@ -71,9 +41,29 @@ const getStatusVariant = (status: string) => {
     }
 }
 
-
 export default function OrdersPage() {
-  const hasOrders = orders.length > 0;
+  const { user } = useUser();
+  const { data: orders, isLoading, error } = useOrdersBySeller(user?.uid);
+  const { toast } = useToast();
+
+  const handleStatusUpdate = async (orderId: string, status: Order['status']) => {
+    try {
+        await updateOrderStatus(orderId, status);
+        toast({
+            title: "Order Updated",
+            description: `Order has been marked as ${status}.`
+        })
+    } catch(err) {
+        toast({
+            variant: "destructive",
+            title: "Update failed",
+            description: (err as Error).message,
+        })
+    }
+  }
+
+
+  const hasOrders = orders && orders.length > 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -86,51 +76,27 @@ export default function OrdersPage() {
         </div>
       </header>
       <main className="flex-1 overflow-auto p-4 sm:p-6">
-        {hasOrders ? (
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Order ID</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {orders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-medium">{order.id}</TableCell>
-                      <TableCell>{order.customer}</TableCell>
-                      <TableCell>{order.date}</TableCell>
-                      <TableCell className="text-right">{order.total}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={getStatusVariant(order.status) as any}>{order.status}</Badge>
-                      </TableCell>
-                       <TableCell className="text-right">
-                         <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem>View Details</DropdownMenuItem>
-                                <DropdownMenuItem>Update Status</DropdownMenuItem>
-                                <DropdownMenuItem>Contact Customer</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                       </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        ) : (
+        {isLoading && (
+            <div className="flex justify-center items-center h-full">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+        )}
+        {!isLoading && error && (
+            <div className="flex items-center justify-center h-full">
+                <Card className="w-full max-w-lg text-center border-dashed shadow-none">
+                    <CardHeader>
+                        <div className="mx-auto bg-destructive/10 rounded-full w-16 h-16 flex items-center justify-center">
+                            <FileWarning className="w-8 h-8 text-destructive" />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <CardTitle className="font-headline text-destructive">An Error Occurred</CardTitle>
+                        <CardDescription className="mt-2">{error.message}</CardDescription>
+                    </CardContent>
+                </Card>
+            </div>
+        )}
+        {!isLoading && !hasOrders && !error && (
           <div className="flex items-center justify-center h-full">
             <Card className="w-full max-w-lg text-center border-dashed shadow-none">
               <CardHeader>
@@ -148,6 +114,54 @@ export default function OrdersPage() {
               </CardContent>
             </Card>
           </div>
+        )}
+        {hasOrders && (
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order ID</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell className="font-medium">#{order.id?.slice(0, 7)}</TableCell>
+                      <TableCell>{order.customerInfo.name}</TableCell>
+                      <TableCell>{format(order.createdAt.toDate(), 'PPP')}</TableCell>
+                      <TableCell className="text-right">₦{order.total.toLocaleString()}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={getStatusVariant(order.status) as any}>{order.status}</Badge>
+                      </TableCell>
+                       <TableCell className="text-right">
+                         <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem>View Details</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Processing')}>Mark as Processing</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Shipped')}>Mark as Shipped</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Delivered')}>Mark as Delivered</DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive" onClick={() => handleStatusUpdate(order.id!, 'Cancelled')}>Cancel Order</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                       </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         )}
       </main>
     </div>

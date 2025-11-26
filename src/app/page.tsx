@@ -8,11 +8,13 @@ import { IkmLogo } from "@/components/icons";
 import Image from 'next/image';
 import { Heart, ShoppingCart, Loader2 } from 'lucide-react';
 import { useAllProducts } from '@/lib/firebase/firestore/products';
-import { useAllUserProfiles } from '@/lib/firebase/firestore/users'; // Assuming you have a hook to get all users
+import { useAllUserProfiles } from '@/lib/firebase/firestore/users';
+import { useCart } from '@/lib/cart-context';
 
 export default function StoreHomePage() {
   const { data: products, isLoading: isLoadingProducts } = useAllProducts();
   const { data: users, isLoading: isLoadingUsers } = useAllUserProfiles();
+  const { addToCart } = useCart();
 
   // A simple way to get the first seller's store info as a fallback.
   // In a real multi-seller app, you'd determine which store to show differently.
@@ -56,9 +58,9 @@ export default function StoreHomePage() {
             {!isLoading && products && products.length > 0 && (
               <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
                 {products.map((product) => (
-                  <Card key={product.id} className="group overflow-hidden">
-                    <Link href={`/product/${product.id}`}>
-                      <CardHeader className="p-0 relative">
+                  <Card key={product.id} className="group overflow-hidden relative">
+                     <Link href={`/product/${product.id}`}>
+                      <CardHeader className="p-0">
                         <Image 
                           src={product.imageUrl || `https://picsum.photos/seed/${product.id}/600/400`} 
                           alt={product.name} 
@@ -67,15 +69,17 @@ export default function StoreHomePage() {
                           className="aspect-square object-cover group-hover:scale-105 transition-transform duration-300"
                           data-ai-hint="product image"
                         />
-                        <Button size="icon" variant="secondary" className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/70 hover:bg-background">
-                          <Heart className="h-4 w-4" />
-                        </Button>
                       </CardHeader>
+                      </Link>
                       <CardContent className="p-3 sm:p-4">
                         <h3 className="font-semibold text-base sm:text-lg truncate">{product.name}</h3>
-                        <p className="font-bold text-primary text-lg sm:text-xl mt-1">₦{product.price.toLocaleString()}</p>
+                        <div className="flex justify-between items-center mt-1">
+                            <p className="font-bold text-primary text-lg sm:text-xl">₦{product.price.toLocaleString()}</p>
+                             <Button size="icon" className="h-8 w-8" onClick={() => addToCart(product)}>
+                                <ShoppingCart className="h-4 w-4" />
+                            </Button>
+                        </div>
                       </CardContent>
-                    </Link>
                   </Card>
                 ))}
               </div>

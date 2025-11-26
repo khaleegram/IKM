@@ -10,10 +10,12 @@ import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { useProduct } from "@/lib/firebase/firestore/products";
 import React from "react";
+import { useCart } from "@/lib/cart-context";
 
 export default function ProductDetailPage({ params }: { params: { id: string } }) {
   const resolvedParams = React.use(params);
   const { data: product, isLoading, error } = useProduct(resolvedParams.id);
+  const { addToCart } = useCart();
 
   if (isLoading) {
     return (
@@ -71,7 +73,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                     {product.description}
                 </p>
                 <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                    <Button size="lg" className="w-full sm:w-auto">
+                    <Button size="lg" className="w-full sm:w-auto" onClick={() => addToCart(product)}>
                         <ShoppingCart className="mr-2"/>
                         Add to Cart
                     </Button>

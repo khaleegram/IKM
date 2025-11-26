@@ -9,18 +9,14 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Trash2, Plus, Minus, ShoppingCart } from 'lucide-react';
 import { CoPilotWidget } from '@/components/copilot-widget';
-
-// Mock cart data
-const cartItems = [
-    { id: '1', name: 'Handmade Ankara Bag', price: 15000, image: '1', quantity: 1 },
-    { id: '3', name: 'Custom Print T-Shirt', price: 12000, image: '3', quantity: 2 },
-];
-
+import { useCart } from '@/lib/cart-context';
 
 export default function CartPage() {
-    const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-    const shipping = 2500; // Mock shipping cost
-    const total = subtotal + shipping;
+    const { cartItems, updateQuantity, removeFromCart, totalPrice } = useCart();
+    
+    // In a real app, shipping would be calculated based on address, etc.
+    const shipping = cartItems.length > 0 ? 2500 : 0; 
+    const total = totalPrice + shipping;
 
     const hasItems = cartItems.length > 0;
 
@@ -36,7 +32,7 @@ export default function CartPage() {
                                     {cartItems.map((item) => (
                                         <li key={item.id} className="flex items-center p-4 gap-4">
                                             <Image
-                                                src={`https://picsum.photos/seed/${item.image}/200/200`}
+                                                src={item.imageUrl || `https://picsum.photos/seed/${item.id}/200/200`}
                                                 alt={item.name}
                                                 width={100}
                                                 height={100}
@@ -47,16 +43,16 @@ export default function CartPage() {
                                                 <p className="text-muted-foreground text-sm">₦{item.price.toLocaleString()}</p>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <Button size="icon" variant="outline" className="h-8 w-8">
+                                                <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.id!, item.quantity - 1)}>
                                                     <Minus className="h-4 w-4" />
                                                 </Button>
                                                 <Input type="number" value={item.quantity} readOnly className="w-14 h-8 text-center" />
-                                                <Button size="icon" variant="outline" className="h-8 w-8">
+                                                <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.id!, item.quantity + 1)}>
                                                     <Plus className="h-4 w-4" />
                                                 </Button>
                                             </div>
                                             <p className="font-semibold w-24 text-right">₦{(item.price * item.quantity).toLocaleString()}</p>
-                                            <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-destructive">
+                                            <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={() => removeFromCart(item.id!)}>
                                                 <Trash2 className="h-5 w-5" />
                                             </Button>
                                         </li>
@@ -73,7 +69,7 @@ export default function CartPage() {
                             <CardContent className="space-y-4">
                                 <div className="flex justify-between">
                                     <p className="text-muted-foreground">Subtotal</p>
-                                    <p className="font-semibold">₦{subtotal.toLocaleString()}</p>
+                                    <p className="font-semibold">₦{totalPrice.toLocaleString()}</p>
                                 </div>
                                 <div className="flex justify-between">
                                     <p className="text-muted-foreground">Shipping</p>

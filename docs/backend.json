@@ -72,6 +72,57 @@
             }
         },
         "required": ["name"]
+    },
+    "order": {
+      "title": "Order",
+      "description": "Represents a customer's order.",
+      "type": "object",
+      "properties": {
+        "customerId": {
+          "type": "string",
+          "description": "The ID of the customer who placed the order."
+        },
+        "sellerId": {
+            "type": "string",
+            "description": "The ID of the seller whose products are being ordered."
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "productId": {"type": "string"},
+              "name": {"type": "string"},
+              "price": {"type": "number"},
+              "quantity": {"type": "number"}
+            },
+            "required": ["productId", "name", "price", "quantity"]
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Processing", "Shipped", "Delivered", "Cancelled"]
+        },
+        "deliveryAddress": {
+            "type": "string"
+        },
+        "customerInfo": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "email": {"type": "string"},
+                "phone": {"type": "string"}
+            }
+        },
+        "createdAt": {
+            "type": "string",
+            "format": "date-time"
+        }
+      },
+      "required": ["customerId", "sellerId", "items", "total", "status", "createdAt"]
     }
   },
   "auth": {
@@ -95,6 +146,12 @@
             "$ref": "#/entities/deliveryLocation"
         },
         "description": "A seller's available delivery location."
+    },
+    "/orders/{orderId}": {
+        "schema": {
+            "$ref": "#/entities/order"
+        },
+        "description": "A customer order."
     }
   }
 }

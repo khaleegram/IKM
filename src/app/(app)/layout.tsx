@@ -14,6 +14,8 @@ import { useFirebase } from "@/firebase";
 import { signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
 import React from "react";
+import { useCart } from "@/lib/cart-context";
+import { Badge } from "@/components/ui/badge";
 
 
 export default function AppLayout({
@@ -26,6 +28,7 @@ export default function AppLayout({
   const { user, isLoading } = useUser();
   const { auth } = useFirebase();
   const { toast } = useToast();
+  const { cartCount } = useCart();
 
   const isSellerRoute = pathname.startsWith('/seller');
   
@@ -138,11 +141,14 @@ export default function AppLayout({
             <Link href="/wishlist">
               <Button>My Wishlist</Button>
             </Link>
-            <Link href="/cart">
+            <Link href="/cart" className="relative">
               <Button size="icon" variant="outline">
                 <ShoppingCart className="h-5 w-5" />
                 <span className="sr-only">Shopping Cart</span>
               </Button>
+              {cartCount > 0 && (
+                <Badge className="absolute -right-2 -top-2 h-5 w-5 justify-center p-0" variant="destructive">{cartCount}</Badge>
+              )}
             </Link>
           </div>
         </header>
