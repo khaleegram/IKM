@@ -23,7 +23,9 @@ export interface Product extends DocumentData {
   id?: string;
   name: string;
   description: string;
-  price: number;
+  price: number; // This will now be the initial price for client-side display
+  initialPrice: number;
+  lastPrice: number;
   stock: number;
   imageUrl?: string;
   sellerId: string;
@@ -63,7 +65,7 @@ export const useAllProducts = (productLimit?: number) => {
     const unsubscribe = onSnapshot(
       productsQuery,
       (snapshot) => {
-        const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+        const productsData = snapshot.docs.map(doc => ({ id: doc.id, price: doc.data().initialPrice, ...doc.data() } as Product));
         setProducts(productsData);
         setIsLoading(false);
       },
@@ -103,7 +105,7 @@ export const useProductsBySeller = (sellerId: string | undefined) => {
     const unsubscribe = onSnapshot(
       sellerProductsQuery,
       (snapshot) => {
-        const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+        const productsData = snapshot.docs.map(doc => ({ id: doc.id, price: doc.data().initialPrice, ...doc.data() } as Product));
         setProducts(productsData);
         setIsLoading(false);
       },
@@ -142,7 +144,7 @@ export const useProduct = (productId: string) => {
       productRef,
       (doc) => {
         if (doc.exists()) {
-          setProduct({ id: doc.id, ...doc.data() } as Product);
+          setProduct({ id: doc.id, price: doc.data().initialPrice, ...doc.data() } as Product);
         } else {
           setProduct(null);
         }
@@ -163,7 +165,7 @@ export const useProduct = (productId: string) => {
 
 
 // Functions to modify products
-export const addProduct = async (userId: string, product: Omit<Product, 'id' | 'sellerId'>) => {
+export const addProduct = async (userId: string, product: Omit<Product, 'id' | 'sellerId' | 'price'>) => {
     const { firestore } = useFirebase();
     if (!firestore) throw new Error("Firestore is not initialized");
 
@@ -187,8 +189,11 @@ export const updateProduct = async (productId: string, userId: string, product: 
         throw new Error("Product not found or permission denied");
     }
 
+    // remove price field before update, as it's a client-side construct
+    const { price, ...updateData } = product;
+
     return await updateDoc(productRef, {
-        ...product,
+        ...updateData,
         updatedAt: serverTimestamp(),
     });
 };

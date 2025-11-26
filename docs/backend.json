@@ -13,9 +13,13 @@
           "type": "string",
           "description": "The description of the product."
         },
-        "price": {
+        "initialPrice": {
           "type": "number",
-          "description": "The price of the product."
+          "description": "The starting price of the product for negotiation."
+        },
+        "lastPrice": {
+          "type": "number",
+          "description": "The lowest acceptable price for the product after negotiation."
         },
         "stock": {
           "type": "number",
@@ -30,7 +34,7 @@
           "description": "The ID of the user who is selling the product."
         }
       },
-      "required": ["name", "price", "stock", "sellerId"]
+      "required": ["name", "initialPrice", "lastPrice", "stock", "sellerId"]
     },
     "userProfile": {
       "title": "User Profile",

@@ -60,9 +60,13 @@ export async function suggestStoreName(input: SuggestStoreNameInput) {
 const productSchema = z.object({
     name: z.string().min(1, "Name is required"),
     description: z.string(),
-    price: z.preprocess(
+    initialPrice: z.preprocess(
       (val) => (val === "" ? undefined : Number(val)),
       z.number().positive("Price must be a positive number")
+    ),
+    lastPrice: z.preprocess(
+      (val) => (val === "" ? undefined : Number(val)),
+      z.number().positive("Last price must be a positive number")
     ),
     stock: z.preprocess(
       (val) => (val === "" ? undefined : Number(val)),
@@ -70,6 +74,9 @@ const productSchema = z.object({
     ),
     category: z.string().optional(),
     image: z.instanceof(File).optional(),
+}).refine(data => data.lastPrice <= data.initialPrice, {
+    message: "Lowest price cannot be greater than the initial price.",
+    path: ["lastPrice"],
 });
 
 export async function addProduct(userId: string, data: FormData) {

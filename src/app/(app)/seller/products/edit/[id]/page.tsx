@@ -36,7 +36,8 @@ export default function EditProductPage() {
     const [formData, setFormData] = useState({
         name: '',
         description: '',
-        price: '',
+        initialPrice: '',
+        lastPrice: '',
         stock: '',
         category: ''
     });
@@ -49,7 +50,8 @@ export default function EditProductPage() {
         setFormData({
             name: product.name || '',
             description: product.description || '',
-            price: product.price?.toString() || '',
+            initialPrice: product.initialPrice?.toString() || '',
+            lastPrice: product.lastPrice?.toString() || '',
             stock: product.stock?.toString() || '',
             category: product.category || ''
         })
@@ -216,9 +218,14 @@ export default function EditProductPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="relative">
-                                <Label htmlFor="price">Price (₦)</Label>
+                                <Label htmlFor="initialPrice">Initial Price (₦)</Label>
                                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground mt-2.5" />
-                                <Input id="price" name="price" type="number" value={formData.price} onChange={handleInputChange} placeholder="15000" className="pl-8" />
+                                <Input id="initialPrice" name="initialPrice" type="number" value={formData.initialPrice} onChange={handleInputChange} placeholder="15000" className="pl-8" />
+                            </div>
+                             <div className="relative">
+                                <Label htmlFor="lastPrice">Lowest Price (₦)</Label>
+                                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground mt-2.5" />
+                                <Input id="lastPrice" name="lastPrice" type="number" value={formData.lastPrice} onChange={handleInputChange} placeholder="12000" className="pl-8" />
                             </div>
                              <div>
                                 <Label htmlFor="stock">Stock Quantity</Label>
