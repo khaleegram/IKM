@@ -15,7 +15,9 @@ interface FirebaseClientProviderProps {
 export function FirebaseClientProvider({ children, config }: FirebaseClientProviderProps) {
   const app = getApps().length === 0 ? initializeApp(config) : getApp();
   const auth = getAuth(app);
-  const firestore = getFirestore(app);
+  const firestore = getFirestore(app, {
+    ignoreUndefinedProperties: true,
+  });
   const storage = getStorage(app);
 
   return (
