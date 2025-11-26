@@ -12,9 +12,10 @@ import React from "react";
 import { useCart } from "@/lib/cart-context";
 import { useUserProfile } from "@/lib/firebase/firestore/users";
 
-export default function ProductDetailPage({ params }: { params: { id: string } }) {
-  const resolvedParams = React.use(params);
-  const { data: product, isLoading, error } = useProduct(resolvedParams.id);
+export default function ProductDetailPage() {
+  const params = useParams();
+  const productId = params.id as string;
+  const { data: product, isLoading, error } = useProduct(productId);
   const { data: sellerProfile } = useUserProfile(product?.sellerId);
   const { addToCart } = useCart();
 
