@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -16,8 +15,10 @@ import {
   getDoc,
   serverTimestamp,
   limit,
+  getDocs,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
+import { getAdminFirestore } from '@/lib/firebase/admin';
 
 export interface Product extends DocumentData {
   id?: string;
@@ -29,6 +30,30 @@ export interface Product extends DocumentData {
   sellerId: string;
   category?: string;
 }
+
+// SERVER-SIDE function to search products for the WhatsApp Bot
+export async function searchProducts(searchTerm: string): Promise<Product[]> {
+    const db = getAdminFirestore();
+    const productsRef = db.collection('products');
+    // Note: This is a simple text search. For production, consider a dedicated search service like Algolia or Typesense.
+    const snapshot = await productsRef.get();
+
+    if (snapshot.empty) {
+        return [];
+    }
+
+    const allProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+
+    const lowercasedTerm = searchTerm.toLowerCase();
+    const filteredProducts = allProducts.filter(product => 
+        product.name.toLowerCase().includes(lowercasedTerm) || 
+        (product.description && product.description.toLowerCase().includes(lowercasedTerm)) ||
+        (product.category && product.category.toLowerCase().includes(lowercasedTerm))
+    );
+
+    return filteredProducts;
+}
+
 
 // Hook to get all products for the storefront
 export const useAllProducts = (productLimit?: number) => {
