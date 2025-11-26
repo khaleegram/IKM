@@ -5,22 +5,20 @@ import { getStorage, Storage } from 'firebase-admin/storage';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string);
 
-let adminApp: App;
-let adminFirestore: Firestore;
-let adminStorage: Storage;
-
-if (!getApps().length) {
-    adminApp = initializeApp({
+function getAdminApp(): App {
+    if (getApps().length > 0) {
+        return getApps()[0];
+    }
+    return initializeApp({
         credential: cert(serviceAccount),
         storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
     });
-} else {
-    adminApp = getApps()[0];
 }
 
-adminFirestore = getFirestore(adminApp);
-adminStorage = getStorage(adminApp);
+export function getAdminFirestore(): Firestore {
+    return getFirestore(getAdminApp());
+}
 
-export const getAdminApp = () => adminApp;
-export const getAdminFirestore = () => adminFirestore;
-export const getAdminStorage = () => adminStorage;
+export function getAdminStorage(): Storage {
+    return getStorage(getAdminApp());
+}

@@ -1,7 +1,6 @@
 
 'use server';
 
-import 'dotenv/config';
 import { z } from "zod";
 import { getAdminFirestore, getAdminStorage } from "@/lib/firebase/admin";
 import { revalidatePath } from "next/cache";

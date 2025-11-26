@@ -1,7 +1,6 @@
 
 'use server';
 
-import 'dotenv/config';
 import { z } from "zod";
 import { getAdminFirestore } from '@/lib/firebase/admin';
 import { headers } from "next/headers";
