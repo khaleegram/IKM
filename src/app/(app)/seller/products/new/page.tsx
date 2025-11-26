@@ -10,20 +10,26 @@ import { Upload, DollarSign, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useTransition } from "react";
-import { getProductDescription } from "@/lib/actions";
+import { useState, useTransition, use, useRef } from "react";
+import { getProductDescription, addProduct } from "@/lib/actions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { useFirebase } from "@/firebase";
 
 
 export default function NewProductPage() {
     const router = useRouter();
     const { toast } = useToast();
+    const { auth } = useFirebase();
+    const user = auth.currentUser;
     const [isPending, startTransition] = useTransition();
+    const [isGenerating, startGenerating] = useTransition();
+
+    const formRef = useRef<HTMLFormElement>(null);
 
     const [isFormModalOpen, setFormModalOpen] = useState(false);
     const [generatedDescription, setGeneratedDescription] = useState('');
     const [formData, setFormData] = useState({
-        productName: '',
+        name: '',
         description: '',
         price: '',
         stock: '',
@@ -36,7 +42,7 @@ export default function NewProductPage() {
     };
 
     const handleGenerateDescription = () => {
-        if (!formData.productName) {
+        if (!formData.name) {
             toast({
                 variant: "destructive",
                 title: "Product Name Required",
@@ -45,10 +51,10 @@ export default function NewProductPage() {
             return;
         }
         setFormModalOpen(true);
-        startTransition(async () => {
+        startGenerating(async () => {
             try {
                 const result = await getProductDescription({
-                    productName: formData.productName,
+                    productName: formData.name,
                     productCategory: formData.category || 'General',
                     keyFeatures: '', // You can add a field for this if needed
                     targetAudience: '' // You can add a field for this if needed
@@ -67,14 +73,26 @@ export default function NewProductPage() {
     };
 
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        // Here you would typically handle form submission, e.g., send data to an API
-        toast({
-            title: "Product Added!",
-            description: "Your new product has been successfully added to your store.",
+        if (!user) {
+            toast({ variant: 'destructive', title: 'Not authenticated', description: 'You must be logged in to add a product.' });
+            return;
+        }
+        
+        const data = new FormData(e.currentTarget);
+        startTransition(async () => {
+            try {
+                await addProduct(user.uid, data);
+                toast({
+                    title: "Product Added!",
+                    description: "Your new product has been successfully added to your store.",
+                });
+                router.push('/seller/products');
+            } catch (error) {
+                toast({ variant: 'destructive', title: 'Failed to add product', description: (error as Error).message });
+            }
         });
-        router.push('/seller/products');
     }
 
     return (
@@ -86,7 +104,7 @@ export default function NewProductPage() {
         </div>
       </header>
       <main className="flex-1 overflow-auto p-4 sm:p-6">
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
                     <Card>
@@ -96,18 +114,18 @@ export default function NewProductPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div>
-                                <Label htmlFor="productName">Product Name</Label>
-                                <Input id="productName" value={formData.productName} onChange={handleInputChange} placeholder="e.g., Handmade Ankara Bag" />
+                                <Label htmlFor="name">Product Name</Label>
+                                <Input id="name" name="name" value={formData.name} onChange={handleInputChange} placeholder="e.g., Handmade Ankara Bag" />
                             </div>
                             <div>
                                 <div className="flex justify-between items-center mb-1">
                                     <Label htmlFor="description">Description</Label>
-                                    <Button type="button" variant="ghost" size="sm" onClick={handleGenerateDescription} disabled={isPending}>
+                                    <Button type="button" variant="ghost" size="sm" onClick={handleGenerateDescription} disabled={isGenerating}>
                                         <Sparkles className="mr-2 h-4 w-4" />
-                                        Generate with AI
+                                        {isGenerating ? "Generating..." : "Generate with AI"}
                                     </Button>
                                 </div>
-                                <Textarea id="description" value={formData.description} onChange={handleInputChange} placeholder="Describe the product, its features, materials, and what makes it special." rows={6} />
+                                <Textarea id="description" name="description" value={formData.description} onChange={handleInputChange} placeholder="Describe the product, its features, materials, and what makes it special." rows={6} />
                             </div>
                         </CardContent>
                     </Card>
@@ -134,11 +152,11 @@ export default function NewProductPage() {
                             <div className="relative">
                                 <Label htmlFor="price">Price (₦)</Label>
                                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground mt-2.5" />
-                                <Input id="price" type="number" value={formData.price} onChange={handleInputChange} placeholder="15000" className="pl-8" />
+                                <Input id="price" name="price" type="number" value={formData.price} onChange={handleInputChange} placeholder="15000" className="pl-8" />
                             </div>
                              <div>
                                 <Label htmlFor="stock">Stock Quantity</Label>
-                                <Input id="stock" type="number" value={formData.stock} onChange={handleInputChange} placeholder="25" />
+                                <Input id="stock" name="stock" type="number" value={formData.stock} onChange={handleInputChange} placeholder="25" />
                             </div>
                         </CardContent>
                     </Card>
@@ -148,16 +166,16 @@ export default function NewProductPage() {
                         </CardHeader>
                         <CardContent>
                             <Label htmlFor="category">Product Category</Label>
-                            <Input id="category" value={formData.category} onChange={handleInputChange} placeholder="e.g., Fashion, Bags" />
+                            <Input id="category" name="category" value={formData.category} onChange={handleInputChange} placeholder="e.g., Fashion, Bags" />
                         </CardContent>
                     </Card>
                 </div>
             </div>
             <div className="mt-6 flex justify-end gap-2">
                 <Link href="/seller/products">
-                    <Button variant="outline">Cancel</Button>
+                    <Button variant="outline" type="button">Cancel</Button>
                 </Link>
-                <Button type="submit">Save Product</Button>
+                <Button type="submit" disabled={isPending}>{isPending ? 'Saving...' : 'Save Product'}</Button>
             </div>
         </form>
 
@@ -169,7 +187,7 @@ export default function NewProductPage() {
                   Here's a description for your product. You can edit it before using it.
                 </DialogDescription>
               </DialogHeader>
-                {isPending ? (
+                {isGenerating ? (
                     <div className="py-4 space-y-2">
                         <div className="animate-pulse bg-muted h-4 w-3/4 rounded"></div>
                         <div className="animate-pulse bg-muted h-4 w-full rounded"></div>
@@ -185,7 +203,7 @@ export default function NewProductPage() {
                 )}
               <DialogFooter>
                 <Button type="button" variant="ghost" onClick={() => setFormModalOpen(false)}>Cancel</Button>
-                <Button type="button" onClick={handleUseDescription} disabled={isPending}>Use This Description</Button>
+                <Button type="button" onClick={handleUseDescription} disabled={isGenerating}>Use This Description</Button>
               </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -193,5 +211,3 @@ export default function NewProductPage() {
     </div>
     )
 }
-
-    
