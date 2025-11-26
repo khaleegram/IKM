@@ -39,7 +39,6 @@ export default function AppLayout({
   const { toast } = useToast();
   const { cartCount } = useCart();
   const { data: orders, isLoading: isLoadingOrders } = useOrdersBySeller(user?.uid);
-  const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const isInitialLoad = useRef(true);
   
@@ -246,5 +245,3 @@ export default function AppLayout({
       </div>
   )
 }
-
-    
