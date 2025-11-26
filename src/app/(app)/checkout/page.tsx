@@ -1,7 +1,6 @@
 
 'use client';
 
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,8 +12,9 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/lib/cart-context';
 import { useUser } from '@/lib/firebase/auth/use-user';
-import { createOrder, Order } from '@/lib/firebase/firestore/orders';
 import { useState, useTransition } from 'react';
+import { usePaystackPayment } from 'react-paystack';
+import type { PaystackProps } from 'react-paystack/dist/types';
 
 export default function CheckoutPage() {
     const router = useRouter();
@@ -22,9 +22,7 @@ export default function CheckoutPage() {
     const { cartItems, totalPrice, clearCart } = useCart();
     const { user } = useUser();
     const [isPending, startTransition] = useTransition();
-    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
-    // In a real app, shipping would be calculated based on address, etc.
     const shipping = cartItems.length > 0 ? 2500 : 0;
     const total = totalPrice + shipping;
 
@@ -32,7 +30,7 @@ export default function CheckoutPage() {
         firstName: '',
         lastName: '',
         address: '',
-        email: '',
+        email: user?.email || '',
         phone: ''
     });
 
@@ -42,6 +40,61 @@ export default function CheckoutPage() {
     };
     
     const isFormValid = formState.firstName && formState.lastName && formState.address && formState.email && formState.phone;
+
+    const paystackConfig: PaystackProps = {
+        reference: new Date().getTime().toString(),
+        email: formState.email,
+        amount: total * 100, // Paystack amount is in kobo
+        publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
+    };
+    
+    const initializePayment = usePaystackPayment(paystackConfig);
+
+    const onPaymentSuccess = (reference: any) => {
+        startTransition(async () => {
+            try {
+                const response = await fetch('/api/verify-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        reference: reference.reference,
+                        cartItems,
+                        total,
+                        deliveryAddress: formState.address,
+                        customerInfo: {
+                            name: `${formState.firstName} ${formState.lastName}`,
+                            email: formState.email,
+                            phone: formState.phone
+                        }
+                    }),
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Payment verification failed.');
+                }
+
+                toast({
+                    title: 'Order Placed!',
+                    description: "Thank you for your purchase. Your payment was successful.",
+                });
+                clearCart();
+                router.push('/');
+
+            } catch (error) {
+                toast({ variant: 'destructive', title: 'Order Failed', description: (error as Error).message });
+            }
+        });
+    };
+
+    const onPaymentClose = () => {
+        toast({
+            variant: 'destructive',
+            title: 'Payment Cancelled',
+            description: 'You closed the payment window without completing the transaction.',
+        });
+    };
 
     const handlePlaceOrder = (e: React.FormEvent) => {
         e.preventDefault();
@@ -58,48 +111,11 @@ export default function CheckoutPage() {
         }
 
         if (cartItems.length === 0) {
-             toast({ variant: 'destructive', title: 'Empty Cart', description: 'Your cart is empty.' });
+            toast({ variant: 'destructive', title: 'Empty Cart', description: 'Your cart is empty.' });
             return;
         }
-
-        setIsProcessingPayment(true);
-
-        // Simulate payment processing delay
-        setTimeout(() => {
-            startTransition(async () => {
-                 // In a real multi-seller marketplace, you would group items by seller and create separate orders.
-                 // For this MVP, we assume all items come from the first item's seller.
-                const sellerId = cartItems[0].sellerId;
-                
-                const orderData: Omit<Order, 'id' | 'createdAt'> = {
-                    customerId: user.uid,
-                    sellerId: sellerId,
-                    items: cartItems.map(({ id, name, price, quantity, sellerId }) => ({ id, name, price, quantity, sellerId })),
-                    total: total,
-                    status: 'Processing',
-                    deliveryAddress: formState.address,
-                    customerInfo: {
-                        name: `${formState.firstName} ${formState.lastName}`,
-                        email: formState.email,
-                        phone: formState.phone
-                    }
-                };
-                
-                try {
-                    await createOrder(orderData);
-                    toast({
-                        title: 'Order Placed!',
-                        description: "Thank you for your purchase. You'll receive a confirmation email shortly.",
-                    });
-                    clearCart();
-                    router.push('/');
-                } catch (error) {
-                     toast({ variant: 'destructive', title: 'Order Failed', description: (error as Error).message });
-                } finally {
-                    setIsProcessingPayment(false);
-                }
-            });
-        }, 2000); // 2-second delay to simulate payment
+        
+        initializePayment({onSuccess: onPaymentSuccess, onClose: onPaymentClose});
     };
 
     return (
@@ -178,12 +194,9 @@ export default function CheckoutPage() {
                                 ) : (
                                     <p className="text-muted-foreground text-center">Your cart is empty.</p>
                                 )}
-                                <Button size="lg" type="submit" className="w-full mt-4" disabled={isPending || isProcessingPayment || cartItems.length === 0 || !isFormValid}>
-                                    {isProcessingPayment ? 'Processing Payment...' : isPending ? 'Placing Order...' : `Confirm and Pay ₦${total.toLocaleString()}`}
+                                <Button size="lg" type="submit" className="w-full mt-4" disabled={isPending || cartItems.length === 0 || !isFormValid}>
+                                    {isPending ? 'Verifying Payment...' : `Confirm and Pay ₦${total.toLocaleString()}`}
                                 </Button>
-                                <p className="text-xs text-center text-muted-foreground mt-2">
-                                    You will not be charged. This is a payment simulation.
-                                </p>
                             </CardContent>
                         </Card>
                     </div>
