@@ -51,10 +51,10 @@ export default function StoreHomePage() {
     <>
       {/* Functional Hero Section */}
       <section className="relative overflow-hidden border-b bg-gradient-to-b from-background via-card/5 to-background">
-         <div className="container relative z-10 mx-auto flex flex-col items-center justify-center space-y-6 px-4 py-12 text-center animate-fade-in-up">
+         <div className="container relative z-10 mx-auto flex flex-col items-center justify-center space-y-6 px-4 py-12 sm:py-20 text-center animate-fade-in-up">
             <div className="flex items-center gap-2 sm:gap-4">
-              <IkmLogo className="w-auto h-10 sm:h-12" />
-              <h1 className="text-3xl sm:text-4xl font-bold font-headline tracking-tight">The IK Market Place</h1>
+              <IkmLogo className="w-auto h-12 sm:h-16" />
+              <h1 className="hidden sm:block text-4xl sm:text-5xl font-bold font-headline tracking-tight">IK Market Place</h1>
             </div>
             <div className="w-full max-w-xl">
               <div className="relative">
