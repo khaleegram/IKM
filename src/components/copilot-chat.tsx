@@ -22,8 +22,9 @@ type Message = {
 
 const sellerDashboardPrompts = ["📈 How do I get my first sale?", "💡 Suggest a name for my store", "💰 How much should I charge for delivery?"];
 const sellerProductsPrompts = ["✍️ Help write a compelling product description", "🖼️ What kind of images work best for [Product]?", "⚖️ How should I price this item?"];
-const sellerOrdersPrompts = ["📦 Print a shipping label for order #123", "💬 Send a delivery update to a customer", "📈 What's my order fulfillment rate?"];
-const sellerSettingsPrompts = ["🏦 How do I set up my payment account?", "💬 How do I connect my WhatsApp?", "🔒 Secure my account"];
+const buyerCheckoutPrompts = ["🚚 What are the delivery options?", "🔒 Is my payment secure?", "🤔 Can I change my order?"];
+const defaultPrompts = ["🔭 Show me something new", "🔥 What's trending right now?", "🛍️ Personalize my feed."];
+
 
 export function CoPilotChat() {
   const pathname = usePathname();
@@ -40,10 +41,9 @@ export function CoPilotChat() {
 
   const getPrompts = () => {
     if (pathname.startsWith("/seller/products")) return sellerProductsPrompts;
-    if (pathname.startsWith("/seller/orders")) return sellerOrdersPrompts;
-    if (pathname.startsWith("/seller/settings")) return sellerSettingsPrompts;
     if (pathname.startsWith("/seller")) return sellerDashboardPrompts;
-    return sellerDashboardPrompts;
+    if (pathname.startsWith("/cart") || pathname.startsWith("/checkout")) return buyerCheckoutPrompts;
+    return defaultPrompts;
   };
 
   const handlePromptClick = (prompt: string) => {
@@ -226,7 +226,7 @@ export function CoPilotChat() {
                   e.preventDefault();
                   if (!input.trim()) return;
                   handlePromptClick(input);
-                  setInput("");
+setInput("");
                 }
               }}
             />
