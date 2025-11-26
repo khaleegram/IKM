@@ -1,6 +1,6 @@
 
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { IkmLogo } from "@/components/icons";
 import Image from 'next/image';
@@ -24,7 +24,7 @@ export default function StoreHomePage() {
           <IkmLogo className="w-auto h-8" />
         </Link>
         <div className="flex items-center gap-2">
-          <Link href="/seller/dashboard">
+          <Link href="/login">
             <Button variant="ghost">Seller Hub</Button>
           </Link>
           <Link href="/wishlist">

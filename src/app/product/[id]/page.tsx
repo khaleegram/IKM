@@ -35,7 +35,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
             <IkmLogo className="w-auto h-8" />
         </Link>
         <div className="flex items-center gap-2">
-          <Link href="/seller">
+          <Link href="/login">
             <Button variant="ghost">Seller Hub</Button>
           </Link>
           <Link href="#">

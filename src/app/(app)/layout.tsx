@@ -22,8 +22,6 @@ export default function AppLayout({
     { href: "/seller/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/seller/products", label: "Products", icon: Package },
     { href: "/seller/orders", label: "Orders", icon: BarChart2 },
-    { href: "/seller/payouts", label: "Payouts", icon: Wallet },
-    { href: "/seller/messages", label: "Messages", icon: MessageSquare },
   ];
   
   if (pathname.startsWith('/seller')) {
@@ -67,7 +65,7 @@ export default function AppLayout({
                               </Link>
                           </SidebarMenuItem>
                           <SidebarMenuItem>
-                              <Link href="/login">
+                              <Link href="/">
                                   <SidebarMenuButton
                                       tooltip={{ children: "Logout", side: "right", align: "center" }}
                                   >
@@ -97,7 +95,7 @@ export default function AppLayout({
             <IkmLogo className="w-auto h-8" />
           </Link>
           <div className="flex items-center gap-2">
-            <Link href="/seller/dashboard">
+            <Link href="/login">
               <Button variant="ghost">Seller Hub</Button>
             </Link>
             <Link href="/wishlist">
@@ -117,7 +115,6 @@ export default function AppLayout({
          <footer className="p-6 text-center text-sm text-muted-foreground border-t">
             <p>&copy; {new Date().getFullYear()} IKM. All Rights Reserved.</p>
         </footer>
-        <CoPilotWidget />
       </div>
   )
 }
