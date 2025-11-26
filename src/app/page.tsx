@@ -52,11 +52,12 @@ export default function StoreHomePage() {
       {/* Functional Hero Section */}
       <section className="relative overflow-hidden border-b bg-gradient-to-b from-background via-card/5 to-background">
          <div className="container relative z-10 mx-auto flex flex-col items-center justify-center space-y-6 px-4 py-12 text-center animate-fade-in-up">
-            <Link href="/">
+            <div className="flex items-center gap-4">
               <IkmLogo className="w-auto h-12" />
-            </Link>
-             <p className="max-w-2xl text-lg text-muted-foreground">
-              Your one-stop marketplace.
+              <h1 className="text-4xl font-bold font-headline tracking-tight">The IK Market Place</h1>
+            </div>
+             <p className="max-w-2xl text-lg text-primary">
+              Authentic Nigerian goods, just a WhatsApp message away.
             </p>
             <div className="w-full max-w-xl">
               <div className="relative">
