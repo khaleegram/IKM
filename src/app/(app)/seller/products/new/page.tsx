@@ -11,7 +11,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useTransition, useRef } from "react";
-import { getProductDescription, addProduct as addProductAction } from "@/lib/actions";
+import { getProductDescription } from "@/lib/actions";
+import { addProduct as addProductAction } from "@/lib/product-actions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useFirebase } from "@/firebase";
 import Image from "next/image";
@@ -249,5 +250,3 @@ export default function NewProductPage() {
     </div>
     )
 }
-
-    

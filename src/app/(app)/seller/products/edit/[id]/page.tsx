@@ -11,7 +11,8 @@ import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useTransition, useEffect, useRef } from "react";
-import { getProductDescription, updateProduct as updateProductAction } from "@/lib/actions";
+import { getProductDescription } from "@/lib/actions";
+import { updateProduct as updateProductAction } from "@/lib/product-actions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useFirebase } from "@/firebase";
 import { useProduct } from "@/lib/firebase/firestore/products";
@@ -284,5 +285,3 @@ export default function EditProductPage() {
     </div>
     )
 }
-
-    
