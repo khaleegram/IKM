@@ -32,6 +32,7 @@ export interface Product extends DocumentData {
   imageUrl?: string;
   sellerId: string;
   category?: string;
+  isFeatured?: boolean;
 }
 
 // This function is intended for server-side use now, but we keep it here to avoid breaking client-side imports of other functions for now.
@@ -104,7 +105,7 @@ export const useProductsBySeller = (sellerId: string | undefined) => {
 
   useEffect(() => {
     if (!sellerProductsQuery) {
-        setIsLoading(false);
+        if (!sellerId) setIsLoading(false);
         setProducts([]);
         return;
     }
@@ -145,7 +146,7 @@ export const useProduct = (productId: string) => {
 
   useEffect(() => {
     if (!productRef) {
-      setIsLoading(false);
+      if (!productId) setIsLoading(false);
       return;
     };
 
@@ -169,7 +170,7 @@ export const useProduct = (productId: string) => {
     );
 
     return () => unsubscribe();
-  }, [productRef]);
+  }, [productRef, productId]);
 
   return { data: product, isLoading, error };
 };
@@ -220,3 +221,4 @@ export const deleteProduct = async (firestore: Firestore, productId: string, use
     return await deleteDoc(productRef);
 };
 
+    

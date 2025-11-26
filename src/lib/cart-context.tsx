@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Product } from '@/lib/firebase/firestore/products';
@@ -16,12 +17,14 @@ interface CartContextType {
   clearCart: () => void;
   cartCount: number;
   totalPrice: number;
+  isAddingToCart: boolean;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [isAddingToCart, setAddingToCart] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -36,12 +39,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   }, [cartItems]);
 
   const addToCart = (product: Product, quantity = 1) => {
+    setAddingToCart(true);
     if (!product.id) {
         toast({
             variant: "destructive",
             title: "Error",
             description: "Product information is missing.",
         });
+        setAddingToCart(false);
         return;
     }
     setCartItems(prevItems => {
@@ -60,6 +65,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         title: "Added to cart",
         description: `${product.name} has been added to your cart.`,
     });
+    setAddingToCart(false);
   };
 
   const removeFromCart = (productId: string) => {
@@ -91,7 +97,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const totalPrice = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
 
   return (
-    <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, updateQuantity, clearCart, cartCount, totalPrice }}>
+    <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, updateQuantity, clearCart, cartCount, totalPrice, isAddingToCart }}>
       {children}
     </CartContext.Provider>
   );
@@ -104,3 +110,5 @@ export const useCart = () => {
   }
   return context;
 };
+
+    
