@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getProductDescription } from "@/lib/actions";
+import { getProductDescription, suggestStoreName } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "./ui/label";
@@ -60,6 +60,12 @@ export function CoPilotChat() {
             setFormModalOpen(true);
             return; // Don't add a default response yet
         }
+
+        if (action.includes("suggest a name for my store")) {
+            setCurrentAction("💡 Suggest a name for my store");
+            setFormModalOpen(true);
+            return;
+        }
         
         setMessages(prev => [...prev, { role: "assistant", content: response }]);
       } catch (error) {
@@ -93,6 +99,18 @@ export function CoPilotChat() {
                 const keyFeatures = formData.get('keyFeatures') as string;
                 const targetAudience = formData.get('targetAudience') as string;
                 response = await getProductDescription({ productName, productCategory, keyFeatures, targetAudience });
+            }
+             if (prompt === "💡 Suggest a name for my store") {
+                const keywords = formData.get('keywords') as string;
+                const result = await suggestStoreName({ keywords });
+                response = (
+                    <div>
+                        <p>Here are a few store name suggestions:</p>
+                        <ul className="list-disc pl-5 mt-2 space-y-1">
+                            {result.storeNames.map((name: string, index: number) => <li key={index}>{name}</li>)}
+                        </ul>
+                    </div>
+                );
             }
             setMessages(prev => [...prev, { role: "assistant", content: response as string }]);
         } catch (error) {
@@ -136,6 +154,15 @@ export function CoPilotChat() {
                 </div>
               </div>
             );
+        case '💡 Suggest a name for my store':
+            return (
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="keywords">Describe your store in a few keywords</Label>
+                        <Input id="keywords" name="keywords" placeholder="e.g., handmade jewelry, Nigerian crafts" />
+                    </div>
+                </div>
+            )
         default: 
             return null;
     }

@@ -2,6 +2,7 @@
 'use server';
 
 import { generateProductDescription as genProductDesc, type GenerateProductDescriptionInput } from "@/ai/flows/seller-product-description-assistance";
+import { suggestStoreName as genStoreName, type SuggestStoreNameInput } from "@/ai/flows/store-name-assistance";
 import { addProduct as addProd, updateProduct as updateProd, type Product } from "@/lib/firebase/firestore/products";
 import { z } from "zod";
 
@@ -17,6 +18,17 @@ export async function getProductDescription(input: GenerateProductDescriptionInp
   const result = await genProductDesc(parsedInput);
   return result.description;
 }
+
+const storeNameSchema = z.object({
+  keywords: z.string(),
+});
+
+export async function suggestStoreName(input: SuggestStoreNameInput) {
+    const parsedInput = storeNameSchema.parse(input);
+    const result = await genStoreName(parsedInput);
+    return result;
+}
+
 
 const productSchema = z.object({
     name: z.string().min(1, "Name is required"),
