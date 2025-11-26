@@ -22,6 +22,7 @@ export default function CheckoutPage() {
     const { cartItems, totalPrice, clearCart } = useCart();
     const { user } = useUser();
     const [isPending, startTransition] = useTransition();
+    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
     // In a real app, shipping would be calculated based on address, etc.
     const shipping = cartItems.length > 0 ? 2500 : 0;
@@ -39,10 +40,17 @@ export default function CheckoutPage() {
         const { id, value } = e.target;
         setFormState(prev => ({ ...prev, [id]: value }));
     };
+    
+    const isFormValid = formState.firstName && formState.lastName && formState.address && formState.email && formState.phone;
 
     const handlePlaceOrder = (e: React.FormEvent) => {
         e.preventDefault();
         
+        if (!isFormValid) {
+            toast({ variant: 'destructive', title: 'Incomplete Information', description: 'Please fill out all delivery details.' });
+            return;
+        }
+
         if (!user) {
             toast({ variant: 'destructive', title: 'Not Authenticated', description: 'Please log in to place an order.' });
             router.push('/login');
@@ -54,37 +62,44 @@ export default function CheckoutPage() {
             return;
         }
 
-        startTransition(async () => {
-             // In a real multi-seller marketplace, you would group items by seller and create separate orders.
-             // For this MVP, we assume all items come from the first item's seller.
-            const sellerId = cartItems[0].sellerId;
-            
-            const orderData: Omit<Order, 'id' | 'createdAt'> = {
-                customerId: user.uid,
-                sellerId: sellerId,
-                items: cartItems.map(({ id, name, price, quantity, sellerId }) => ({ id, name, price, quantity, sellerId })),
-                total: total,
-                status: 'Processing',
-                deliveryAddress: formState.address,
-                customerInfo: {
-                    name: `${formState.firstName} ${formState.lastName}`,
-                    email: formState.email,
-                    phone: formState.phone
+        setIsProcessingPayment(true);
+
+        // Simulate payment processing delay
+        setTimeout(() => {
+            startTransition(async () => {
+                 // In a real multi-seller marketplace, you would group items by seller and create separate orders.
+                 // For this MVP, we assume all items come from the first item's seller.
+                const sellerId = cartItems[0].sellerId;
+                
+                const orderData: Omit<Order, 'id' | 'createdAt'> = {
+                    customerId: user.uid,
+                    sellerId: sellerId,
+                    items: cartItems.map(({ id, name, price, quantity, sellerId }) => ({ id, name, price, quantity, sellerId })),
+                    total: total,
+                    status: 'Processing',
+                    deliveryAddress: formState.address,
+                    customerInfo: {
+                        name: `${formState.firstName} ${formState.lastName}`,
+                        email: formState.email,
+                        phone: formState.phone
+                    }
+                };
+                
+                try {
+                    await createOrder(orderData);
+                    toast({
+                        title: 'Order Placed!',
+                        description: "Thank you for your purchase. You'll receive a confirmation email shortly.",
+                    });
+                    clearCart();
+                    router.push('/');
+                } catch (error) {
+                     toast({ variant: 'destructive', title: 'Order Failed', description: (error as Error).message });
+                } finally {
+                    setIsProcessingPayment(false);
                 }
-            };
-            
-            try {
-                await createOrder(orderData);
-                toast({
-                    title: 'Order Placed!',
-                    description: "Thank you for your purchase. You'll receive a confirmation email shortly.",
-                });
-                clearCart();
-                router.push('/');
-            } catch (error) {
-                 toast({ variant: 'destructive', title: 'Order Failed', description: (error as Error).message });
-            }
-        });
+            });
+        }, 2000); // 2-second delay to simulate payment
     };
 
     return (
@@ -122,16 +137,6 @@ export default function CheckoutPage() {
                                         <Input id="phone" type="tel" placeholder="+234..." value={formState.phone} onChange={handleInputChange} required/>
                                     </div>
                                 </div>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Payment Details</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-muted-foreground">
-                                    This is a simulation. In a real application, a payment gateway like Paystack or Flutterwave would be integrated here.
-                                </p>
                             </CardContent>
                         </Card>
                     </div>
@@ -173,9 +178,12 @@ export default function CheckoutPage() {
                                 ) : (
                                     <p className="text-muted-foreground text-center">Your cart is empty.</p>
                                 )}
-                                <Button size="lg" type="submit" className="w-full mt-4" disabled={isPending || cartItems.length === 0}>
-                                    {isPending ? 'Placing Order...' : 'Place Order'}
+                                <Button size="lg" type="submit" className="w-full mt-4" disabled={isPending || isProcessingPayment || cartItems.length === 0 || !isFormValid}>
+                                    {isProcessingPayment ? 'Processing Payment...' : isPending ? 'Placing Order...' : `Confirm and Pay ₦${total.toLocaleString()}`}
                                 </Button>
+                                <p className="text-xs text-center text-muted-foreground mt-2">
+                                    You will not be charged. This is a payment simulation.
+                                </p>
                             </CardContent>
                         </Card>
                     </div>
