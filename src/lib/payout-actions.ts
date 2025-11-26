@@ -1,6 +1,7 @@
 
 'use server';
 
+import 'dotenv/config';
 import { z } from "zod";
 import { updateUserProfile } from "./firebase/firestore/users";
 import { getAdminFirestore } from "./firebase/admin";
