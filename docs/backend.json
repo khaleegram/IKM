@@ -60,6 +60,18 @@
         }
       },
       "required": ["displayName", "email"]
+    },
+    "deliveryLocation": {
+        "title": "Delivery Location",
+        "description": "A location where a seller can deliver products.",
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "The name of the location (e.g., a bus stop)."
+            }
+        },
+        "required": ["name"]
     }
   },
   "auth": {
@@ -77,6 +89,12 @@
         "$ref": "#/entities/userProfile"
       },
       "description": "A user's profile."
+    },
+    "/users/{userId}/deliveryLocations/{locationId}": {
+        "schema": {
+            "$ref": "#/entities/deliveryLocation"
+        },
+        "description": "A seller's available delivery location."
     }
   }
 }

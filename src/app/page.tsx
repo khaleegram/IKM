@@ -8,9 +8,16 @@ import { IkmLogo } from "@/components/icons";
 import Image from 'next/image';
 import { Heart, ShoppingCart, Loader2 } from 'lucide-react';
 import { useAllProducts } from '@/lib/firebase/firestore/products';
+import { useAllUserProfiles } from '@/lib/firebase/firestore/users'; // Assuming you have a hook to get all users
 
 export default function StoreHomePage() {
-  const { data: products, isLoading } = useAllProducts();
+  const { data: products, isLoading: isLoadingProducts } = useAllProducts();
+  const { data: users, isLoading: isLoadingUsers } = useAllUserProfiles();
+
+  // A simple way to get the first seller's store info as a fallback.
+  // In a real multi-seller app, you'd determine which store to show differently.
+  const storeInfo = users && users.length > 0 ? users[0] : null;
+  const isLoading = isLoadingProducts || isLoadingUsers;
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -36,8 +43,8 @@ export default function StoreHomePage() {
       <main className="flex-1">
         <section className="py-12 px-4 sm:px-6">
             <div className="text-center mb-12">
-                <h1 className="text-4xl sm:text-5xl font-bold font-headline">Mary's Store</h1>
-                <p className="mt-2 text-lg text-muted-foreground">Handmade Crafts & Apparel</p>
+                <h1 className="text-4xl sm:text-5xl font-bold font-headline">{storeInfo?.storeName || "IKM Marketplace"}</h1>
+                <p className="mt-2 text-lg text-muted-foreground">{storeInfo?.storeDescription || "Handmade Crafts & Apparel"}</p>
             </div>
             
             {isLoading && (
