@@ -6,16 +6,23 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { IkmLogo } from "@/components/icons";
 import Image from 'next/image';
-import { ShoppingCart, Loader2, ArrowRight } from 'lucide-react';
+import { ShoppingCart, Loader2, ArrowRight, Search } from 'lucide-react';
 import { useAllProducts } from '@/lib/firebase/firestore/products';
 import { useAllUserProfiles } from '@/lib/firebase/firestore/users';
 import { useCart } from '@/lib/cart-context';
+import { useState } from 'react';
+import { Input } from '@/components/ui/input';
 
 export default function StoreHomePage() {
   const { data: products, isLoading: isLoadingProducts } = useAllProducts(8); // Limit to 8 products for the homepage
   const { addToCart } = useCart();
+  const [searchTerm, setSearchTerm] = useState('');
 
   const isLoading = isLoadingProducts;
+
+  const filteredProducts = products.filter(product => 
+    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <>
@@ -31,16 +38,27 @@ export default function StoreHomePage() {
             </div>
             
             <div className="max-w-7xl mx-auto">
-                <h2 className="text-2xl font-bold font-headline mb-6">Featured Products</h2>
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold font-headline">Featured Products</h2>
+                    <div className="relative w-full max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Search products..."
+                            className="pl-9"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
                 {isLoading && (
                   <div className="flex justify-center items-center h-64">
                     <Loader2 className="w-12 h-12 animate-spin text-primary" />
                   </div>
                 )}
 
-                {!isLoading && products && products.length > 0 && (
+                {!isLoading && filteredProducts.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-                    {products.map((product) => (
+                    {filteredProducts.map((product) => (
                       <Card key={product.id} className="group overflow-hidden relative">
                          <Link href={`/product/${product.id}`}>
                           <CardHeader className="p-0">
@@ -67,10 +85,16 @@ export default function StoreHomePage() {
                     ))}
                   </div>
                 )}
-                 {!isLoading && (!products || products.length === 0) && (
+                 {!isLoading && (products.length === 0 || filteredProducts.length === 0) && (
                   <div className="text-center text-muted-foreground py-16">
-                    <p className="text-lg">No products have been listed yet.</p>
-                    <p>Check back soon to see what our sellers have to offer!</p>
+                    {products.length > 0 && filteredProducts.length === 0 ? (
+                        <p className="text-lg">No products found for "{searchTerm}".</p>
+                    ) : (
+                        <>
+                            <p className="text-lg">No products have been listed yet.</p>
+                            <p>Check back soon to see what our sellers have to offer!</p>
+                        </>
+                    )}
                   </div>
                 )}
             </div>
