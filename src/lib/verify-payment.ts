@@ -6,6 +6,7 @@ import { getAdminFirestore } from '@/lib/firebase/admin';
 import { headers } from "next/headers";
 import { serverTimestamp } from "firebase-admin/firestore";
 import type { Order } from "./firebase/firestore/orders";
+import type { CartItem } from "./cart-context";
 
 const verifyPaymentSchema = z.object({
   reference: z.string(),
@@ -35,7 +36,7 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
          throw new Error(paystackResult.message || 'Paystack verification failed');
     }
 
-    const { status, amount, currency } = paystackResult.data;
+    const { status, amount } = paystackResult.data;
 
     if (status !== 'success' || amount / 100 !== total) {
         throw new Error('Transaction verification failed. Status or amount mismatch.');
@@ -51,7 +52,7 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
     const orderData: Omit<Order, 'id' | 'createdAt'> = {
         customerId: customerId || "anonymous",
         sellerId: sellerId,
-        items: cartItems.map(({ id, name, price, quantity }: any) => ({ id, name, price, quantity })),
+        items: cartItems.map(({ id, name, price, quantity }: CartItem) => ({ productId: id, name, price, quantity })),
         total: total,
         status: 'Processing',
         deliveryAddress: deliveryAddress,
