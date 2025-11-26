@@ -5,13 +5,12 @@
 'use client';
 
 import { app } from '@/firebase/config';
-import { Auth, getAuth, connectAuthEmulator } from 'firebase/auth';
+import { Auth, getAuth } from 'firebase/auth';
 import {
   Firestore,
   getFirestore,
-  connectFirestoreEmulator,
 } from 'firebase/firestore';
-import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { getStorage } from 'firebase/storage';
 import {
   isSupported,
   getAnalytics,
