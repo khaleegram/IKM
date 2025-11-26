@@ -50,7 +50,11 @@ async function uploadImage(userId: string, file: File): Promise<string> {
 
 
 export async function addProduct(userId: string, data: FormData) {
-    const rawData = Object.fromEntries(data.entries());
+    const rawData: Record<string, any> = {};
+    data.forEach((value, key) => {
+        rawData[key] = value;
+    });
+
     const validation = productSchema.safeParse(rawData);
 
     if (!validation.success) {
@@ -77,7 +81,11 @@ export async function addProduct(userId: string, data: FormData) {
 }
 
 export async function updateProduct(productId: string, userId: string, data: FormData) {
-    const rawData = Object.fromEntries(data.entries());
+    const rawData: Record<string, any> = {};
+     data.forEach((value, key) => {
+        rawData[key] = value;
+    });
+    
     const validation = productSchema.safeParse(rawData);
 
     if (!validation.success) {
