@@ -3,6 +3,7 @@
 
 import { generateProductDescription as genProductDesc, type GenerateProductDescriptionInput } from "@/ai/flows/seller-product-description-assistance";
 import { suggestStoreName as genStoreName, type SuggestStoreNameInput } from "@/ai/flows/store-name-assistance";
+import { getFirestoreInstance } from "@/firebase";
 import { addProduct as addProd, updateProduct as updateProd } from "@/lib/firebase/firestore/products";
 import { uploadImage } from "@/lib/firebase/storage";
 import { z } from "zod";
@@ -90,8 +91,9 @@ export async function addProduct(userId: string, data: FormData) {
     if (validation.data.image && validation.data.image.size > 0) {
         imageUrl = await uploadImage(userId, validation.data.image);
     }
-
-    await addProd(userId, {
+    
+    const firestore = getFirestoreInstance();
+    await addProd(firestore, userId, {
         ...validation.data,
         sellerId: userId,
         imageUrl: imageUrl,
@@ -113,7 +115,8 @@ export async function updateProduct(productId: string, userId: string, data: For
         imageUrl = await uploadImage(userId, image);
     }
 
-    await updateProd(productId, userId, {
+    const firestore = getFirestoreInstance();
+    await updateProd(firestore, productId, userId, {
         ...productData,
         ...(imageUrl && { imageUrl }),
     });

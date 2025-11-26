@@ -15,6 +15,7 @@ import {
   doc,
   getDoc,
   orderBy,
+  Firestore,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
 import { CartItem } from '@/lib/cart-context';
@@ -36,8 +37,7 @@ export interface Order extends DocumentData {
 }
 
 // Function to create an order
-export const createOrder = async (orderData: Omit<Order, 'id' | 'createdAt'>) => {
-  const { firestore } = useFirebase();
+export const createOrder = async (firestore: Firestore, orderData: Omit<Order, 'id' | 'createdAt'>) => {
   if (!firestore) throw new Error("Firestore is not initialized");
 
   const ordersCollection = collection(firestore, 'orders');
@@ -168,8 +168,7 @@ export const useOrder = (orderId: string | undefined) => {
 
 
 // Function to update an order's status
-export const updateOrderStatus = async (orderId: string, status: Order['status']) => {
-    const { firestore } = useFirebase();
+export const updateOrderStatus = async (firestore: Firestore, orderId: string, status: Order['status']) => {
     if (!firestore) throw new Error("Firestore is not initialized");
 
     const orderRef = doc(firestore, 'orders', orderId);

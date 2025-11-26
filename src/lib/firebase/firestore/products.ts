@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -16,6 +17,7 @@ import {
   serverTimestamp,
   limit,
   getDocs,
+  Firestore,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
 
@@ -165,8 +167,7 @@ export const useProduct = (productId: string) => {
 
 
 // Functions to modify products
-export const addProduct = async (userId: string, product: Omit<Product, 'id' | 'sellerId' | 'price'>) => {
-    const { firestore } = useFirebase();
+export const addProduct = async (firestore: Firestore, userId: string, product: Omit<Product, 'id' | 'sellerId' | 'price'>) => {
     if (!firestore) throw new Error("Firestore is not initialized");
 
     const productsCollection = collection(firestore, 'products');
@@ -178,8 +179,7 @@ export const addProduct = async (userId: string, product: Omit<Product, 'id' | '
     });
 };
 
-export const updateProduct = async (productId: string, userId: string, product: Partial<Product>) => {
-    const { firestore } = useFirebase();
+export const updateProduct = async (firestore: Firestore, productId: string, userId: string, product: Partial<Product>) => {
     if (!firestore) throw new Error("Firestore is not initialized");
 
     const productRef = doc(firestore, 'products', productId);
@@ -198,8 +198,7 @@ export const updateProduct = async (productId: string, userId: string, product: 
     });
 };
 
-export const deleteProduct = async (productId: string, userId: string) => {
-    const { firestore } = useFirebase();
+export const deleteProduct = async (firestore: Firestore, productId: string, userId: string) => {
     if (!firestore) throw new Error("Firestore is not initialized");
 
     const productRef = doc(firestore, 'products', productId);

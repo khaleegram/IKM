@@ -31,6 +31,7 @@ import { useOrdersBySeller, updateOrderStatus, Order } from "@/lib/firebase/fire
 import { useToast } from "@/hooks/use-toast";
 import { format } from 'date-fns';
 import Link from "next/link";
+import { useFirebase } from "@/firebase";
 
 const getStatusVariant = (status: Order['status']) => {
     switch (status) {
@@ -44,12 +45,13 @@ const getStatusVariant = (status: Order['status']) => {
 
 export default function OrdersPage() {
   const { user } = useUser();
+  const { firestore } = useFirebase();
   const { data: orders, isLoading, error } = useOrdersBySeller(user?.uid);
   const { toast } = useToast();
 
   const handleStatusUpdate = async (orderId: string, status: Order['status']) => {
     try {
-        await updateOrderStatus(orderId, status);
+        await updateOrderStatus(firestore, orderId, status);
         toast({
             title: "Order Updated",
             description: `Order has been marked as ${status}.`

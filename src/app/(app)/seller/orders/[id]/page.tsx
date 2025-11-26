@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useFirebase } from "@/firebase";
 
 const getStatusVariant = (status: Order['status']) => {
     switch (status) {
@@ -47,6 +48,7 @@ export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const orderId = params.id as string;
+  const { firestore } = useFirebase();
   const { data: order, isLoading, error } = useOrder(orderId);
   const { toast } = useToast();
 
@@ -64,7 +66,7 @@ export default function OrderDetailPage() {
   
   const handleStatusUpdate = async (status: Order['status']) => {
     try {
-        await updateOrderStatus(orderId, status);
+        await updateOrderStatus(firestore, orderId, status);
         toast({
             title: "Order Updated",
             description: `Order has been marked as ${status}.`

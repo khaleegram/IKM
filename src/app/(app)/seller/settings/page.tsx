@@ -16,6 +16,7 @@ import { useState, useEffect, useTransition } from "react";
 export default function SellerSettingsPage() {
     const { toast } = useToast();
     const { user: authUser } = useUser();
+    const { firestore } = useFirebase();
     const { data: userProfile, isLoading: isLoadingProfile } = useUserProfile(authUser?.uid);
 
     const [isPending, startTransition] = useTransition();
@@ -39,7 +40,7 @@ export default function SellerSettingsPage() {
 
         startTransition(async () => {
             try {
-                await updateUserProfile(authUser.uid, {
+                await updateUserProfile(firestore, authUser.uid, {
                     storeName,
                     storeDescription
                 });
@@ -59,7 +60,7 @@ export default function SellerSettingsPage() {
 
         startTransition(async () => {
             try {
-                await updateUserProfile(authUser.uid, { whatsappNumber });
+                await updateUserProfile(firestore, authUser.uid, { whatsappNumber });
                 toast({
                     title: "Settings Saved!",
                     description: `Your WhatsApp number has been updated.`,
@@ -76,7 +77,7 @@ export default function SellerSettingsPage() {
         
         startTransition(async () => {
             try {
-                await addDeliveryLocation(authUser.uid, { name: newLocation });
+                await addDeliveryLocation(firestore, authUser.uid, { name: newLocation });
                 setNewLocation('');
                 toast({
                     title: "Location Added!",
@@ -93,7 +94,7 @@ export default function SellerSettingsPage() {
 
         startTransition(async () => {
             try {
-                await deleteDeliveryLocation(authUser.uid, locationId);
+                await deleteDeliveryLocation(firestore, authUser.uid, locationId);
                  toast({
                     title: "Location Removed",
                     description: `The location has been removed.`,

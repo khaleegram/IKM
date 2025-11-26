@@ -31,7 +31,7 @@ import { useState } from 'react';
 
 
 export default function ProductsPage() {
-  const { auth } = useFirebase();
+  const { auth, firestore } = useFirebase();
   const user = auth.currentUser;
   const { data: products, isLoading, error } = useProductsBySeller(user?.uid);
   const { toast } = useToast();
@@ -53,7 +53,7 @@ export default function ProductsPage() {
   const handleDeleteConfirm = async () => {
     if (!productToDelete || !user) return;
     try {
-      await deleteProduct(productToDelete, user.uid);
+      await deleteProduct(firestore, productToDelete, user.uid);
       toast({
         title: "Product Deleted",
         description: "The product has been successfully removed from your store.",

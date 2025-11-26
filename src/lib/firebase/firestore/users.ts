@@ -11,7 +11,8 @@ import {
   collection,
   addDoc,
   deleteDoc,
-  query
+  query,
+  Firestore
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
 
@@ -137,8 +138,7 @@ export const useAllUserProfiles = () => {
 
 
 // Function to update user profile
-export const updateUserProfile = async (userId: string, data: Partial<UserProfile>) => {
-    const { firestore } = useFirebase();
+export const updateUserProfile = async (firestore: Firestore, userId: string, data: Partial<UserProfile>) => {
     if (!firestore) throw new Error("Firestore is not initialized");
 
     const userRef = doc(firestore, 'users', userId);
@@ -146,8 +146,7 @@ export const updateUserProfile = async (userId: string, data: Partial<UserProfil
 };
 
 // Function to add a delivery location
-export const addDeliveryLocation = async (userId: string, location: { name: string }) => {
-    const { firestore } = useFirebase();
+export const addDeliveryLocation = async (firestore: Firestore, userId: string, location: { name: string }) => {
     if (!firestore) throw new Error("Firestore is not initialized");
 
     const locationsCollection = collection(firestore, 'users', userId, 'deliveryLocations');
@@ -155,8 +154,7 @@ export const addDeliveryLocation = async (userId: string, location: { name: stri
 }
 
 // Function to delete a delivery location
-export const deleteDeliveryLocation = async (userId: string, locationId: string) => {
-    const { firestore } = useFirebase();
+export const deleteDeliveryLocation = async (firestore: Firestore, userId: string, locationId: string) => {
     if (!firestore) throw new Error("Firestore is not initialized");
     
     const locationRef = doc(firestore, 'users', userId, 'deliveryLocations', locationId);
