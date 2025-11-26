@@ -67,7 +67,7 @@ export default function AppLayout({
                               </Link>
                           </SidebarMenuItem>
                           <SidebarMenuItem>
-                              <Link href="/">
+                              <Link href="/login">
                                   <SidebarMenuButton
                                       tooltip={{ children: "Logout", side: "right", align: "center" }}
                                   >
@@ -115,7 +115,7 @@ export default function AppLayout({
             {children}
         </main>
          <footer className="p-6 text-center text-sm text-muted-foreground border-t">
-            <p>&copy; {new Date().getFullYear()} Mary's Store. Powered by IKM.</p>
+            <p>&copy; {new Date().getFullYear()} IKM. All Rights Reserved.</p>
         </footer>
         <CoPilotWidget />
       </div>

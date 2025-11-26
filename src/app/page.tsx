@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button";
 import { IkmLogo } from "@/components/icons";
 import Image from 'next/image';
-import { Heart } from 'lucide-react';
+import { Heart, ShoppingCart } from 'lucide-react';
 
 // Mock product data - in a real app, this would come from a database
 const products = [
@@ -20,14 +20,22 @@ export default function StoreHomePage() {
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <header className="p-4 sm:p-6 flex justify-between items-center border-b">
-        <IkmLogo className="w-auto h-8" />
+        <Link href="/">
+          <IkmLogo className="w-auto h-8" />
+        </Link>
         <div className="flex items-center gap-2">
-          <Link href="/seller">
+          <Link href="/seller/dashboard">
             <Button variant="ghost">Seller Hub</Button>
           </Link>
-          <Link href="#">
+          <Link href="/wishlist">
             <Button>My Wishlist</Button>
           </Link>
+          <Link href="/cart">
+              <Button size="icon" variant="outline">
+                <ShoppingCart className="h-5 w-5" />
+                <span className="sr-only">Shopping Cart</span>
+              </Button>
+            </Link>
         </div>
       </header>
       <main className="flex-1">
@@ -65,7 +73,7 @@ export default function StoreHomePage() {
         </section>
       </main>
       <footer className="p-6 text-center text-sm text-muted-foreground border-t">
-        <p>&copy; {new Date().getFullYear()} Mary's Store. Powered by IKM.</p>
+        <p>&copy; {new Date().getFullYear()} IKM. All Rights Reserved.</p>
       </footer>
     </div>
   );
