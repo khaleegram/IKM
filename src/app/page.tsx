@@ -43,92 +43,8 @@ export default function StoreHomePage() {
     }
   }, [addToCart]);
 
-  const placeholderImages = [
-    { src: "https://picsum.photos/seed/fashion/600/800", alt: "Fashion accessory", "data-ai-hint": "fashion accessory" },
-    { src: "https://picsum.photos/seed/crafts/600/400", alt: "Handmade craft", "data-ai-hint": "handmade craft" },
-    { src: "https://picsum.photos/seed/pottery/600/400", alt: "Pottery art", "data-ai-hint": "pottery art" },
-    { src: "https://picsum.photos/seed/art/600/800", alt: "Local art", "data-ai-hint": "local art" },
-  ];
-
   return (
     <>
-      {/* Hero Section */}
-      <section className="bg-gradient-to-br from-muted/20 to-muted/5 relative overflow-hidden">
-        <div className="container mx-auto grid lg:grid-cols-2 gap-12 items-center py-16 sm:py-24 px-4">
-          <div className="flex flex-col items-start text-left space-y-6 z-10">
-            <div className="space-y-4">
-              <Badge variant="secondary" className="px-4 py-1 text-sm font-semibold">
-                🎉 100+ Nigerian Artisans
-              </Badge>
-              <h1 className="text-4xl lg:text-6xl font-bold font-headline tracking-tight leading-tight">
-                Unique Finds,
-                <br />
-                <span className="text-primary">
-                  Nigerian Hands.
-                </span>
-              </h1>
-              <p className="text-xl text-muted-foreground max-w-lg leading-relaxed">
-                Discover authentic products from independent sellers and talented artisans across Nigeria.
-              </p>
-            </div>
-            
-            <div className="w-full max-w-md flex flex-col sm:flex-row gap-3">
-              <Link href="/stores" className="flex-1">
-                <Button size="lg" className="w-full h-12 text-base">
-                  <Sparkles className="mr-2 h-5 w-5" />
-                  Explore All Stores
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="/seller/dashboard" className="flex-1">
-                <Button size="lg" variant="outline" className="w-full h-12 text-base">
-                  Become a Seller
-                </Button>
-              </Link>
-            </div>
-
-            {/* Stats */}
-            <div className="flex gap-6 pt-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">500+</div>
-                <div className="text-sm text-muted-foreground">Products</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">50+</div>
-                <div className="text-sm text-muted-foreground">Artisans</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">100%</div>
-                <div className="text-sm text-muted-foreground">Authentic</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Image Grid */}
-          <div className="hidden lg:grid grid-cols-2 gap-4 relative">
-            {placeholderImages.map((image, index) => (
-              <div 
-                key={index}
-                className={`${index % 2 === 0 ? 'pt-12' : ''} animate-fade-in`}
-                style={{ animationDelay: `${index * 150}ms` }}
-              >
-                <div className="rounded-2xl shadow-lg overflow-hidden group hover:shadow-2xl transition-all duration-300">
-                  <Image 
-                    src={image.src} 
-                    alt={image.alt}
-                    width={600}
-                    height={index % 2 === 1 ? 400 : 800}
-                    className="object-cover w-full h-full group-hover:scale-110 transition-transform duration-500"
-                    priority={index < 2}
-                    data-ai-hint={image['data-ai-hint']}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Featured Products Section */}
       <section className="py-16 sm:py-24 px-4 sm:px-6 bg-background">
         <div className="max-w-7xl mx-auto">
@@ -290,5 +206,3 @@ export default function StoreHomePage() {
     </>
   );
 }
-
-    
