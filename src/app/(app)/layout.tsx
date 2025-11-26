@@ -13,9 +13,10 @@ import { useUser } from "@/lib/firebase/auth/use-user";
 import { useFirebase } from "@/firebase";
 import { signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { useCart } from "@/lib/cart-context";
 import { Badge } from "@/components/ui/badge";
+import { useOrdersBySeller } from "@/lib/firebase/firestore/orders";
 
 
 export default function AppLayout({
@@ -29,6 +30,22 @@ export default function AppLayout({
   const { auth } = useFirebase();
   const { toast } = useToast();
   const { cartCount } = useCart();
+  const { data: orders, isLoading: isLoadingOrders } = useOrdersBySeller(user?.uid);
+  
+  const isInitialLoad = useRef(true);
+  
+  useEffect(() => {
+    if (!isLoadingOrders) {
+      if (isInitialLoad.current) {
+        isInitialLoad.current = false;
+      } else {
+        toast({
+          title: "New Order Received!",
+          description: "A customer has placed a new order. Check your orders page.",
+        });
+      }
+    }
+  }, [orders, isLoadingOrders, toast]);
 
   const isSellerRoute = pathname.startsWith('/seller');
   

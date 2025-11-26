@@ -14,6 +14,7 @@ import {
   serverTimestamp,
   doc,
   getDoc,
+  orderBy,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
 import { CartItem } from '@/lib/cart-context';
@@ -55,7 +56,7 @@ export const useOrdersBySeller = (sellerId: string | undefined) => {
 
   const sellerOrdersQuery = useMemo(() => {
     if (!firestore || !sellerId) return null;
-    return query(collection(firestore, 'orders'), where('sellerId', '==', sellerId));
+    return query(collection(firestore, 'orders'), where('sellerId', '==', sellerId), orderBy('createdAt', 'desc'));
   }, [firestore, sellerId]);
 
   useEffect(() => {
