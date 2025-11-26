@@ -9,9 +9,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { useProduct } from "@/lib/firebase/firestore/products";
+import React from "react";
 
 export default function ProductDetailPage({ params }: { params: { id: string } }) {
-  const { data: product, isLoading, error } = useProduct(params.id);
+  const resolvedParams = React.use(params);
+  const { data: product, isLoading, error } = useProduct(resolvedParams.id);
 
   if (isLoading) {
     return (
@@ -35,9 +37,15 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
           <Link href="/login">
             <Button variant="ghost">Seller Hub</Button>
           </Link>
-          <Link href="#">
+          <Link href="/wishlist">
             <Button>My Wishlist</Button>
           </Link>
+          <Link href="/cart">
+              <Button size="icon" variant="outline">
+                <ShoppingCart className="h-5 w-5" />
+                <span className="sr-only">Shopping Cart</span>
+              </Button>
+            </Link>
         </div>
       </header>
       <main className="flex-1 p-4 sm:p-8">
@@ -76,7 +84,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
         </div>
       </main>
       <footer className="p-6 text-center text-sm text-muted-foreground border-t">
-        <p>&copy; {new Date().getFullYear()} Mary's Store. Powered by IKM.</p>
+        <p>&copy; {new Date().getFullYear()} IKM. All Rights Reserved.</p>
       </footer>
     </div>
   );
