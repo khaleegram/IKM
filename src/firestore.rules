@@ -1,0 +1,39 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Products can be read by anyone, but only created, updated, or deleted
+    // by the authenticated user who owns the product.
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == request.resource.data.sellerId;
+    }
+
+    // User profiles can be read by anyone.
+    // They can be created by any authenticated user.
+    // They can only be updated by the owner, and can only update specific fields.
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId
+                    && request.resource.data.keys().hasOnly(['displayName', 'email', 'storeName', 'storeDescription', 'whatsappNumber', 'payoutDetails']);
+    }
+
+    // Sellers can manage their own delivery locations.
+    match /users/{userId}/deliveryLocations/{locationId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Orders can be created by any authenticated user.
+    // They can be read by the customer who created them or the seller.
+    // They can only be updated by the seller.
+    match /orders/{orderId} {
+        allow create: if request.auth != null;
+        allow read: if request.auth != null && (request.auth.uid == resource.data.customerId || request.auth.uid == resource.data.sellerId);
+        allow update: if request.auth != null && request.auth.uid == resource.data.sellerId;
+        allow delete: if false;
+    }
+  }
+}

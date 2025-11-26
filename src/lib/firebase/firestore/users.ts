@@ -14,7 +14,6 @@ import {
   query,
   Firestore
 } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
 
 export interface DeliveryLocation extends DocumentData {
     id: string;
@@ -29,11 +28,16 @@ export interface UserProfile extends DocumentData {
   storeDescription?: string;
   whatsappNumber?: string;
   deliveryLocations?: DeliveryLocation[];
+  payoutDetails?: {
+    bankName: string;
+    bankCode: string;
+    accountNumber: string;
+    accountName: string;
+  }
 }
 
 // Hook to get a single user profile
-export const useUserProfile = (userId: string | undefined) => {
-  const { firestore } = useFirebase();
+export const useUserProfile = (userId: string | undefined, firestore: Firestore) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | null>(null);
@@ -98,8 +102,7 @@ export const useUserProfile = (userId: string | undefined) => {
 };
 
 // Hook to get all user profiles (for storefront name/desc)
-export const useAllUserProfiles = () => {
-  const { firestore } = useFirebase();
+export const useAllUserProfiles = (firestore: Firestore) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | null>(null);
