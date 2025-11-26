@@ -2,13 +2,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut, Wallet, ShoppingCart } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut, Wallet, ShoppingCart, Loader2 } from "lucide-react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
 import { CoPilotWidget } from "@/components/copilot-widget";
 import { Button } from "@/components/ui/button";
+import { useUser } from "@/lib/firebase/auth/use-user";
+import { useFirebase } from "@/firebase";
+import { signOut } from "firebase/auth";
+import { useToast } from "@/hooks/use-toast";
+import React from "react";
+
 
 export default function AppLayout({
   children,
@@ -16,7 +22,31 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, isLoading } = useUser();
+  const { auth } = useFirebase();
+  const { toast } = useToast();
+
+  const isSellerRoute = pathname.startsWith('/seller');
+  
+  React.useEffect(() => {
+    if (!isLoading && !user && isSellerRoute) {
+      router.replace('/login');
+    }
+  }, [isLoading, user, isSellerRoute, router]);
+
+
   const getIsActive = (path: string) => pathname === path || (path !== '/seller/dashboard' && pathname.startsWith(path));
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({ title: "Logged Out", description: "You have been successfully logged out."});
+      router.push('/login');
+    } catch (error) {
+      toast({ variant: 'destructive', title: "Logout Failed", description: "Something went wrong."});
+    }
+  };
 
   const navItems = [
     { href: "/seller/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -24,7 +54,15 @@ export default function AppLayout({
     { href: "/seller/orders", label: "Orders", icon: BarChart2 },
   ];
   
-  if (pathname.startsWith('/seller')) {
+  if (isSellerRoute) {
+    if (isLoading || !user) {
+        return (
+            <div className="flex items-center justify-center h-screen">
+                <Loader2 className="w-12 h-12 animate-spin text-primary" />
+            </div>
+        )
+    }
+
     return (
       <SidebarProvider>
         <div className="flex min-h-screen">
@@ -65,14 +103,13 @@ export default function AppLayout({
                               </Link>
                           </SidebarMenuItem>
                           <SidebarMenuItem>
-                              <Link href="/">
-                                  <SidebarMenuButton
-                                      tooltip={{ children: "Logout", side: "right", align: "center" }}
-                                  >
-                                      <LogOut />
-                                      <span>Logout</span>
-                                  </SidebarMenuButton>
-                              </Link>
+                              <SidebarMenuButton
+                                  onClick={handleLogout}
+                                  tooltip={{ children: "Logout", side: "right", align: "center" }}
+                              >
+                                  <LogOut />
+                                  <span>Logout</span>
+                              </SidebarMenuButton>
                           </SidebarMenuItem>
                       </SidebarMenu>
                   </SidebarFooter>

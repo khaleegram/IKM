@@ -7,8 +7,57 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { IkmLogo } from '@/components/icons';
+import { useState, useTransition } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { useFirebase } from '@/firebase';
 
 export default function LoginPage() {
+  const { auth, firestore } = useFirebase();
+  const { toast } = useToast();
+  const router = useRouter();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isPending, startTransition] = useTransition();
+
+  const handleLogin = () => {
+    startTransition(async () => {
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        toast({ title: 'Login Successful', description: "Welcome back!" });
+        router.push('/seller/dashboard');
+      } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Login Failed', description: error.message });
+      }
+    });
+  };
+
+  const handleSignUp = () => {
+    startTransition(async () => {
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Create user profile in Firestore
+        await setDoc(doc(firestore, "users", user.uid), {
+            displayName: user.email?.split('@')[0] || 'New Seller',
+            email: user.email,
+            storeName: `${user.email?.split('@')[0]}'s Store`,
+            storeDescription: 'Welcome to my new store!',
+            whatsappNumber: ''
+        });
+
+        toast({ title: 'Account Created!', description: "Welcome! Let's get your store set up." });
+        router.push('/seller/dashboard');
+      } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Sign Up Failed', description: error.message });
+      }
+    });
+  };
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background">
       <main className="flex w-full flex-1 flex-col items-center justify-center px-4 text-center">
@@ -25,19 +74,19 @@ export default function LoginPage() {
           <CardContent className="grid gap-4">
             <div className="grid gap-2 text-left">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="m@example.com" />
+              <Input id="email" type="email" placeholder="m@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="grid gap-2 text-left">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
-            <Link href="/seller/dashboard" className="w-full">
-              <Button className="w-full">Login</Button>
-            </Link>
-            <Button variant="outline" className="w-full">
-              Create a Store
+            <Button className="w-full" onClick={handleLogin} disabled={isPending}>
+              {isPending ? 'Logging in...' : 'Login'}
+            </Button>
+            <Button variant="outline" className="w-full" onClick={handleSignUp} disabled={isPending}>
+              {isPending ? 'Creating Account...' : 'Create a Store'}
             </Button>
           </CardFooter>
         </Card>
