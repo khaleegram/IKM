@@ -57,7 +57,7 @@ export default function StoreHomePage() {
               <h1 className="text-4xl font-bold font-headline tracking-tight">The IK Market Place</h1>
             </div>
              <p className="max-w-2xl text-lg text-primary">
-              Authentic Nigerian goods, just a WhatsApp message away.
+              Your trusted Northern market, right on your phone.
             </p>
             <div className="w-full max-w-xl">
               <div className="relative">
