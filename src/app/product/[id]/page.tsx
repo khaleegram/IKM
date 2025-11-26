@@ -2,18 +2,20 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, Loader2 } from "lucide-react";
+import { ShoppingCart, Loader2, Store } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { useProduct } from "@/lib/firebase/firestore/products";
 import React from "react";
 import { useCart } from "@/lib/cart-context";
+import { useUserProfile } from "@/lib/firebase/firestore/users";
 
 export default function ProductDetailPage({ params }: { params: { id: string } }) {
   const resolvedParams = React.use(params);
   const { data: product, isLoading, error } = useProduct(resolvedParams.id);
+  const { data: sellerProfile } = useUserProfile(product?.sellerId);
   const { addToCart } = useCart();
 
   if (isLoading) {
@@ -47,7 +49,12 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
             </div>
             <div className="flex flex-col justify-center">
                 <h1 className="text-3xl sm:text-4xl font-bold font-headline">{product.name}</h1>
-                <p className="font-bold text-primary text-3xl mt-2">₦{product.price.toLocaleString()}</p>
+                 {sellerProfile && (
+                    <Link href={`/store/${product.sellerId}`} className="mt-2">
+                        <span className="text-muted-foreground hover:text-primary">Sold by {sellerProfile.storeName}</span>
+                    </Link>
+                )}
+                <p className="font-bold text-primary text-3xl mt-4">₦{product.price.toLocaleString()}</p>
                 <p className="mt-4 text-muted-foreground text-base leading-relaxed">
                     {product.description}
                 </p>
@@ -62,6 +69,14 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                         </Button>
                     </Link>
                 </div>
+                {sellerProfile && (
+                     <Link href={`/store/${product.sellerId}`} className="mt-4">
+                        <Button variant="link" className="p-0 h-auto">
+                            <Store className="mr-2 h-4 w-4"/>
+                            View Seller's Store
+                        </Button>
+                    </Link>
+                )}
             </div>
         </div>
       </main>

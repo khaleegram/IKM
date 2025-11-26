@@ -15,6 +15,7 @@ import {
   FirestoreError,
   getDoc,
   serverTimestamp,
+  limit,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
 
@@ -30,7 +31,7 @@ export interface Product extends DocumentData {
 }
 
 // Hook to get all products for the storefront
-export const useAllProducts = () => {
+export const useAllProducts = (productLimit?: number) => {
   const { firestore } = useFirebase();
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,8 +39,12 @@ export const useAllProducts = () => {
 
   const productsQuery = useMemo(() => {
     if (!firestore) return null;
-    return collection(firestore, 'products');
-  }, [firestore]);
+    const coll = collection(firestore, 'products');
+    if (productLimit) {
+        return query(coll, limit(productLimit));
+    }
+    return query(coll);
+  }, [firestore, productLimit]);
 
 
   useEffect(() => {

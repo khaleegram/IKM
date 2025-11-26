@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut, Wallet, ShoppingCart, Loader2 } from "lucide-react";
+import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut, Wallet, ShoppingCart, Loader2, Store } from "lucide-react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
@@ -134,7 +134,13 @@ export default function AppLayout({
           <Link href="/">
             <IkmLogo className="w-auto h-8" />
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Link href="/stores">
+              <Button variant="ghost">
+                <Store className="mr-2 h-4 w-4" />
+                All Stores
+              </Button>
+            </Link>
             <Link href="/seller/dashboard">
               <Button variant="ghost">Seller Hub</Button>
             </Link>
