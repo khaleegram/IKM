@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "product": {
+      "title": "Product",
+      "description": "Represents a product in the marketplace.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the product."
+        },
+        "description": {
+          "type": "string",
+          "description": "The description of the product."
+        },
+        "price": {
+          "type": "number",
+          "description": "The price of the product."
+        },
+        "stock": {
+          "type": "number",
+          "description": "The available stock quantity."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "The URL of the product image."
+        },
+        "sellerId": {
+          "type": "string",
+          "description": "The ID of the user who is selling the product."
+        }
+      },
+      "required": ["name", "price", "stock", "sellerId"]
+    },
+    "userProfile": {
+      "title": "User Profile",
+      "description": "Represents a user's profile information.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "description": "The user's display name."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's email address."
+        },
+        "storeName": {
+            "type": "string",
+            "description": "The name of the seller's store."
+        },
+        "storeDescription": {
+            "type": "string",
+            "description": "A description of the seller's store."
+        },
+        "whatsappNumber": {
+            "type": "string",
+            "description": "The seller's WhatsApp Business number."
+        }
+      },
+      "required": ["displayName", "email"]
+    }
+  },
+  "auth": {
+    "providers": ["email"]
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": {
+        "$ref": "#/entities/product"
+      },
+      "description": "A product listed in the marketplace."
+    },
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/userProfile"
+      },
+      "description": "A user's profile."
+    }
+  }
+}
