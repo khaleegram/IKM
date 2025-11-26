@@ -1,15 +1,4 @@
 
-import { ai } from '@/ai/genkit';
-import { findProducts } from '@/ai/flows/personalize-feed';
-import { z } from 'genkit';
-import type { Product } from '@/lib/firebase/firestore/products';
-
-// Export Zod schemas and tools BEFORE the 'use server' directive
-export const CopilotAssistantInputSchema = z.object({
-  message: z.string().describe('The incoming message from the user in the chat widget.'),
-});
-
-
 'use server';
 
 /**
@@ -19,6 +8,14 @@ export const CopilotAssistantInputSchema = z.object({
  * - CopilotAssistantInput - The input type for the flow.
  */
 
+import { ai } from '@/ai/genkit';
+import { findProducts } from '@/ai/flows/personalize-feed';
+import { z } from 'genkit';
+import type { Product } from '@/lib/firebase/firestore/products';
+
+const CopilotAssistantInputSchema = z.object({
+  message: z.string().describe('The incoming message from the user in the chat widget.'),
+});
 export type CopilotAssistantInput = z.infer<typeof CopilotAssistantInputSchema>;
 
 const copilotAssistantResponseSchema = z.union([
@@ -63,7 +60,7 @@ const copilotAssistantPrompt = ai.definePrompt({
 });
 
 // Define the main flow that orchestrates the logic
-export const copilotAssistantFlow = ai.defineFlow(
+const copilotAssistantFlow = ai.defineFlow(
   {
     name: 'copilotAssistantFlow',
     inputSchema: CopilotAssistantInputSchema,

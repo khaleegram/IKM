@@ -1,11 +1,20 @@
 
+'use server';
+
+/**
+ * @fileOverview Personalizes a user's product feed based on their interests.
+ *
+ * - findProducts - A Genkit tool to search for products in Firestore.
+ * - personalizeFeed - The main flow to process user interests and return products.
+ * - PersonalizeFeedInput - The input type for the personalizeFeed flow.
+ */
+
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchProducts } from '@/lib/actions';
 import type { Product } from '@/lib/firebase/firestore/products';
 
-// Export Zod schemas and tools BEFORE the 'use server' directive
-export const PersonalizeFeedInputSchema = z.object({
+const PersonalizeFeedInputSchema = z.object({
   interests: z.string().describe('The user\'s stated interests, like "handmade jewelry" or "men\'s fashion".'),
 });
 
@@ -41,15 +50,6 @@ export const findProducts = ai.defineTool(
     }
 );
 
-'use server';
-
-/**
- * @fileOverview Personalizes a user's product feed based on their interests.
- *
- * - findProducts - A Genkit tool to search for products in Firestore.
- * - personalizeFeed - The main flow to process user interests and return products.
- * - PersonalizeFeedInput - The input type for the personalizeFeed flow.
- */
 
 export type PersonalizeFeedInput = z.infer<typeof PersonalizeFeedInputSchema>;
 
@@ -85,7 +85,7 @@ const personalizeFeedPrompt = ai.definePrompt({
 });
 
 // Define the main flow that orchestrates the logic
-export const personalizeFeedFlow = ai.defineFlow(
+const personalizeFeedFlow = ai.defineFlow(
   {
     name: 'personalizeFeedFlow',
     inputSchema: PersonalizeFeedInputSchema,
