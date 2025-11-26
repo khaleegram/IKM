@@ -10,10 +10,11 @@ import { Upload, DollarSign, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useTransition, use, useRef } from "react";
-import { getProductDescription, addProduct } from "@/lib/actions";
+import { useState, useTransition, useRef } from "react";
+import { getProductDescription, addProduct as addProductAction } from "@/lib/actions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useFirebase } from "@/firebase";
+import Image from "next/image";
 
 
 export default function NewProductPage() {
@@ -25,6 +26,7 @@ export default function NewProductPage() {
     const [isGenerating, startGenerating] = useTransition();
 
     const formRef = useRef<HTMLFormElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [isFormModalOpen, setFormModalOpen] = useState(false);
     const [generatedDescription, setGeneratedDescription] = useState('');
@@ -35,11 +37,24 @@ export default function NewProductPage() {
         stock: '',
         category: ''
     });
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { id, value } = e.target;
         setFormData(prev => ({ ...prev, [id]: value }));
     };
+
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImagePreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
 
     const handleGenerateDescription = () => {
         if (!formData.name) {
@@ -83,7 +98,7 @@ export default function NewProductPage() {
         const data = new FormData(e.currentTarget);
         startTransition(async () => {
             try {
-                await addProduct(user.uid, data);
+                await addProductAction(user.uid, data);
                 toast({
                     title: "Product Added!",
                     description: "Your new product has been successfully added to your store.",
@@ -115,7 +130,7 @@ export default function NewProductPage() {
                         <CardContent className="space-y-4">
                             <div>
                                 <Label htmlFor="name">Product Name</Label>
-                                <Input id="name" name="name" value={formData.name} onChange={handleInputChange} placeholder="e.g., Handmade Ankara Bag" />
+                                <Input id="name" name="name" value={formData.name} onChange={handleInputChange} placeholder="e.g., Handmade Ankara Bag" required/>
                             </div>
                             <div>
                                 <div className="flex justify-between items-center mb-1">
@@ -131,14 +146,31 @@ export default function NewProductPage() {
                     </Card>
                     <Card>
                         <CardHeader>
-                            <CardTitle>Product Images</CardTitle>
-                            <CardDescription>Upload high-quality images of your product.</CardDescription>
+                            <CardTitle>Product Image</CardTitle>
+                            <CardDescription>Upload a high-quality image of your product.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="border-2 border-dashed border-muted rounded-lg p-12 flex flex-col items-center justify-center text-center">
-                                <Upload className="w-10 h-10 text-muted-foreground" />
-                                <p className="mt-4 text-muted-foreground">Drag & drop images here, or</p>
-                                <Button type="button" variant="secondary" className="mt-2">Browse Files</Button>
+                            <div 
+                                className="border-2 border-dashed border-muted rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:border-primary transition-colors"
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <Input 
+                                    ref={fileInputRef}
+                                    id="image" 
+                                    name="image" 
+                                    type="file" 
+                                    className="hidden" 
+                                    accept="image/*"
+                                    onChange={handleImageChange} 
+                                />
+                                {imagePreview ? (
+                                    <Image src={imagePreview} alt="Product preview" width={200} height={200} className="mb-4 rounded-md object-contain h-48 w-48" />
+                                ) : (
+                                    <Upload className="w-10 h-10 text-muted-foreground" />
+                                )}
+                                <p className="mt-2 text-muted-foreground">
+                                    {imagePreview ? 'Click to change image' : 'Drag & drop or click to upload'}
+                                </p>
                             </div>
                         </CardContent>
                     </Card>
@@ -152,11 +184,11 @@ export default function NewProductPage() {
                             <div className="relative">
                                 <Label htmlFor="price">Price (₦)</Label>
                                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground mt-2.5" />
-                                <Input id="price" name="price" type="number" value={formData.price} onChange={handleInputChange} placeholder="15000" className="pl-8" />
+                                <Input id="price" name="price" type="number" value={formData.price} onChange={handleInputChange} placeholder="15000" className="pl-8" required/>
                             </div>
                              <div>
                                 <Label htmlFor="stock">Stock Quantity</Label>
-                                <Input id="stock" name="stock" type="number" value={formData.stock} onChange={handleInputChange} placeholder="25" />
+                                <Input id="stock" name="stock" type="number" value={formData.stock} onChange={handleInputChange} placeholder="25" required/>
                             </div>
                         </CardContent>
                     </Card>
@@ -211,3 +243,5 @@ export default function NewProductPage() {
     </div>
     )
 }
+
+    

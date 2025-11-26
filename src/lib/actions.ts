@@ -3,7 +3,8 @@
 
 import { generateProductDescription as genProductDesc, type GenerateProductDescriptionInput } from "@/ai/flows/seller-product-description-assistance";
 import { suggestStoreName as genStoreName, type SuggestStoreNameInput } from "@/ai/flows/store-name-assistance";
-import { addProduct as addProd, updateProduct as updateProd, type Product } from "@/lib/firebase/firestore/products";
+import { addProduct as addProd, updateProduct as updateProd } from "@/lib/firebase/firestore/products";
+import { uploadImage } from "@/lib/firebase/storage";
 import { z } from "zod";
 
 const productDescriptionSchema = z.object({
@@ -42,7 +43,7 @@ const productSchema = z.object({
       z.number().int().min(0, "Stock cannot be negative")
     ),
     category: z.string().optional(),
-    imageUrl: z.string().optional(),
+    image: z.instanceof(File).optional(),
 });
 
 export async function addProduct(userId: string, data: FormData) {
@@ -53,9 +54,15 @@ export async function addProduct(userId: string, data: FormData) {
         throw new Error(validation.error.errors.map(e => e.message).join(', '));
     }
     
+    let imageUrl: string | undefined = undefined;
+    if (validation.data.image && validation.data.image.size > 0) {
+        imageUrl = await uploadImage(userId, validation.data.image);
+    }
+
     await addProd(userId, {
         ...validation.data,
         sellerId: userId,
+        imageUrl: imageUrl,
     });
 }
 
@@ -67,5 +74,17 @@ export async function updateProduct(productId: string, userId: string, data: For
         throw new Error(validation.error.errors.map(e => e.message).join(', '));
     }
     
-    await updateProd(productId, userId, validation.data);
+    const { image, ...productData } = validation.data;
+    let imageUrl: string | undefined = undefined;
+
+    if (image && image.size > 0) {
+        imageUrl = await uploadImage(userId, image);
+    }
+
+    await updateProd(productId, userId, {
+        ...productData,
+        ...(imageUrl && { imageUrl }),
+    });
 }
+
+    
