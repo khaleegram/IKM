@@ -4,36 +4,41 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Products can be read by anyone, but only created, updated, or deleted
-    // by the authenticated user who owns the product.
-    match /products/{productId} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == request.resource.data.sellerId;
+    function isAdmin() {
+      return request.auth.token.isAdmin == true;
     }
 
-    // User profiles can be read by anyone.
-    // They can be created by any authenticated user.
-    // They can only be updated by the owner, and can only update specific fields.
+    // Products can be read by anyone. Admins have full access.
+    // Otherwise, only the owner (seller) can write.
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin() || (request.auth != null && request.auth.uid == request.resource.data.sellerId);
+    }
+
+    // User profiles can be read by anyone. Admins have full access.
+    // Otherwise, can only be created/updated by the owner.
     match /users/{userId} {
       allow read: if true;
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId
-                    && request.resource.data.keys().hasOnly(['displayName', 'email', 'storeName', 'storeDescription', 'whatsappNumber', 'payoutDetails']);
+      allow update: if isAdmin() || (request.auth != null && request.auth.uid == userId
+                    && request.resource.data.keys().hasOnly(['displayName', 'email', 'storeName', 'storeDescription', 'whatsappNumber', 'payoutDetails']));
+      allow delete: if isAdmin();
     }
 
-    // Sellers can manage their own delivery locations.
+    // Sellers can manage their own delivery locations. Admins have full access.
     match /users/{userId}/deliveryLocations/{locationId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isAdmin() || (request.auth != null && request.auth.uid == userId);
     }
 
-    // Orders can be created by any authenticated user.
+    // Admins can read/write all orders.
+    // Otherwise, orders can be created by any authenticated user.
     // They can be read by the customer who created them or the seller.
     // They can only be updated by the seller.
     match /orders/{orderId} {
         allow create: if request.auth != null;
-        allow read: if request.auth != null && (request.auth.uid == resource.data.customerId || request.auth.uid == resource.data.sellerId);
-        allow update: if request.auth != null && request.auth.uid == resource.data.sellerId;
-        allow delete: if false;
+        allow read: if isAdmin() || (request.auth != null && (request.auth.uid == resource.data.customerId || request.auth.uid == resource.data.sellerId));
+        allow update: if isAdmin() || (request.auth != null && request.auth.uid == resource.data.sellerId);
+        allow delete: if isAdmin();
     }
   }
 }

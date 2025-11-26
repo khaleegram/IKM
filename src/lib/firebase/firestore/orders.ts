@@ -16,6 +16,7 @@ import {
   getDoc,
   orderBy,
   Firestore,
+  getDocs,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase/provider';
 import { CartItem } from '@/lib/cart-context';
@@ -47,6 +48,45 @@ export const createOrder = async (firestore: Firestore, orderData: Omit<Order, '
   });
 };
 
+// Hook to get ALL orders (for admin)
+export const useAllOrders = () => {
+    const { firestore } = useFirebase();
+    const [orders, setOrders] = useState<Order[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<FirestoreError | null>(null);
+
+    const ordersQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
+    }, [firestore]);
+
+    useEffect(() => {
+        if (!ordersQuery) {
+            setIsLoading(false);
+            return;
+        }
+
+        setIsLoading(true);
+        const unsubscribe = onSnapshot(
+            ordersQuery,
+            (snapshot) => {
+                const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+                setOrders(ordersData);
+                setIsLoading(false);
+            },
+            (err) => {
+                console.error("Error fetching all orders: ", err);
+                setError(err);
+                setIsLoading(false);
+            }
+        );
+
+        return () => unsubscribe();
+    }, [ordersQuery]);
+
+    return { data: orders, isLoading, error };
+}
+
 // Hook to get orders for a specific seller
 export const useOrdersBySeller = (sellerId: string | undefined) => {
   const { firestore } = useFirebase();
@@ -62,6 +102,7 @@ export const useOrdersBySeller = (sellerId: string | undefined) => {
   useEffect(() => {
     if (!sellerOrdersQuery) {
         if (!sellerId) setIsLoading(false);
+        setOrders([]);
         return;
     }
     
@@ -101,6 +142,7 @@ export const useOrdersByCustomer = (customerId: string | undefined) => {
   useEffect(() => {
     if (!customerOrdersQuery) {
         if (!customerId) setIsLoading(false);
+        setOrders([]);
         return;
     }
     
@@ -141,6 +183,7 @@ export const useOrder = (orderId: string | undefined) => {
     useEffect(() => {
         if (!orderRef) {
             if (!orderId) setIsLoading(false);
+            setOrder(null);
             return;
         }
 

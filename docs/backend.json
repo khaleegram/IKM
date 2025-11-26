@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "product": {
@@ -61,9 +62,30 @@
         "whatsappNumber": {
             "type": "string",
             "description": "The seller's WhatsApp Business number."
+        },
+        "payoutDetails": {
+            "type": "object",
+            "description": "The seller's bank account details for payouts.",
+            "properties": {
+                "bankName": {"type": "string"},
+                "bankCode": {"type": "string"},
+                "accountNumber": {"type": "string"},
+                "accountName": {"type": "string"}
+            }
         }
       },
       "required": ["displayName", "email"]
+    },
+    "admin": {
+        "title": "Admin",
+        "description": "Represents an admin user with elevated privileges, managed via custom claims.",
+        "type": "object",
+        "properties": {
+            "isAdmin": {
+                "type": "boolean",
+                "description": "Custom claim set on the user's auth token to indicate admin status."
+            }
+        }
     },
     "deliveryLocation": {
         "title": "Delivery Location",

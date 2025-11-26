@@ -1,9 +1,10 @@
 
+
 "use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut, Wallet, ShoppingCart, Loader2, Store, User as UserIcon } from "lucide-react";
+import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut, Wallet, ShoppingCart, Loader2, Store, User as UserIcon, ShieldCheck } from "lucide-react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
@@ -26,7 +27,7 @@ export default function AppLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isLoading } = useUser();
+  const { user, isLoading, claims } = useUser();
   const { auth } = useFirebase();
   const { toast } = useToast();
   const { cartCount } = useCart();
@@ -48,15 +49,16 @@ export default function AppLayout({
   }, [orders, isLoadingOrders, toast]);
 
   const isSellerRoute = pathname.startsWith('/seller');
+  const isAdminRoute = pathname.startsWith('/admin');
+  const isAdmin = claims?.isAdmin === true;
   
   React.useEffect(() => {
-    if (!isLoading && !user && (isSellerRoute || pathname === '/profile')) {
+    if (!isLoading && !user && (isSellerRoute || isAdminRoute || pathname === '/profile')) {
       router.replace('/login');
     }
-  }, [isLoading, user, isSellerRoute, pathname, router]);
+  }, [isLoading, user, isSellerRoute, isAdminRoute, pathname, router]);
 
-
-  const getIsActive = (path: string) => pathname === path || (path !== '/seller/dashboard' && pathname.startsWith(path));
+  const getIsActive = (path: string) => pathname === path || (path.split('/').length > 2 && pathname.startsWith(path));
 
   const handleLogout = async () => {
     try {
@@ -161,6 +163,14 @@ export default function AppLayout({
             <Link href="/seller/dashboard">
               <Button variant="ghost">Seller Hub</Button>
             </Link>
+             {isAdmin && (
+              <Link href="/admin/dashboard">
+                <Button variant="outline">
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                  Admin
+                </Button>
+              </Link>
+            )}
             {user && (
               <Link href="/profile">
                 <Button variant="ghost">
