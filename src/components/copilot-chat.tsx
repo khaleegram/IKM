@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -10,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getProductDescription, getSalesAnalysis } from "@/lib/actions";
+import { getProductDescription } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "./ui/label";
@@ -21,8 +20,8 @@ type Message = {
   content: React.ReactNode;
 };
 
-const sellerDashboardPrompts = ["📈 Analyze my sales for this month", "💰 Which of my products is most profitable?", "💡 Suggest a new product to sell"];
-const sellerProductsPrompts = ["✍️ Help write a compelling product description", "🖼️ What kind of images work best?", "⚖️ How should I price this item?"];
+const sellerDashboardPrompts = ["📈 How do I get my first sale?", "💡 Suggest a name for my store", "💰 How much should I charge for delivery?"];
+const sellerProductsPrompts = ["✍️ Help write a compelling product description", "🖼️ What kind of images work best for [Product]?", "⚖️ How should I price this item?"];
 const sellerOrdersPrompts = ["📦 Print a shipping label for order #123", "💬 Send a delivery update to a customer", "📈 What's my order fulfillment rate?"];
 const sellerSettingsPrompts = ["🏦 How do I set up my payment account?", "💬 How do I connect my WhatsApp?", "🔒 Secure my account"];
 
@@ -52,21 +51,16 @@ export function CoPilotChat() {
     
     startTransition(async () => {
       try {
-        let response: React.ReactNode = "I'm sorry, I can't help with that yet.";
+        let response: React.ReactNode = "I'm sorry, I can't help with that yet. As an AI prototype, my capabilities are still under development.";
         
-        switch (prompt) {
-          case "📈 Analyze my sales for this month":
-            response = await getSalesAnalysis();
-            break;
-          case "✍️ Help write a compelling product description":
-            setCurrentAction(prompt);
+        const action = prompt.toLowerCase();
+
+        if (action.includes("help write") && action.includes("product description")) {
+            setCurrentAction("✍️ Help write a compelling product description");
             setFormModalOpen(true);
             return; // Don't add a default response yet
-          default:
-            setMessages(prev => [...prev, { role: "assistant", content: response }]);
-            return;
         }
-
+        
         setMessages(prev => [...prev, { role: "assistant", content: response }]);
       } catch (error) {
         toast({ variant: 'destructive', title: 'An error occurred', description: (error as Error).message });
@@ -83,9 +77,8 @@ export function CoPilotChat() {
     setCurrentAction(null);
 
     let userMessageContent = `For my product, `;
-    const fields = Array.from(formData.entries()).map(([key, value]) => {
+    Array.from(formData.entries()).forEach(([key, value]) => {
         userMessageContent += `${key}: "${value}", `;
-        return {key, value};
     });
     userMessageContent = userMessageContent.slice(0, -2);
     
@@ -151,9 +144,6 @@ export function CoPilotChat() {
 
   return (
     <div className="flex h-full flex-col">
-       <div id="copilot-widget" className="absolute right-6 bottom-6">
-          <CoPilotWidget />
-        </div>
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full p-4" ref={scrollAreaRef}>
           <div className="space-y-4">

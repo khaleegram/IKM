@@ -2,12 +2,20 @@
 "use client";
 
 import { Bot } from "lucide-react";
+import { usePathname } from 'next/navigation';
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { CoPilotChat } from "@/components/copilot-chat";
 
 export function CoPilotWidget() {
+  const pathname = usePathname();
+  
+  // Only show the widget on the seller dashboard pages
+  if (!pathname.startsWith('/seller')) {
+    return null;
+  }
+  
   return (
     <Sheet>
       <SheetTrigger asChild>

@@ -3,11 +3,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut } from "lucide-react";
+import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut, Wallet } from "lucide-react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { CoPilotWidget } from "@/components/copilot-widget";
 
 export default function AppLayout({
   children,
@@ -15,12 +15,13 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const getIsActive = (path: string) => pathname === path || pathname.startsWith(path);
+  const getIsActive = (path: string) => pathname === path || (path !== '/seller/dashboard' && pathname.startsWith(path));
 
   const navItems = [
     { href: "/seller/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/seller/products", label: "Products", icon: Package },
     { href: "/seller/orders", label: "Orders", icon: BarChart2 },
+    { href: "/seller/payouts", label: "Payouts", icon: Wallet },
     { href: "/seller/messages", label: "Messages", icon: MessageSquare },
   ];
 
@@ -79,6 +80,7 @@ export default function AppLayout({
         </Sidebar>
         <SidebarInset className="flex-1 bg-muted/40">
           {children}
+          <CoPilotWidget />
         </SidebarInset>
       </div>
     </SidebarProvider>
