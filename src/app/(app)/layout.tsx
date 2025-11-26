@@ -3,11 +3,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bike, LayoutDashboard, Shield, ShoppingCart, Store, MessageSquare, Heart } from "lucide-react";
+import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut } from "lucide-react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
-import { CoPilotWidget } from "@/components/copilot-widget";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export default function AppLayout({
@@ -16,19 +15,14 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const getIsActive = (path: string) => pathname.startsWith(path);
+  const getIsActive = (path: string) => pathname === path || pathname.startsWith(path);
 
   const navItems = [
-    { href: "/buyer", label: "Marketplace", icon: ShoppingCart },
-    { href: "/seller", label: "Seller Hub", icon: Store },
-    { href: "/rider", label: "Rider Zone", icon: Bike },
-    { href: "/admin", label: "Admin Panel", icon: Shield },
-    { href: "/messages", label: "Messages", icon: MessageSquare },
+    { href: "/seller/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/seller/products", label: "Products", icon: Package },
+    { href: "/seller/orders", label: "Orders", icon: BarChart2 },
+    { href: "/seller/messages", label: "Messages", icon: MessageSquare },
   ];
-
-  const secondaryNavItems = [
-     { href: "/buyer/wishlist", label: "Wishlist", icon: Heart },
-  ]
 
   return (
     <SidebarProvider>
@@ -36,7 +30,7 @@ export default function AppLayout({
         <Sidebar collapsible="icon" className="border-r">
             <div id="sidebar-menu" className="flex flex-col h-full p-2">
                 <div className="p-2 pb-4">
-                  <Link href="/buyer">
+                  <Link href="/seller/dashboard">
                     <IkmLogo className="w-auto h-7 group-data-[collapsible=icon]:hidden" />
                     <LayoutDashboard className="w-7 h-7 hidden group-data-[collapsible=icon]:block" />
                   </Link>
@@ -46,7 +40,7 @@ export default function AppLayout({
                     <SidebarMenuItem key={item.href}>
                         <Link href={item.href}>
                             <SidebarMenuButton 
-                                isActive={getIsActive(item.href) && item.href !== '/buyer' || pathname === '/buyer'} 
+                                isActive={getIsActive(item.href)} 
                                 tooltip={{ children: item.label, side: "right", align: "center" }}
                             >
                                 <item.icon />
@@ -55,32 +49,27 @@ export default function AppLayout({
                         </Link>
                     </SidebarMenuItem>
                     ))}
-                    {secondaryNavItems.map((item) => (
-                        <SidebarMenuItem key={item.href}>
-                            <Link href={item.href}>
-                                <SidebarMenuButton 
-                                    isActive={getIsActive(item.href)}
-                                    tooltip={{ children: item.label, side: "right", align: "center" }}
-                                >
-                                    <item.icon />
-                                    <span>{item.label}</span>
-                                </SidebarMenuButton>
-                            </Link>
-                        </SidebarMenuItem>
-                    ))}
                 </SidebarMenu>
                 <SidebarFooter>
                     <SidebarMenu>
                         <SidebarMenuItem>
-                             <Link href="/profile">
+                             <Link href="/seller/settings">
                                 <SidebarMenuButton 
-                                    isActive={getIsActive("/profile")}
-                                    tooltip={{ children: "Profile & Settings", side: "right", align: "center" }}
+                                    isActive={getIsActive("/seller/settings")}
+                                    tooltip={{ children: "Settings", side: "right", align: "center" }}
                                 >
-                                    <Avatar className="w-7 h-7">
-                                        <AvatarFallback>B</AvatarFallback>
-                                    </Avatar>
-                                    <span>Profile</span>
+                                    <Settings />
+                                    <span>Settings</span>
+                                </SidebarMenuButton>
+                            </Link>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                             <Link href="/">
+                                <SidebarMenuButton
+                                    tooltip={{ children: "Logout", side: "right", align: "center" }}
+                                >
+                                    <LogOut />
+                                    <span>Logout</span>
                                 </SidebarMenuButton>
                             </Link>
                         </SidebarMenuItem>
@@ -88,12 +77,9 @@ export default function AppLayout({
                 </SidebarFooter>
             </div>
         </Sidebar>
-        <SidebarInset className="flex-1">
+        <SidebarInset className="flex-1 bg-muted/40">
           {children}
         </SidebarInset>
-        <div id="copilot-widget">
-          <CoPilotWidget />
-        </div>
       </div>
     </SidebarProvider>
   );

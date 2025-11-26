@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getProductDescription, getSalesAnalysis, getRiderEarningsSummary, getSuspiciousActivity, getPlatformRevenueSummary } from "@/lib/actions";
+import { getProductDescription, getSalesAnalysis } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "./ui/label";
@@ -21,33 +21,10 @@ type Message = {
   content: React.ReactNode;
 };
 
-const buyerPrompts = ["🔭 Show me something new", "🔥 What's trending right now?", "🛍️ Personalize my feed"];
-const sellerPrompts = ["📈 Analyze my revenue this month", "💰 Which product is most profitable?", "📦 Print a shipping label."];
-const riderPrompts = ["🗺️ Show profitable 'hotspot' areas now?", "⛽ Estimate fuel cost for this trip?", "⏰ What are today's peak hours?"];
-const adminPrompts = ["📈 Summarize daily performance", "🚩 Flag suspicious activity", "⚠️ Check platform health"];
-const productDetailPrompts = ["🤔 Any discounts for this item?", "⭐ Summarize the reviews", "↔️ Show me similar products"];
-const cartPrompts = ["💸 Can I apply a coupon?", "🚚 Estimate delivery fee?", "🤔 Help me with my order."];
-const checkoutPrompts = ["🔒 Is this payment secure?", "📜 What's the return policy?", "📞 Contact Support."];
-const addProductPrompts = ["✍️ Help write a compelling title", "💡 Suggest a competitive price", "🖼️ What kind of images work best?"];
-const activeDeliveryPrompts = ["🚧 Report traffic?", "💬 Send ETA update to buyer?", "🆘 I need help with this delivery."];
-const adminApprovalsPrompts = ["✔️ Run automated background check?", "🔎 Flag any issues with these documents?", "💬 Send 'More Info Required' message."];
-const orderHistoryPrompts = ["💬 I have an issue with an order", "📦 Track my ongoing order", "🧾 Get an invoice for this purchase."];
-const salesHistoryPrompts = ["📈 Analyze my revenue this month", "💰 Which product is most profitable?", "📦 Print shipping label."];
-const sellerAnalyticsPrompts = ["📈 Which of my products gets the most views but fewest sales?", "💡 How can I improve my conversion rate?", "💰 Forecast my sales for next month."];
-const profileSettingsPrompts = ["🔐 Secure my account", "🔔 Customize my notifications", "❓ I have a question about my data."];
-const editProfilePrompts = ["💡 Tips for a good profile photo", "✍️ Help write my store bio"];
-const financialReportsPrompts = ["📈 Forecast next month's revenue", "📊 Compare this period to the last one", "⚠️ Any unusual transaction patterns?"];
-const manageUsersPrompts = ["👥 Show users with no activity in 90 days", "🚩 Find all users with multiple accounts."];
-const userDetailPrompts = ["📜 Pull full activity log", "⚖️ Any prior warnings for this user?"];
-const allOrdersPrompts = ["⚠️ Show all disputed orders", "💰 What is the average order value?"];
-const changePasswordPrompts = ["🔐 Generate a strong password for me", "💡 What makes a password strong?"];
-const orderDetailsPrompts = ["📨 Email a copy of this invoice", "⭐ Rate this seller & rider", "🔄 I need to return an item."];
-const messagesPrompts = ["✍️ Suggest a reply", "✅ Is this a good price to offer?", "❓ Ask about shipping"];
-const writeReviewPrompts = ["💡 What makes a good review?", "✍️ Help me describe the quality", "✅ Check my review for clarity."];
-const wishlistPrompts = ["🔔 Notify me if this price drops", "⭐ Which of these has the best reviews?", "🎁 Show me items on my list that are on sale."];
-const paymentMethodsPrompts = ["🏦 How do I add a new payout account?", "🔒 Is my payment information secure?", "💸 What are the platform fees?"];
-const platformHealthPrompts = ["⚠️ Are there any bottlenecks in the user funnel?", "🚀 How can we boost user engagement this week?", "🔎 Identify our most valuable sellers."];
-const filterPrompts = ["🔍 Find top-rated fashion items under ₦10,000", "💡 What are the most popular filters?"];
+const sellerDashboardPrompts = ["📈 Analyze my sales for this month", "💰 Which of my products is most profitable?", "💡 Suggest a new product to sell"];
+const sellerProductsPrompts = ["✍️ Help write a compelling product description", "🖼️ What kind of images work best?", "⚖️ How should I price this item?"];
+const sellerOrdersPrompts = ["📦 Print a shipping label for order #123", "💬 Send a delivery update to a customer", "📈 What's my order fulfillment rate?"];
+const sellerSettingsPrompts = ["🏦 How do I set up my payment account?", "💬 How do I connect my WhatsApp?", "🔒 Secure my account"];
 
 export function CoPilotChat() {
   const pathname = usePathname();
@@ -63,34 +40,11 @@ export function CoPilotChat() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const getPrompts = () => {
-    if (pathname.startsWith("/admin/platform-health")) return platformHealthPrompts;
-    if (pathname.startsWith("/buyer/wishlist")) return wishlistPrompts;
-    if (pathname.startsWith("/buyer/write-review")) return writeReviewPrompts;
-    if (pathname.startsWith("/messages")) return messagesPrompts;
-    if (pathname.startsWith("/buyer/orders/")) return orderDetailsPrompts;
-    if (pathname.startsWith("/admin/manage-users/")) return userDetailPrompts;
-    if (pathname.startsWith("/admin/manage-users")) return manageUsersPrompts;
-    if (pathname.startsWith("/admin/all-orders")) return allOrdersPrompts;
-    if (pathname.startsWith("/admin/financial-reports")) return financialReportsPrompts;
-    if (pathname.startsWith("/admin/pending-approvals")) return adminApprovalsPrompts;
-    if (pathname.startsWith("/rider/active-delivery")) return activeDeliveryPrompts;
-    if (pathname.startsWith("/seller/add-product")) return addProductPrompts;
-    if (pathname.startsWith("/seller/sales-history")) return salesHistoryPrompts;
-    if (pathname.startsWith("/seller/analytics")) return sellerAnalyticsPrompts;
-    if (pathname.startsWith("/seller")) return sellerPrompts;
-    if (pathname.startsWith("/rider")) return riderPrompts;
-    if (pathname.startsWith("/admin")) return adminPrompts;
-    if (pathname.startsWith("/buyer/product/")) return productDetailPrompts;
-    if (pathname.startsWith("/buyer/cart")) return cartPrompts;
-    if (pathname.startsWith("/buyer/checkout")) return checkoutPrompts;
-    if (pathname.startsWith("/buyer/orders")) return orderHistoryPrompts;
-    if (pathname.startsWith("/profile/payment-methods")) return paymentMethodsPrompts;
-    if (pathname.startsWith("/profile/edit")) return editProfilePrompts;
-    if (pathname.startsWith("/profile/change-password")) return changePasswordPrompts;
-    if (pathname.startsWith("/profile")) return profileSettingsPrompts;
-    if (pathname.startsWith("/buyer/filter")) return filterPrompts;
-    if (pathname.startsWith("/buyer")) return buyerPrompts;
-    return buyerPrompts;
+    if (pathname.startsWith("/seller/products")) return sellerProductsPrompts;
+    if (pathname.startsWith("/seller/orders")) return sellerOrdersPrompts;
+    if (pathname.startsWith("/seller/settings")) return sellerSettingsPrompts;
+    if (pathname.startsWith("/seller")) return sellerDashboardPrompts;
+    return sellerDashboardPrompts;
   };
 
   const handlePromptClick = (prompt: string) => {
@@ -101,28 +55,14 @@ export function CoPilotChat() {
         let response: React.ReactNode = "I'm sorry, I can't help with that yet.";
         
         switch (prompt) {
-          case "📈 Analyze my sales":
+          case "📈 Analyze my sales for this month":
             response = await getSalesAnalysis();
             break;
-          case "💵 Summarize my earnings":
-            response = await getRiderEarningsSummary({ riderId: 'rider-123', period: 'last week' });
-            break;
-          case "💹 Summarize platform revenue":
-          case "📈 Summarize daily performance":
-            response = await getPlatformRevenueSummary({ timePeriod: 'today' });
-            break;
-          case "🚩 Flag suspicious activity":
-            const activity = await getSuspiciousActivity({ activityDetails: 'Multiple login failures for user "test-user" followed by a successful login from a new IP address.' });
-            response = `${activity.isSuspicious ? 'Suspicious Activity Flagged:' : 'Activity not suspicious.'} ${activity.reason}`;
-            break;
-          case "✍️ Help write a product description":
-          case "✍️ Help write a compelling title":
-          case "✍️ Help write my store bio":
+          case "✍️ Help write a compelling product description":
             setCurrentAction(prompt);
             setFormModalOpen(true);
             return; // Don't add a default response yet
           default:
-            // For prompts not yet implemented
             setMessages(prev => [...prev, { role: "assistant", content: response }]);
             return;
         }
@@ -154,11 +94,11 @@ export function CoPilotChat() {
     startTransition(async () => {
         try {
             let response: React.ReactNode = "I'm sorry, I can't help with that yet.";
-            if (prompt === "✍️ Help write a product description" || prompt === "✍️ Help write a compelling title" || prompt === "✍️ Help write my store bio") {
-                const productName = formData.get('productName') as string || formData.get('storeName') as string;
-                const productCategory = formData.get('productCategory') as string || 'Seller Profile';
-                const keyFeatures = formData.get('keyFeatures') as string || formData.get('storeBio') as string;
-                const targetAudience = formData.get('targetAudience') as string || 'Customers';
+            if (prompt === "✍️ Help write a compelling product description") {
+                const productName = formData.get('productName') as string;
+                const productCategory = formData.get('productCategory') as string;
+                const keyFeatures = formData.get('keyFeatures') as string;
+                const targetAudience = formData.get('targetAudience') as string;
                 response = await getProductDescription({ productName, productCategory, keyFeatures, targetAudience });
             }
             setMessages(prev => [...prev, { role: "assistant", content: response as string }]);
@@ -182,8 +122,7 @@ export function CoPilotChat() {
 
   const getFormForAction = (action: string | null) => {
     switch(action) {
-        case '✍️ Help write a product description':
-        case '✍️ Help write a compelling title':
+        case '✍️ Help write a compelling product description':
             return (
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -204,19 +143,6 @@ export function CoPilotChat() {
                 </div>
               </div>
             );
-        case '✍️ Help write my store bio':
-             return (
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="storeName">Store Name</Label>
-                  <Input id="storeName" name="storeName" placeholder="e.g., The Artisan Shop" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="storeBio">Current Bio / Key points</Label>
-                  <Textarea id="storeBio" name="storeBio" placeholder="e.g., Handmade goods, African-inspired, modern design" />
-                </div>
-              </div>
-            );
         default: 
             return null;
     }
@@ -225,6 +151,9 @@ export function CoPilotChat() {
 
   return (
     <div className="flex h-full flex-col">
+       <div id="copilot-widget" className="absolute right-6 bottom-6">
+          <CoPilotWidget />
+        </div>
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full p-4" ref={scrollAreaRef}>
           <div className="space-y-4">
@@ -237,7 +166,7 @@ export function CoPilotChat() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground mb-4">
-                    I'm your AI assistant. How can I help you today?
+                    I'm your AI assistant. How can I help you manage your store?
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {suggestedPrompts.map((prompt) => (

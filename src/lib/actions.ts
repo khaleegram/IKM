@@ -1,10 +1,8 @@
+
 'use server';
 
 import { analyzeSales } from "@/ai/flows/seller-sales-analysis";
 import { generateProductDescription as genProductDesc, type GenerateProductDescriptionInput } from "@/ai/flows/seller-product-description-assistance";
-import { summarizeRiderEarnings, type RiderEarningsSummaryInput } from "@/ai/flows/rider-earnings-summary";
-import { flagSuspiciousActivity, type FlagSuspiciousActivityInput } from "@/ai/flows/admin-suspicious-activity-flagging";
-import { summarizePlatformRevenue, type SummarizePlatformRevenueInput } from "@/ai/flows/admin-platform-revenue-summary";
 import { z } from "zod";
 
 const salesData = [
@@ -31,19 +29,4 @@ export async function getProductDescription(input: GenerateProductDescriptionInp
   const parsedInput = productDescriptionSchema.parse(input);
   const result = await genProductDesc(parsedInput);
   return result.description;
-}
-
-export async function getRiderEarningsSummary(input: RiderEarningsSummaryInput) {
-    const result = await summarizeRiderEarnings(input);
-    return result.summary;
-}
-
-export async function getSuspiciousActivity(input: FlagSuspiciousActivityInput) {
-    const result = await flagSuspiciousActivity(input);
-    return result;
-}
-
-export async function getPlatformRevenueSummary(input: SummarizePlatformRevenueInput) {
-    const result = await summarizePlatformRevenue(input);
-    return result.revenueSummary;
 }

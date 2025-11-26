@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -14,10 +15,12 @@ export default function LoginPage() {
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-4">
             <div className="flex justify-center">
-              <IkmLogo />
+              <Link href="/">
+                <IkmLogo />
+              </Link>
             </div>
-            <CardTitle className="text-2xl font-headline">Welcome Back</CardTitle>
-            <CardDescription>Enter your credentials to access your account</CardDescription>
+            <CardTitle className="text-2xl font-headline">Seller Hub Login</CardTitle>
+            <CardDescription>Enter your credentials to manage your store</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <div className="grid gap-2 text-left">
@@ -30,11 +33,11 @@ export default function LoginPage() {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
-            <Link href="/buyer" className="w-full">
+            <Link href="/seller/dashboard" className="w-full">
               <Button className="w-full">Login</Button>
             </Link>
             <Button variant="outline" className="w-full">
-              Create Account
+              Create a Store
             </Button>
           </CardFooter>
         </Card>
