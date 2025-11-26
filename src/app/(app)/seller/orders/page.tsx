@@ -30,6 +30,7 @@ import { useUser } from "@/lib/firebase/auth/use-user";
 import { useOrdersBySeller, updateOrderStatus, Order } from "@/lib/firebase/firestore/orders";
 import { useToast } from "@/hooks/use-toast";
 import { format } from 'date-fns';
+import Link from "next/link";
 
 const getStatusVariant = (status: Order['status']) => {
     switch (status) {
@@ -147,7 +148,9 @@ export default function OrdersPage() {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem>View Details</DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/seller/orders/${order.id}`}>View Details</Link>
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Processing')}>Mark as Processing</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Shipped')}>Mark as Shipped</DropdownMenuItem>

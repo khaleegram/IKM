@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -12,6 +13,7 @@ import {
   FirestoreError,
   serverTimestamp,
   doc,
+  getDoc,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
 import { CartItem } from '@/lib/cart-context';
@@ -81,6 +83,46 @@ export const useOrdersBySeller = (sellerId: string | undefined) => {
   }, [sellerId, sellerOrdersQuery]);
 
   return { data: orders, isLoading, error };
+};
+
+// Hook to get a single order by ID
+export const useOrder = (orderId: string | undefined) => {
+    const { firestore } = useFirebase();
+    const [order, setOrder] = useState<Order | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<FirestoreError | null>(null);
+
+    const orderRef = useMemo(() => {
+        if (!firestore || !orderId) return null;
+        return doc(firestore, 'orders', orderId);
+    }, [firestore, orderId]);
+
+    useEffect(() => {
+        if (!orderRef) {
+            if (!orderId) setIsLoading(false);
+            return;
+        }
+
+        setIsLoading(true);
+        const unsubscribe = onSnapshot(orderRef,
+            (doc) => {
+                if (doc.exists()) {
+                    setOrder({ id: doc.id, ...doc.data() } as Order);
+                } else {
+                    setOrder(null);
+                }
+                setIsLoading(false);
+            },
+            (err) => {
+                console.error(`Error fetching order ${orderId}:`, err);
+                setError(err);
+                setIsLoading(false);
+            }
+        );
+        return () => unsubscribe();
+    }, [orderId, orderRef]);
+
+    return { data: order, isLoading, error };
 };
 
 
