@@ -57,7 +57,9 @@ export const useAllOrders = () => {
 
     const ordersQuery = useMemo(() => {
         if (!firestore) return null;
-        return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
+        // The orderBy clause can fail if the collection doesn't exist and an index hasn't been created.
+        // Removing it makes the query more robust. We will sort client-side.
+        return query(collection(firestore, 'orders'));
     }, [firestore]);
 
     useEffect(() => {
@@ -75,6 +77,15 @@ export const useAllOrders = () => {
                     ...doc.data(),
                     total: doc.data().total || 0, // Ensure total is never undefined
                 } as Order));
+
+                // Sort client-side to avoid query errors on missing indexes
+                ordersData.sort((a, b) => {
+                    if (a.createdAt?.toDate && b.createdAt?.toDate) {
+                        return b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime();
+                    }
+                    return 0;
+                });
+
                 setOrders(ordersData);
                 setIsLoading(false);
             },
