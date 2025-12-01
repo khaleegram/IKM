@@ -21,6 +21,8 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase/provider';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { errorEmitter } from '@/firebase/error-emitter';
 
 export interface Product extends DocumentData {
   id?: string;
@@ -36,16 +38,6 @@ export interface Product extends DocumentData {
   isFeatured?: boolean;
   createdAt?: any;
 }
-
-// This function is intended for server-side use now, but we keep it here to avoid breaking client-side imports of other functions for now.
-// A better refactor would be to move server-side functions to their own files.
-// The searchProducts logic is now in a server action file / a dedicated server file.
-async function searchProducts(searchTerm: string): Promise<Product[]> {
-    // This is a placeholder. The actual logic is now server-side.
-    console.warn("searchProducts is being called on the client. This should be a server-side call.");
-    return [];
-}
-
 
 // Hook to get all products for the storefront
 export const useAllProducts = (productLimit?: number) => {
@@ -80,10 +72,15 @@ export const useAllProducts = (productLimit?: number) => {
         setError(null);
         setIsLoading(false);
       },
-      (err) => {
+      (err: any) => {
         console.error("Error fetching products: ", err);
         setError(err);
         setIsLoading(false);
+        const permissionError = new FirestorePermissionError({
+            path: (productsQuery as any).path,
+            operation: 'list',
+          });
+        errorEmitter.emit('permission-error', permissionError);
       }
     );
 
@@ -122,10 +119,15 @@ export const useProductsBySeller = (sellerId: string | undefined) => {
         setError(null);
         setIsLoading(false);
       },
-      (err) => {
+      (err: any) => {
         console.error("Error fetching seller products: ", err);
         setError(err);
         setIsLoading(false);
+        const permissionError = new FirestorePermissionError({
+          path: `users/${sellerId}/products`,
+          operation: 'list',
+        });
+        errorEmitter.emit('permission-error', permissionError);
       }
     );
 
@@ -165,10 +167,15 @@ export const useProduct = (productId: string) => {
         setError(null);
         setIsLoading(false);
       },
-      (err) => {
+      (err: any) => {
         console.error("Error fetching product:", err);
         setError(err);
         setIsLoading(false);
+        const permissionError = new FirestorePermissionError({
+          path: `products/${productId}`,
+          operation: 'get',
+        });
+        errorEmitter.emit('permission-error', permissionError);
       }
     );
 
@@ -180,48 +187,63 @@ export const useProduct = (productId: string) => {
 
 
 // Functions to modify products
-export const addProduct = async (firestore: Firestore, userId: string, product: Omit<Product, 'id' | 'sellerId' | 'price'>) => {
+export const addProduct = (firestore: Firestore, userId: string, productData: Omit<Product, 'id' | 'sellerId' | 'price' | 'createdAt'>) => {
     if (!firestore) throw new Error("Firestore is not initialized");
 
     const productsCollection = collection(firestore, 'products');
-    return await addDoc(productsCollection, {
-        ...product,
+    const dataWithTimestamp = {
+        ...productData,
         sellerId: userId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+    };
+    
+    return addDoc(productsCollection, dataWithTimestamp).catch(async (serverError) => {
+      const permissionError = new FirestorePermissionError({
+        path: productsCollection.path,
+        operation: 'create',
+        requestResourceData: dataWithTimestamp
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      throw serverError; // Re-throw original error
     });
 };
 
-export const updateProduct = async (firestore: Firestore, productId: string, userId: string, product: Partial<Product>) => {
+export const updateProduct = (firestore: Firestore, productId: string, userId: string, product: Partial<Product>) => {
     if (!firestore) throw new Error("Firestore is not initialized");
 
     const productRef = doc(firestore, 'products', productId);
-    const productDoc = await getDoc(productRef);
-
-    if (!productDoc.exists() || productDoc.data().sellerId !== userId) {
-        throw new Error("Product not found or permission denied");
-    }
-
+    
     // remove price field before update, as it's a client-side construct
     const { price, ...updateData } = product;
 
-    return await updateDoc(productRef, {
+    const dataWithTimestamp = {
         ...updateData,
         updatedAt: serverTimestamp(),
+    };
+
+    return updateDoc(productRef, dataWithTimestamp).catch(async (serverError) => {
+        const permissionError = new FirestorePermissionError({
+          path: productRef.path,
+          operation: 'update',
+          requestResourceData: dataWithTimestamp,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        throw serverError; // Re-throw original error
     });
 };
 
-export const deleteProduct = async (firestore: Firestore, productId: string, userId: string) => {
+export const deleteProduct = (firestore: Firestore, productId: string, userId: string) => {
     if (!firestore) throw new Error("Firestore is not initialized");
 
     const productRef = doc(firestore, 'products', productId);
-    const productDoc = await getDoc(productRef);
-
-    if (!productDoc.exists() || productDoc.data().sellerId !== userId) {
-        throw new Error("Product not found or permission denied");
-    }
-
-    return await deleteDoc(productRef);
-};
-
     
+    return deleteDoc(productRef).catch(async (serverError) => {
+      const permissionError = new FirestorePermissionError({
+        path: productRef.path,
+        operation: 'delete',
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      throw serverError; // Re-throw original error
+    });
+};
