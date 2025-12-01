@@ -10,7 +10,7 @@ import { useUser } from "@/lib/firebase/auth/use-user";
 import { useFirebase } from "@/firebase/provider";
 import { signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
-import React from "react";
+import React, { useState } from "react";
 import { IkmLogo } from "@/components/icons";
 import { grantAdminRoleToFirstUser } from "@/lib/admin-actions";
 
@@ -25,25 +25,48 @@ export default function AdminLayout({
   const { auth } = useFirebase();
   const { toast } = useToast();
 
+  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
+
   const isAdmin = claims?.isAdmin === true;
 
   React.useEffect(() => {
-    if (!isLoading && !user) {
-        router.replace('/login?redirect=/admin/dashboard');
-        return;
-    }
-    // Attempt to grant admin role if this is the first user and no admin exists.
-    if (user?.uid) {
-        grantAdminRoleToFirstUser(user.uid);
+    if (isLoading) {
+      return; // Wait until user auth state is resolved
     }
 
-    if (!isLoading && user && !isAdmin) {
-      toast({ variant: 'destructive', title: "Unauthorized", description: "You do not have permission to access this page."});
-      router.replace('/');
+    if (!user) {
+      router.replace('/login?redirect=/admin/dashboard');
+      return;
+    }
+
+    // If user is loaded, try to grant admin and see if they are one
+    const checkAndSetAdmin = async () => {
+      // This server action checks if they are the first user and grants admin if so.
+      // It's designed to only run the grant logic once.
+      await grantAdminRoleToFirstUser(user.uid);
+      
+      // Force a refresh of the user's token to get the latest claims
+      await user.getIdToken(true);
+      
+      // Check claims again after attempting to grant
+      const idTokenResult = await user.getIdTokenResult();
+      if (idTokenResult.claims.isAdmin) {
+        setIsCheckingAdmin(false);
+      } else {
+        // If still not admin after the check, then they are unauthorized.
+        toast({ variant: 'destructive', title: "Unauthorized", description: "You do not have permission to access this page."});
+        router.replace('/');
+      }
+    };
+
+    if (!isAdmin) {
+      checkAndSetAdmin();
+    } else {
+      setIsCheckingAdmin(false);
     }
   }, [isLoading, user, isAdmin, router, toast]);
 
-  if (isLoading || !isAdmin || !user) {
+  if (isLoading || isCheckingAdmin) {
     return (
         <div className="flex items-center justify-center h-screen">
             <Loader2 className="w-12 h-12 animate-spin text-primary" />
