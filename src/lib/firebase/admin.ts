@@ -9,30 +9,36 @@ let adminFirestore: Firestore;
 let adminStorage: Storage;
 
 function initializeAdminApp() {
-    if (getApps().length > 0) {
-        adminApp = getApps()[0];
-    } else {
+    // Check if the app is already initialized to avoid re-initializing
+    if (!getApps().length) {
         try {
             const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
             if (!serviceAccountString) {
                 throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
             }
             const serviceAccount = JSON.parse(serviceAccountString);
+            
             adminApp = initializeApp({
                 credential: cert(serviceAccount),
                 storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
             });
+
+            adminFirestore = getFirestore(adminApp);
+            adminFirestore.settings({
+                ignoreUndefinedProperties: true,
+            });
+            adminStorage = getStorage(adminApp);
+
         } catch (e: any) {
             console.error('Firebase Admin initialization error:', e.message);
             throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set or is invalid JSON.');
         }
+    } else {
+        // If already initialized, just get the instances
+        adminApp = getApps()[0];
+        adminFirestore = getFirestore(adminApp);
+        adminStorage = getStorage(adminApp);
     }
-
-    adminFirestore = getFirestore(adminApp);
-    adminFirestore.settings({
-        ignoreUndefinedProperties: true,
-    });
-    adminStorage = getStorage(adminApp);
 }
 
 // Initialize on module load
@@ -40,14 +46,16 @@ initializeAdminApp();
 
 export function getAdminFirestore(): Firestore {
     if (!adminFirestore) {
-        throw new Error("Admin Firestore is not initialized. Check your Firebase Admin setup.");
+        // This is a fallback in case the initial load failed, though it shouldn't be hit
+        // in a normal server startup.
+        initializeAdminApp();
     }
     return adminFirestore;
 }
 
 export function getAdminStorage(): Storage {
      if (!adminStorage) {
-        throw new Error("Admin Storage is not initialized. Check your Firebase Admin setup.");
+       initializeAdminApp();
     }
     return adminStorage;
 }
