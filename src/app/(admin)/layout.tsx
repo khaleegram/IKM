@@ -10,7 +10,7 @@ import { useUser } from "@/lib/firebase/auth/use-user";
 import { useFirebase } from "@/firebase/provider";
 import { signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { IkmLogo } from "@/components/icons";
 import { grantAdminRoleToFirstUser } from "@/lib/admin-actions";
 
@@ -29,42 +29,56 @@ export default function AdminLayout({
 
   const isAdmin = claims?.isAdmin === true;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isLoading) {
       return; // Wait until user auth state is resolved
     }
 
     if (!user) {
-      router.replace('/login?redirect=/admin/dashboard');
+      router.replace(`/login?redirect=${pathname}`);
       return;
     }
 
-    // If user is loaded, try to grant admin and see if they are one
+    // If the user already has admin claims, we're good.
+    if (isAdmin) {
+      setIsCheckingAdmin(false);
+      return;
+    }
+
+    // If not admin, try to grant it. This server action checks if they're the first user.
+    // It's designed to only work once for the very first user.
     const checkAndSetAdmin = async () => {
-      // This server action checks if they are the first user and grants admin if so.
-      // It's designed to only run the grant logic once.
-      await grantAdminRoleToFirstUser(user.uid);
-      
-      // Force a refresh of the user's token to get the latest claims
-      await user.getIdToken(true);
-      
-      // Check claims again after attempting to grant
-      const idTokenResult = await user.getIdTokenResult();
-      if (idTokenResult.claims.isAdmin) {
-        setIsCheckingAdmin(false);
-      } else {
-        // If still not admin after the check, then they are unauthorized.
-        toast({ variant: 'destructive', title: "Unauthorized", description: "You do not have permission to access this page."});
+      try {
+        const wasGranted = await grantAdminRoleToFirstUser(user.uid);
+        
+        if (wasGranted) {
+          // If the role was just granted, we need to refresh the token to get new claims.
+          await user.getIdToken(true);
+          const idTokenResult = await user.getIdTokenResult();
+          
+          if (idTokenResult.claims.isAdmin) {
+            // Success! The user is now an admin.
+             setIsCheckingAdmin(false);
+          } else {
+            // This shouldn't happen, but as a fallback, deny access.
+            throw new Error("Failed to verify admin role after granting.");
+          }
+        } else {
+          // If the role was not granted (because they aren't the first user), then they are unauthorized.
+          toast({ variant: 'destructive', title: "Unauthorized", description: "You do not have permission to access this page."});
+          router.replace('/');
+        }
+      } catch (error) {
+        console.error("Admin check failed:", error);
+        toast({ variant: 'destructive', title: "Access Denied", description: "An error occurred while verifying your permissions."});
         router.replace('/');
       }
     };
 
-    if (!isAdmin) {
-      checkAndSetAdmin();
-    } else {
-      setIsCheckingAdmin(false);
-    }
-  }, [isLoading, user, isAdmin, router, toast]);
+    checkAndSetAdmin();
+
+  }, [isLoading, user, isAdmin, router, toast, pathname]);
+
 
   if (isLoading || isCheckingAdmin) {
     return (
