@@ -76,6 +76,17 @@
       },
       "required": ["displayName", "email"]
     },
+    "admin": {
+        "title": "Admin",
+        "description": "Represents an admin user with elevated privileges, managed via custom claims.",
+        "type": "object",
+        "properties": {
+            "isAdmin": {
+                "type": "boolean",
+                "description": "Custom claim set on the user's auth token to indicate admin status."
+            }
+        }
+    },
     "deliveryLocation": {
         "title": "Delivery Location",
         "description": "A location where a seller can deliver products.",
@@ -138,6 +149,17 @@
         }
       },
       "required": ["customerId", "sellerId", "items", "total", "status", "createdAt"]
+    },
+    "branding": {
+        "title": "Branding",
+        "description": "Marketplace branding settings.",
+        "type": "object",
+        "properties": {
+            "logoUrl": {
+                "type": "string",
+                "description": "URL for the marketplace logo."
+            }
+        }
     }
   },
   "auth": {
@@ -167,6 +189,12 @@
             "$ref": "#/entities/order"
         },
         "description": "A customer order."
+    },
+    "/settings/branding": {
+        "schema": {
+            "$ref": "#/entities/branding"
+        },
+        "description": "Global branding settings for the marketplace."
     }
   }
 }

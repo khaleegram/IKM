@@ -18,6 +18,7 @@ import {
   limit,
   getDocs,
   Firestore,
+  orderBy,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase/provider';
 
@@ -55,10 +56,11 @@ export const useAllProducts = (productLimit?: number) => {
   const productsQuery = useMemo(() => {
     if (!firestore) return null;
     const coll = collection(firestore, 'products');
+    let q = query(coll, orderBy('createdAt', 'desc'));
     if (productLimit) {
-        return query(coll, limit(productLimit));
+        q = query(q, limit(productLimit));
     }
-    return query(coll);
+    return q;
   }, [firestore, productLimit]);
 
 
@@ -99,7 +101,7 @@ export const useProductsBySeller = (sellerId: string | undefined) => {
   
   const sellerProductsQuery = useMemo(() => {
       if (!firestore || !sellerId) return null;
-      return query(collection(firestore, 'products'), where('sellerId', '==', sellerId));
+      return query(collection(firestore, 'products'), where('sellerId', '==', sellerId), orderBy('createdAt', 'desc'));
   }, [firestore, sellerId]);
 
 

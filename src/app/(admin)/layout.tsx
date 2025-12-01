@@ -3,10 +3,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Settings, Users, LogOut, BarChart2, Loader2, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Package, Users, LogOut, BarChart2, Loader2, ShieldCheck, Palette } from "lucide-react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset } from "@/components/ui/sidebar";
-import { IkmLogo } from "@/components/icons";
 import { useUser } from "@/lib/firebase/auth/use-user";
 import { useFirebase } from "@/firebase/provider";
 import { signOut } from "firebase/auth";
@@ -56,6 +55,7 @@ export default function AdminLayout({
     { href: "/admin/users", label: "Users", icon: Users },
     { href: "/admin/products", label: "Products", icon: Package },
     { href: "/admin/orders", label: "Orders", icon: BarChart2 },
+    { href: "/admin/branding", label: "Branding", icon: Palette },
   ];
 
   const getIsActive = (path: string) => pathname === path || (path !== '/admin/dashboard' && pathname.startsWith(path));

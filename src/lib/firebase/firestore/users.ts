@@ -12,7 +12,8 @@ import {
   addDoc,
   deleteDoc,
   query,
-  Firestore
+  Firestore,
+  orderBy,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase/provider';
 
@@ -117,7 +118,7 @@ export const useAllUserProfiles = () => {
 
   const usersQuery = useMemo(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'users'));
+    return query(collection(firestore, 'users'), orderBy('displayName'));
   }, [firestore]);
 
 
