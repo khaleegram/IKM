@@ -3,8 +3,6 @@
 
 import { generateProductDescription as genProductDesc, type GenerateProductDescriptionInput } from "@/ai/flows/seller-product-description-assistance";
 import { suggestStoreName as genStoreName, type SuggestStoreNameInput } from "@/ai/flows/store-name-assistance";
-import { addProduct as addProd, updateProduct as updateProd } from "@/lib/firebase/firestore/products";
-import { uploadImage } from "@/lib/firebase/storage";
 import { z } from "zod";
 import { getAdminFirestore } from '@/lib/firebase/admin';
 import type { Product } from "@/lib/firebase/firestore/products";
@@ -54,4 +52,3 @@ export async function suggestStoreName(input: SuggestStoreNameInput) {
     const result = await genStoreName(parsedInput);
     return result;
 }
-    
