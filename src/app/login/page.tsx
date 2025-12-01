@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { useFirebase } from '@/firebase/provider';
+import { grantAdminRoleToFirstUser } from '@/lib/admin-actions';
 
 export default function LoginPage() {
   const { auth, firestore } = useFirebase();
@@ -28,7 +29,10 @@ export default function LoginPage() {
       try {
         await signInWithEmailAndPassword(auth, email, password);
         toast({ title: 'Login Successful', description: "Welcome back!" });
-        router.push('/seller/dashboard');
+        
+        const redirectUrl = new URLSearchParams(window.location.search).get('redirect') || '/seller/dashboard';
+        router.push(redirectUrl);
+
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Login Failed', description: error.message });
       }
@@ -50,8 +54,14 @@ export default function LoginPage() {
             whatsappNumber: ''
         });
 
+        // Grant admin role if this is the first user
+        await grantAdminRoleToFirstUser(user.uid);
+
         toast({ title: 'Account Created!', description: "Welcome! Let's get your store set up." });
-        router.push('/seller/dashboard');
+        
+        const redirectUrl = new URLSearchParams(window.location.search).get('redirect') || '/seller/dashboard';
+        router.push(redirectUrl);
+
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Sign Up Failed', description: error.message });
       }

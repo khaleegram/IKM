@@ -11,6 +11,7 @@ import { useFirebase } from "@/firebase/provider";
 import { signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
 import React from "react";
+import { IkmLogo } from "@/components/icons";
 
 export default function AdminLayout({
   children,
@@ -26,13 +27,17 @@ export default function AdminLayout({
   const isAdmin = claims?.isAdmin === true;
 
   React.useEffect(() => {
+    if (!isLoading && !user) {
+        router.replace('/login?redirect=/admin/dashboard');
+        return;
+    }
     if (!isLoading && !isAdmin) {
       toast({ variant: 'destructive', title: "Unauthorized", description: "You do not have permission to access this page."});
-      router.replace('/login');
+      router.replace('/');
     }
-  }, [isLoading, isAdmin, router, toast]);
+  }, [isLoading, user, isAdmin, router, toast]);
 
-  if (isLoading || !isAdmin) {
+  if (isLoading || !isAdmin || !user) {
     return (
         <div className="flex items-center justify-center h-screen">
             <Loader2 className="w-12 h-12 animate-spin text-primary" />
@@ -67,7 +72,8 @@ export default function AdminLayout({
             <div id="sidebar-menu" className="flex flex-col h-full p-2">
                 <div className="p-2 pb-4">
                   <Link href="/admin/dashboard">
-                    <ShieldCheck className="w-7 h-7" />
+                    <IkmLogo className="w-auto h-7 group-data-[collapsible=icon]:hidden" />
+                    <ShieldCheck className="w-7 h-7 hidden group-data-[collapsible=icon]:block" />
                   </Link>
                 </div>
                 <SidebarMenu className="flex-1">

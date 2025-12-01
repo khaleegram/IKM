@@ -35,7 +35,8 @@ export interface UserProfile extends DocumentData {
     bankCode: string;
     accountNumber: string;
     accountName: string;
-  }
+  };
+  isAdmin?: boolean; // Added for UI reactivity
 }
 
 // Hook to get a single user profile
