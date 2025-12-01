@@ -25,7 +25,8 @@ export default function AdminDashboardPage() {
   const isLoading = isLoadingUsers || isLoadingProducts || isLoadingOrders;
   const error = errorUsers || errorProducts || errorOrders;
 
-  const totalRevenue = orders.reduce((acc, order) => acc + order.total, 0);
+  const totalRevenue = orders ? orders.reduce((acc, order) => acc + (order.total || 0), 0) : 0;
+  const totalOrders = orders ? orders.length : 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -62,7 +63,7 @@ export default function AdminDashboardPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">₦{totalRevenue.toLocaleString()}</div>
-                            <p className="text-xs text-muted-foreground">from {orders.length} orders</p>
+                            <p className="text-xs text-muted-foreground">from {totalOrders} orders</p>
                         </CardContent>
                     </Card>
                      <Card>

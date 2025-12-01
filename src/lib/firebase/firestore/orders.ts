@@ -70,7 +70,11 @@ export const useAllOrders = () => {
         const unsubscribe = onSnapshot(
             ordersQuery,
             (snapshot) => {
-                const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+                const ordersData = snapshot.docs.map(doc => ({ 
+                    id: doc.id, 
+                    ...doc.data(),
+                    total: doc.data().total || 0, // Ensure total is never undefined
+                } as Order));
                 setOrders(ordersData);
                 setIsLoading(false);
             },
