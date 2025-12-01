@@ -42,6 +42,7 @@ export async function grantAdminRole(userId: string): Promise<void> {
   const firestore = getAdminFirestore();
   await firestore.collection('users').doc(userId).update({ isAdmin: true });
   revalidatePath('/admin/users');
+  revalidatePath('/admin/dashboard'); // Revalidate admin pages
 }
 
 export async function revokeAdminRole(userId: string): Promise<void> {
@@ -56,10 +57,11 @@ export async function revokeAdminRole(userId: string): Promise<void> {
 export async function grantAdminRoleToFirstUser(userId: string): Promise<void> {
     const firestore = getAdminFirestore();
     const usersSnapshot = await firestore.collection('users').limit(2).get();
+    const adminUsersSnapshot = await firestore.collection('users').where('isAdmin', '==', true).limit(1).get();
 
-    // If there is only one user in the database, make them an admin.
-    if (usersSnapshot.size === 1) {
-        console.log(`This is the first user (${userId}). Granting admin role.`);
+    // If there is only one user in the database AND no admins exist, make them an admin.
+    if (usersSnapshot.size === 1 && adminUsersSnapshot.empty) {
+        console.log(`This is the first user (${userId}) and no admins exist. Granting admin role.`);
         await grantAdminRole(userId);
     }
 }

@@ -12,6 +12,7 @@ import { signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
 import React from "react";
 import { IkmLogo } from "@/components/icons";
+import { grantAdminRoleToFirstUser } from "@/lib/admin-actions";
 
 export default function AdminLayout({
   children,
@@ -31,7 +32,12 @@ export default function AdminLayout({
         router.replace('/login?redirect=/admin/dashboard');
         return;
     }
-    if (!isLoading && !isAdmin) {
+    // Attempt to grant admin role if this is the first user and no admin exists.
+    if (user?.uid) {
+        grantAdminRoleToFirstUser(user.uid);
+    }
+
+    if (!isLoading && user && !isAdmin) {
       toast({ variant: 'destructive', title: "Unauthorized", description: "You do not have permission to access this page."});
       router.replace('/');
     }

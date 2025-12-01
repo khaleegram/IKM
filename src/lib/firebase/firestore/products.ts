@@ -34,6 +34,7 @@ export interface Product extends DocumentData {
   sellerId: string;
   category?: string;
   isFeatured?: boolean;
+  createdAt?: any;
 }
 
 // This function is intended for server-side use now, but we keep it here to avoid breaking client-side imports of other functions for now.

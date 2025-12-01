@@ -22,7 +22,7 @@ export default function StoreHomePage() {
   const [addingProductId, setAddingProductId] = useState<string | null>(null);
 
   const filteredProducts = useMemo(() => 
-    products.filter(product => 
+    (products || []).filter(product => 
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase()))
     ),
