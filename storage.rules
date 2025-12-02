@@ -1,0 +1,20 @@
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Only allow authenticated users to upload files to their own "folder"
+    // And ensure the file size is reasonable (e.g., max 5MB)
+    match /product_images/{userId}/{fileName} {
+      allow read: if true; // Anyone can read product images
+      allow write: if request.auth != null && request.auth.uid == userId
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+    }
+
+    // Disallow all other writes to storage from the client
+    match /{allPaths=**} {
+      allow write: if false;
+    }
+  }
+}
