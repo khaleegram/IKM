@@ -14,8 +14,11 @@ import {
   query,
   Firestore,
   orderBy,
+  getDocs,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase/provider';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export interface DeliveryLocation extends DocumentData {
     id: string;
@@ -119,7 +122,9 @@ export const useAllUserProfiles = () => {
 
   const usersQuery = useMemo(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'users'), orderBy('displayName'));
+    // This query might fail if the 'users' collection doesn't exist yet.
+    // By removing orderBy, it's more resilient. We can sort client-side.
+    return query(collection(firestore, 'users'));
   }, [firestore]);
 
 
@@ -134,13 +139,16 @@ export const useAllUserProfiles = () => {
       usersQuery,
       (snapshot) => {
         const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile));
+        // Sort client-side for consistency
+        usersData.sort((a, b) => a.displayName.localeCompare(b.displayName));
         setUsers(usersData);
         setError(null);
         setIsLoading(false);
       },
       (err) => {
-        console.error("Error fetching users: ", err);
+        console.error("Error fetching all user profiles: ", err);
         setError(err);
+        setUsers([]); // Return empty array on error to prevent page crash
         setIsLoading(false);
       }
     );

@@ -34,6 +34,11 @@ export default function AdminLayout({
 
     // If loading is done and there's no user, redirect to login.
     if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Required",
+        description: "Please log in to access the admin area.",
+      });
       router.replace(`/login?redirect=${pathname}`);
       return;
     }
@@ -51,7 +56,9 @@ export default function AdminLayout({
   }, [isLoading, user, isAdmin, router, pathname, toast]);
 
 
-  if (isLoading || !isAdmin) {
+  // While loading or if user is not a confirmed admin yet, show a loading screen.
+  // This prevents brief flashes of content or 404 pages.
+  if (isLoading || !user || !isAdmin) {
     return (
         <div className="flex items-center justify-center h-screen">
             <Loader2 className="w-12 h-12 animate-spin text-primary" />

@@ -23,10 +23,13 @@ export default function AdminDashboardPage() {
   const { data: orders, isLoading: isLoadingOrders, error: errorOrders } = useAllOrders();
 
   const isLoading = isLoadingUsers || isLoadingProducts || isLoadingOrders;
-  const error = errorUsers || errorProducts || errorOrders;
+  const combinedError = errorUsers || errorProducts || errorOrders;
 
-  const totalRevenue = orders ? orders.reduce((acc, order) => acc + (order.total || 0), 0) : 0;
+  // Safely calculate totals
+  const totalRevenue = orders ? orders.reduce((acc, order) => acc + (order?.total || 0), 0) : 0;
   const totalOrders = orders ? orders.length : 0;
+  const totalUsers = users ? users.length : 0;
+  const totalProducts = products ? products.length : 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -41,7 +44,7 @@ export default function AdminDashboardPage() {
              <div className="flex items-center justify-center h-64">
                 <Loader2 className="w-12 h-12 animate-spin text-primary" />
             </div>
-        ) : error ? (
+        ) : combinedError ? (
             <Card className="w-full text-center border-dashed shadow-none">
                 <CardHeader>
                     <div className="mx-auto bg-destructive/10 rounded-full w-16 h-16 flex items-center justify-center">
@@ -49,8 +52,10 @@ export default function AdminDashboardPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <CardTitle className="font-headline text-destructive">An Error Occurred</CardTitle>
-                    <CardDescription className="mt-2">{error.message}</CardDescription>
+                    <CardTitle className="font-headline text-destructive">A Data Fetching Error Occurred</CardTitle>
+                    <CardDescription className="mt-2">
+                        Could not load all dashboard data. The following error occurred: {combinedError.message}
+                    </CardDescription>
                 </CardContent>
             </Card>
         ) : (
@@ -72,7 +77,7 @@ export default function AdminDashboardPage() {
                             <Users className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{users.length}</div>
+                            <div className="text-2xl font-bold">{totalUsers}</div>
                             <p className="text-xs text-muted-foreground">Sellers & Customers</p>
                         </CardContent>
                     </Card>
@@ -82,7 +87,7 @@ export default function AdminDashboardPage() {
                             <Package className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{products.length}</div>
+                            <div className="text-2xl font-bold">{totalProducts}</div>
                              <p className="text-xs text-muted-foreground">Listed across all stores</p>
                         </CardContent>
                     </Card>
@@ -103,7 +108,7 @@ export default function AdminDashboardPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {users.map((user) => (
+                                {(users || []).map((user) => (
                                 <TableRow key={user.id}>
                                     <TableCell>
                                         <div className="flex items-center gap-3">
@@ -119,6 +124,11 @@ export default function AdminDashboardPage() {
                                 ))}
                             </TableBody>
                         </Table>
+                         {users.length === 0 && (
+                            <div className="text-center p-8 text-muted-foreground">
+                                No users have signed up yet.
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
