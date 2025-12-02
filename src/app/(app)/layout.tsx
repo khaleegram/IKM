@@ -214,7 +214,7 @@ export default function AppLayout({
                      <DropdownMenuItem asChild><Link href="/stores">All Stores</Link></DropdownMenuItem>
                      <DropdownMenuItem asChild><Link href="/seller/dashboard">Seller Hub</Link></DropdownMenuItem>
                     {user && <DropdownMenuItem asChild><Link href="/profile">My Orders</Link></DropdownMenuItem>}
-                    {isAdmin && <DropdownMenuItem asChild><Link href="/admin/dashboard">Admin</Link></DropdownMenuItem>}
+                    {user && isAdmin && <DropdownMenuItem asChild><Link href="/admin/dashboard">Admin</Link></DropdownMenuItem>}
                     <DropdownMenuSeparator />
                     {user ? (
                       <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>

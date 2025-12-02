@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -88,7 +87,7 @@ export default function LoginPage() {
         toast({ title: 'Account Created!', description: "Welcome! Let's get your store set up." });
         await handleAuthSuccess(user);
 
-      } catch (error: any) {
+      } catch (error: any) => {
         toast({ variant: 'destructive', title: 'Sign Up Failed', description: error.message });
       }
     });
