@@ -1,3 +1,4 @@
+
 'use server';
 
 import 'dotenv/config';
@@ -15,7 +16,8 @@ function initializeAdminApp() {
          try {
             const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
             if (!serviceAccountString) {
-                throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
+                // This will be caught by the overall admin initializer, but good to have a specific check
+                return;
             }
             const serviceAccount = JSON.parse(serviceAccountString);
             
@@ -24,7 +26,6 @@ function initializeAdminApp() {
             }, 'admin-actions');
         } catch (e: any) {
             console.error('Admin Actions: Firebase Admin initialization error:', e.message);
-            throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set or is invalid JSON.');
         }
     } else {
         adminApp = getApps().find(app => app.name === 'admin-actions')!;
@@ -34,6 +35,9 @@ function initializeAdminApp() {
 initializeAdminApp();
 
 export async function createAdminUser(userId: string, email: string, displayName: string): Promise<void> {
+    if (!adminApp) {
+        throw new Error("Admin SDK not initialized. Check server logs for details.");
+    }
     const auth = getAuth(adminApp);
     const firestore = getAdminFirestore();
 
@@ -51,6 +55,9 @@ export async function createAdminUser(userId: string, email: string, displayName
 
 
 export async function grantAdminRole(userId: string): Promise<void> {
+  if (!adminApp) {
+    throw new Error("Admin SDK not initialized. Check server logs for details.");
+  }
   const auth = getAuth(adminApp);
   await auth.setCustomUserClaims(userId, { isAdmin: true });
   // Also update the user's document in Firestore to reflect the change immediately in the UI
@@ -61,6 +68,9 @@ export async function grantAdminRole(userId: string): Promise<void> {
 }
 
 export async function revokeAdminRole(userId: string): Promise<void> {
+  if (!adminApp) {
+    throw new Error("Admin SDK not initialized. Check server logs for details.");
+  }
   const auth = getAuth(adminApp);
   await auth.setCustomUserClaims(userId, { isAdmin: false });
   // Also update the user's document in Firestore
@@ -71,6 +81,10 @@ export async function revokeAdminRole(userId: string): Promise<void> {
 
 export async function grantAdminRoleToFirstUser(userId: string): Promise<boolean> {
     const firestore = getAdminFirestore();
+    if (!firestore) {
+      console.warn("Firestore admin not available, cannot grant first admin role.");
+      return false;
+    }
     const usersSnapshot = await firestore.collection('users').limit(2).get();
     const adminUsersSnapshot = await firestore.collection('users').where('isAdmin', '==', true).limit(1).get();
 
