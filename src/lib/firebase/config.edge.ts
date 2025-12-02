@@ -1,3 +1,4 @@
+
 // All of these are defined in `service-account.json.enc` and loaded in `next.config.js`
 export const clientConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -6,6 +7,10 @@ export const clientConfig = {
 };
 
 const thirtyDaysInSeconds = 30 * 24 * 60 * 60;
+
+// This private key is a secret and MUST NOT be exposed to the client-side.
+// It's used in the Edge Runtime for session management.
+const privateKey = (process.env.FIREBASE_ADMIN_PRIVATE_KEY || '').replace(/\\n/g, '\n');
 
 export const serverConfig = {
     cookieName: process.env.AUTH_COOKIE_NAME || 'AuthToken',
@@ -23,7 +28,6 @@ export const serverConfig = {
     serviceAccount: {
         projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL!,
-        // Replace all `\n` occurrences with a new line
-        privateKey: (process.env.FIREBASE_ADMIN_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+        privateKey: privateKey,
     },
 };
