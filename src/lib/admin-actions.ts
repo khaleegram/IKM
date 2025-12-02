@@ -1,4 +1,3 @@
-
 'use server';
 
 import 'dotenv/config';
@@ -33,6 +32,22 @@ function initializeAdminApp() {
 }
 
 initializeAdminApp();
+
+export async function createAdminUser(userId: string, email: string, displayName: string): Promise<void> {
+    const auth = getAuth(adminApp);
+    const firestore = getAdminFirestore();
+
+    // Set custom claim first
+    await auth.setCustomUserClaims(userId, { isAdmin: true });
+
+    // Then create user profile document
+    await firestore.collection('users').doc(userId).set({
+        displayName: displayName,
+        email: email,
+        isAdmin: true, // Also store it in the document for easy querying/UI
+        createdAt: new Date(),
+    });
+}
 
 
 export async function grantAdminRole(userId: string): Promise<void> {
