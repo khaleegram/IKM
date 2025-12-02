@@ -5,18 +5,20 @@ export const clientConfig = {
     projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
 };
 
+const thirtyDaysInSeconds = 30 * 24 * 60 * 60;
+
 export const serverConfig = {
-    cookieName: process.env.AUTH_COOKIE_NAME!,
+    cookieName: process.env.AUTH_COOKIE_NAME || 'AuthToken',
     cookieSignatureKeys: [
-        process.env.AUTH_COOKIE_SIGNATURE_KEY_CURRENT!,
-        process.env.AUTH_COOKIE_SIGNATURE_KEY_PREVIOUS!,
+        process.env.AUTH_COOKIE_SIGNATURE_KEY_CURRENT || '9b552a952826a11e7330594343e064e4',
+        process.env.AUTH_COOKIE_SIGNATURE_KEY_PREVIOUS || '24503524b09a473489849591ea280628',
     ],
     cookieSerializeOptions: {
         path: '/',
         httpOnly: true,
-        secure: true, // Set this to false in local (non-HTTPS) development
+        secure: process.env.USE_SECURE_COOKIES === 'true', // Set this to false in local (non-HTTPS) development
         sameSite: 'lax' as const,
-        maxAge: 12 * 60 * 60 * 24, // twelve days
+        maxAge: thirtyDaysInSeconds, 
     },
     serviceAccount: {
         projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
