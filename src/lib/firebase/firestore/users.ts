@@ -47,7 +47,7 @@ export const useUserProfile = (userId: string | undefined) => {
   const { firestore } = useFirebase();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [setError] = useState<FirestoreError | null>(null);
+  const [error, setError] = useState<FirestoreError | null>(null);
 
   const userRef = useMemo(() => {
     if (!firestore || !userId) return null;
@@ -108,9 +108,9 @@ export const useUserProfile = (userId: string | undefined) => {
         unsubscribeUser();
         unsubscribeLocations();
     }
-  }, [userRef, locationsRef, userId, setError]);
+  }, [userRef, locationsRef, userId]);
 
-  return { data: userProfile, isLoading, error: null };
+  return { data: userProfile, isLoading, error };
 };
 
 // Hook to get all user profiles (for storefront name/desc)
@@ -137,7 +137,7 @@ export const useAllUserProfiles = () => {
       usersQuery,
       (snapshot) => {
         const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile));
-        usersData.sort((a, b) => a.displayName.localeCompare(b.displayName));
+        usersData.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
         setUsers(usersData);
         setError(null);
         setIsLoading(false);
@@ -145,8 +145,11 @@ export const useAllUserProfiles = () => {
       (err) => {
         console.error("Error fetching all user profiles: ", err);
         setError(err);
-        setUsers([]);
+        setUsers([]); // Return empty array on error
         setIsLoading(false);
+        // Emit a detailed error for the UI
+        const permissionError = new FirestorePermissionError({ path: 'users', operation: 'list' });
+        errorEmitter.emit('permission-error', permissionError);
       }
     );
 
