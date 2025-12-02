@@ -1,19 +1,11 @@
 
-import { auth } from 'next-firebase-auth-edge';
-import { clientConfig, serverConfig } from '@/lib/firebase/config.edge';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const response = NextResponse.json(null, {
-      status: 200,
-    });
-
-    await auth.logout(request, response, {
-      ...serverConfig,
-      ...clientConfig,
-    });
-    
+    // Instruct the browser to clear the cookie
+    const response = NextResponse.json({ success: true }, { status: 200 });
+    response.cookies.set("AuthToken", "", { maxAge: -1, path: '/' });
     return response;
 
   } catch (e) {

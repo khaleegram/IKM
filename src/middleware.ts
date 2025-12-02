@@ -1,66 +1,59 @@
 
 import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "next-firebase-auth-edge";
-import { clientConfig, serverConfig } from '@/lib/firebase/config.edge';
+import { getAdminApp } from '@/lib/firebase/admin-sdk';
+import { getAuth } from "firebase-admin/auth";
+
+// Initialize Firebase Admin
+const adminApp = getAdminApp();
+const adminAuth = getAuth(adminApp);
 
 export async function middleware(request: NextRequest) {
-    return auth(request, {
-        loginPath: "/api/login",
-        logoutPath: "/api/logout",
-        ...clientConfig,
-        ...serverConfig,
-        
-        // This handler runs if the user is authenticated
-        handleValidToken: async ({ token, decodedToken }) => {
-            const pathname = request.nextUrl.pathname;
-            const headers = new Headers(request.headers);
-            
-            // Pass the user's UID to server components and API routes
-            headers.set('X-User-UID', decodedToken.uid);
+    const sessionCookie = request.cookies.get("AuthToken")?.value;
+    const { pathname } = request.nextUrl;
 
-            // Enforce admin role for /admin routes
-            if (pathname.startsWith('/admin') && decodedToken.claims?.isAdmin !== true) {
-                console.log(`[Middleware] Unauthorized access to ${pathname} by user ${decodedToken.uid}`);
+    if (!sessionCookie) {
+        // If no cookie and trying to access a protected route, redirect to login
+        if (pathname.startsWith('/admin') || pathname.startsWith('/seller') || pathname === '/profile' || pathname === '/checkout') {
+             return NextResponse.redirect(new URL(`/login?redirect=${pathname}`, request.url));
+        }
+        return NextResponse.next();
+    }
+
+    try {
+        const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
+        const headers = new Headers(request.headers);
+        headers.set('X-User-UID', decodedToken.uid);
+
+        // Handle admin route protection
+        if (pathname.startsWith('/admin')) {
+            if (decodedToken.isAdmin !== true) {
+                // Not an admin, redirect to home
                 return NextResponse.redirect(new URL('/', request.url));
             }
-
-            return NextResponse.next({
-                request: { headers },
-            });
-        },
+        }
         
-        // This handler runs if the user is not authenticated
-        handleInvalidToken: async () => {
-            const pathname = request.nextUrl.pathname;
-            // Redirect to login if trying to access a protected route
-            if (pathname.startsWith('/admin') || pathname.startsWith('/seller') || pathname === '/profile' || pathname === '/checkout') {
-                console.log(`[Middleware] Invalid token. Redirecting from ${pathname} to /login`);
-                return NextResponse.redirect(new URL(`/login?redirect=${pathname}`, request.url));
-            }
-            // Allow access to public pages
-            return NextResponse.next();
-        },
+        return NextResponse.next({
+            request: { headers },
+        });
 
-        // Handle any other errors
-        handleError: async (error) => {
-            console.error('[Middleware] Error:', error.message);
-            // Fallback for unexpected errors is to redirect to login
-            return NextResponse.redirect(new URL('/login', request.url));
-        },
-    });
+    } catch (error) {
+        // Session cookie is invalid. Clear it and redirect to login for protected routes.
+        const response = NextResponse.next();
+
+        if (pathname.startsWith('/admin') || pathname.startsWith('/seller') || pathname === '/profile' || pathname === '/checkout') {
+            const redirectResponse = NextResponse.redirect(new URL(`/login?redirect=${pathname}`, request.url));
+            redirectResponse.cookies.set("AuthToken", "", { maxAge: -1 }); // Clear the invalid cookie
+            return redirectResponse;
+        }
+
+        response.cookies.set("AuthToken", "", { maxAge: -1 }); // Clear the invalid cookie
+        return response;
+    }
 }
 
 // Define the routes that the middleware will run on
 export const config = {
     matcher: [
-        "/admin/:path*",
-        "/seller/:path*",
-        "/profile",
-        "/checkout",
-        "/api/login",
-        "/api/logout",
-        // Add API routes that need authentication context
-        "/api/verify-payment",
-        "/lib/payout-actions",
+        "/((?!api/login|_next/static|_next/image|favicon.ico).*)",
     ],
 };
