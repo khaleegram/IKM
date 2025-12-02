@@ -1,15 +1,12 @@
-
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from 'next-firebase-auth-edge';
+import { clientConfig, serverConfig } from '@/lib/firebase/config.edge';
 
 export async function POST(request: NextRequest) {
-  try {
-    // Instruct the browser to clear the cookie
-    const response = NextResponse.json({ success: true }, { status: 200 });
-    response.cookies.set("AuthToken", "", { maxAge: -1, path: '/' });
-    return response;
-
-  } catch (e) {
-    console.error('[API Logout] Error:', e);
-    return NextResponse.json({ error: 'Failed to destroy session' }, { status: 500 });
-  }
+    return auth.logout(request, {
+        apiKey: clientConfig.apiKey,
+        cookieName: serverConfig.cookieName,
+        cookieSignatureKeys: serverConfig.cookieSignatureKeys,
+        cookieSerializeOptions: serverConfig.cookieSerializeOptions,
+    });
 }
