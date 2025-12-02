@@ -9,46 +9,60 @@ import { Label } from '@/components/ui/label';
 import { IkmLogo } from '@/components/icons';
 import { useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { useFirebase } from '@/firebase/provider';
 import { grantAdminRoleToFirstUser } from '@/lib/admin-actions';
+import { IdTokenResult, User } from 'firebase/auth';
 
 export default function LoginPage() {
   const { auth, firestore } = useFirebase();
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isPending, startTransition] = useTransition();
 
+  const handleAuthSuccess = async (user: User) => {
+    const idToken = await user.getIdToken();
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+    });
+
+    if (!response.ok) {
+        throw new Error('Failed to create session cookie.');
+    }
+    
+    // The getIdTokenResult(true) is crucial to force a refresh from the server
+    // and get the latest custom claims.
+    const idTokenResult = await user.getIdTokenResult(true);
+    const isAdmin = idTokenResult.claims.isAdmin === true;
+
+    toast({ title: 'Login Successful', description: "Welcome back!" });
+    
+    if (isAdmin) {
+        router.push('/admin/dashboard');
+    } else {
+        const redirectUrl = searchParams.get('redirect');
+        if (redirectUrl && !redirectUrl.startsWith('/admin')) {
+            router.push(redirectUrl);
+        } else {
+            router.push('/seller/dashboard');
+        }
+    }
+  };
+
+
   const handleLogin = () => {
     startTransition(async () => {
       try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-        
-        // Get user claims to determine role
-        const idTokenResult = await user.getIdTokenResult();
-        const isAdmin = idTokenResult.claims.isAdmin === true;
-
-        toast({ title: 'Login Successful', description: "Welcome back!" });
-        
-        // Redirect based on role
-        if (isAdmin) {
-            router.push('/admin/dashboard');
-        } else {
-            const redirectUrl = new URLSearchParams(window.location.search).get('redirect');
-            // Avoid redirecting to admin pages if not an admin
-            if (redirectUrl && !redirectUrl.startsWith('/admin')) {
-                router.push(redirectUrl);
-            } else {
-                router.push('/seller/dashboard');
-            }
-        }
-
+        await handleAuthSuccess(userCredential.user);
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Login Failed', description: error.message });
       }
@@ -61,7 +75,6 @@ export default function LoginPage() {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         
-        // Create user profile in Firestore
         await setDoc(doc(firestore, "users", user.uid), {
             displayName: user.email?.split('@')[0] || 'New Seller',
             email: user.email,
@@ -70,13 +83,10 @@ export default function LoginPage() {
             whatsappNumber: ''
         });
 
-        // Grant admin role if this is the first user
         await grantAdminRoleToFirstUser(user.uid);
-
-        toast({ title: 'Account Created!', description: "Welcome! Let's get your store set up." });
         
-        const redirectUrl = new URLSearchParams(window.location.search).get('redirect') || '/seller/dashboard';
-        router.push(redirectUrl);
+        toast({ title: 'Account Created!', description: "Welcome! Let's get your store set up." });
+        await handleAuthSuccess(user);
 
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Sign Up Failed', description: error.message });

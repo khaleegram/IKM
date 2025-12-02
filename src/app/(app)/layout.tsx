@@ -11,8 +11,6 @@ import { IkmLogo } from "@/components/icons";
 import { CoPilotWidget } from "@/components/copilot-widget";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/lib/firebase/auth/use-user";
-import { useFirebase } from "@/firebase/provider";
-import { signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useRef, useState } from "react";
 import { useCart } from "@/lib/cart-context";
@@ -35,7 +33,6 @@ export default function AppLayout({
   const pathname = usePathname();
   const router = useRouter();
   const { user, isLoading, claims } = useUser();
-  const { auth } = useFirebase();
   const { toast } = useToast();
   const { cartCount } = useCart();
   const { data: orders, isLoading: isLoadingOrders } = useOrdersBySeller(user?.uid);
@@ -56,26 +53,19 @@ export default function AppLayout({
   }, [orders, isLoadingOrders, toast]);
 
   const isSellerRoute = pathname.startsWith('/seller');
-  const isAdminRoute = pathname.startsWith('/admin');
   const isAdmin = claims?.isAdmin === true;
-  
-  React.useEffect(() => {
-    if (!isLoading && !user && (isSellerRoute || isAdminRoute || pathname === '/profile')) {
-      router.replace('/login');
-    }
-  }, [isLoading, user, isSellerRoute, isAdminRoute, pathname, router]);
-
-  const getIsActive = (path: string) => pathname === path || (path.split('/').length > 2 && pathname.startsWith(path));
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await fetch('/api/logout', { method: 'POST' });
       toast({ title: "Logged Out", description: "You have been successfully logged out."});
       router.push('/login');
     } catch (error) {
       toast({ variant: 'destructive', title: "Logout Failed", description: "Something went wrong."});
     }
   };
+
+  const getIsActive = (path: string) => pathname === path || (path.split('/').length > 2 && pathname.startsWith(path));
 
   const navItems = [
     { href: "/seller/dashboard", label: "Dashboard", icon: LayoutDashboard },
