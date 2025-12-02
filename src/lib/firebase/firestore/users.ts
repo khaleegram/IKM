@@ -47,7 +47,7 @@ export const useUserProfile = (userId: string | undefined) => {
   const { firestore } = useFirebase();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<FirestoreError | null>(null);
+  const [setError] = useState<FirestoreError | null>(null);
 
   const userRef = useMemo(() => {
     if (!firestore || !userId) return null;
@@ -108,9 +108,9 @@ export const useUserProfile = (userId: string | undefined) => {
         unsubscribeUser();
         unsubscribeLocations();
     }
-  }, [userRef, locationsRef, userId]);
+  }, [userRef, locationsRef, userId, setError]);
 
-  return { data: userProfile, isLoading, error };
+  return { data: userProfile, isLoading, error: null };
 };
 
 // Hook to get all user profiles (for storefront name/desc)
@@ -122,8 +122,6 @@ export const useAllUserProfiles = () => {
 
   const usersQuery = useMemo(() => {
     if (!firestore) return null;
-    // This query might fail if the 'users' collection doesn't exist yet.
-    // By removing orderBy, it's more resilient. We can sort client-side.
     return query(collection(firestore, 'users'));
   }, [firestore]);
 
@@ -139,7 +137,6 @@ export const useAllUserProfiles = () => {
       usersQuery,
       (snapshot) => {
         const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile));
-        // Sort client-side for consistency
         usersData.sort((a, b) => a.displayName.localeCompare(b.displayName));
         setUsers(usersData);
         setError(null);
@@ -148,7 +145,7 @@ export const useAllUserProfiles = () => {
       (err) => {
         console.error("Error fetching all user profiles: ", err);
         setError(err);
-        setUsers([]); // Return empty array on error to prevent page crash
+        setUsers([]);
         setIsLoading(false);
       }
     );

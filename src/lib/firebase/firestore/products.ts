@@ -49,8 +49,6 @@ export const useAllProducts = (productLimit?: number) => {
   const productsQuery = useMemo(() => {
     if (!firestore) return null;
     const coll = collection(firestore, 'products');
-    // This query is more resilient as it doesn't require a pre-existing index
-    // if the collection is empty. We can sort client-side.
     let q = query(coll);
     if (productLimit) {
         q = query(q, limit(productLimit));
@@ -70,7 +68,6 @@ export const useAllProducts = (productLimit?: number) => {
       productsQuery,
       (snapshot) => {
         const productsData = snapshot.docs.map(doc => ({ id: doc.id, price: doc.data().initialPrice, ...doc.data() } as Product));
-        // Sort client-side
         productsData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
         setProducts(productsData);
         setError(null);
@@ -79,9 +76,8 @@ export const useAllProducts = (productLimit?: number) => {
       (err: any) => {
         console.error("Error fetching all products: ", err);
         setError(err);
-        setProducts([]); // Return empty array on error to prevent page crash
+        setProducts([]);
         setIsLoading(false);
-        // Optionally emit a non-fatal error for debugging
         const permissionError = new FirestorePermissionError({
             path: 'products',
             operation: 'list',
