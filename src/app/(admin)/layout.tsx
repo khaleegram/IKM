@@ -10,9 +10,8 @@ import { useUser } from "@/lib/firebase/auth/use-user";
 import { useFirebase } from "@/firebase/provider";
 import { signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { IkmLogo } from "@/components/icons";
-import { grantAdminRoleToFirstUser } from "@/lib/admin-actions";
 
 export default function AdminLayout({
   children,
@@ -25,65 +24,38 @@ export default function AdminLayout({
   const { auth } = useFirebase();
   const { toast } = useToast();
 
-  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
-
   const isAdmin = claims?.isAdmin === true;
 
   useEffect(() => {
+    // If auth state is still loading, don't do anything yet.
     if (isLoading) {
-      return; // Wait until user auth state is resolved
+      return;
     }
 
+    // If loading is done and there's no user, redirect to login.
     if (!user) {
       router.replace(`/login?redirect=${pathname}`);
       return;
     }
 
-    // If the user already has admin claims, we're good.
-    if (isAdmin) {
-      setIsCheckingAdmin(false);
-      return;
+    // If loading is done, user exists, but they are not an admin, deny access.
+    if (!isAdmin) {
+      toast({
+        variant: "destructive",
+        title: "Unauthorized",
+        description: "You do not have permission to access this page.",
+      });
+      router.replace('/');
     }
 
-    // If not admin, try to grant it. This server action checks if they're the first user.
-    // It's designed to only work once for the very first user.
-    const checkAndSetAdmin = async () => {
-      try {
-        const wasGranted = await grantAdminRoleToFirstUser(user.uid);
-        
-        if (wasGranted) {
-          // If the role was just granted, we need to refresh the token to get new claims.
-          await user.getIdToken(true);
-          const idTokenResult = await user.getIdTokenResult();
-          
-          if (idTokenResult.claims.isAdmin) {
-            // Success! The user is now an admin.
-             setIsCheckingAdmin(false);
-          } else {
-            // This shouldn't happen, but as a fallback, deny access.
-            throw new Error("Failed to verify admin role after granting.");
-          }
-        } else {
-          // If the role was not granted (because they aren't the first user), then they are unauthorized.
-          toast({ variant: 'destructive', title: "Unauthorized", description: "You do not have permission to access this page."});
-          router.replace('/');
-        }
-      } catch (error) {
-        console.error("Admin check failed:", error);
-        toast({ variant: 'destructive', title: "Access Denied", description: "An error occurred while verifying your permissions."});
-        router.replace('/');
-      }
-    };
-
-    checkAndSetAdmin();
-
-  }, [isLoading, user, isAdmin, router, toast, pathname]);
+  }, [isLoading, user, isAdmin, router, pathname, toast]);
 
 
-  if (isLoading || isCheckingAdmin) {
+  if (isLoading || !isAdmin) {
     return (
         <div className="flex items-center justify-center h-screen">
             <Loader2 className="w-12 h-12 animate-spin text-primary" />
+            <p className="ml-4">Verifying permissions...</p>
         </div>
     )
   }
