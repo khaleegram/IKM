@@ -1,16 +1,14 @@
 
 import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "next-firebase-auth-edge/lib/next/middleware";
+import { auth } from "next-firebase-auth-edge";
 import { clientConfig, serverConfig } from '@/lib/firebase/config.edge';
 
 export async function middleware(request: NextRequest) {
     return auth(request, {
         loginPath: "/api/login",
         logoutPath: "/api/logout",
-        // These are the client-side config variables, safe for the edge
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+        ...clientConfig,
+        ...serverConfig,
         
         // This handler runs if the user is authenticated
         handleValidToken: async ({ token, decodedToken }) => {
@@ -63,5 +61,6 @@ export const config = {
         "/api/logout",
         // Add API routes that need authentication context
         "/api/verify-payment",
+        "/lib/payout-actions",
     ],
 };
