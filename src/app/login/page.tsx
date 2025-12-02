@@ -27,11 +27,27 @@ export default function LoginPage() {
   const handleLogin = () => {
     startTransition(async () => {
       try {
-        await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Get user claims to determine role
+        const idTokenResult = await user.getIdTokenResult();
+        const isAdmin = idTokenResult.claims.isAdmin === true;
+
         toast({ title: 'Login Successful', description: "Welcome back!" });
         
-        const redirectUrl = new URLSearchParams(window.location.search).get('redirect') || '/seller/dashboard';
-        router.push(redirectUrl);
+        // Redirect based on role
+        if (isAdmin) {
+            router.push('/admin/dashboard');
+        } else {
+            const redirectUrl = new URLSearchParams(window.location.search).get('redirect');
+            // Avoid redirecting to admin pages if not an admin
+            if (redirectUrl && !redirectUrl.startsWith('/admin')) {
+                router.push(redirectUrl);
+            } else {
+                router.push('/seller/dashboard');
+            }
+        }
 
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Login Failed', description: error.message });
