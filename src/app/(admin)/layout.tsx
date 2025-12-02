@@ -24,10 +24,8 @@ export default function AdminLayout({
   const { auth } = useFirebase();
   const { toast } = useToast();
 
-  const isAdmin = claims?.isAdmin === true;
-
   useEffect(() => {
-    // If auth state is still loading, don't do anything yet.
+    // While loading, we don't know the user's status, so we wait.
     if (isLoading) {
       return;
     }
@@ -43,7 +41,8 @@ export default function AdminLayout({
       return;
     }
 
-    // If loading is done, user exists, but they are not an admin, deny access.
+    // If loading is done, user exists, but they are NOT an admin.
+    const isAdmin = claims?.isAdmin === true;
     if (!isAdmin) {
       toast({
         variant: "destructive",
@@ -53,16 +52,17 @@ export default function AdminLayout({
       router.replace('/');
     }
 
-  }, [isLoading, user, isAdmin, router, pathname, toast]);
+  }, [isLoading, user, claims, router, pathname, toast]);
 
 
   // While loading or if user is not a confirmed admin yet, show a loading screen.
-  // This prevents brief flashes of content or 404 pages.
+  // This prevents brief flashes of content or redirects before auth state is fully resolved.
+  const isAdmin = claims?.isAdmin === true;
   if (isLoading || !user || !isAdmin) {
     return (
-        <div className="flex items-center justify-center h-screen">
+        <div className="flex items-center justify-center h-screen bg-background">
             <Loader2 className="w-12 h-12 animate-spin text-primary" />
-            <p className="ml-4">Verifying permissions...</p>
+            <p className="ml-4 text-lg text-muted-foreground">Verifying permissions...</p>
         </div>
     )
   }
