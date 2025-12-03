@@ -15,10 +15,12 @@ service cloud.firestore {
       allow write: if isAdmin() || (request.auth != null && request.auth.uid == request.resource.data.sellerId);
     }
 
-    // User profiles can be read by anyone. Admins have full access.
+    // User profiles can be read by anyone.
+    // Listing all users is restricted to admins.
     // Otherwise, can only be created/updated by the owner.
     match /users/{userId} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if isAdmin();
       allow create: if request.auth != null && request.auth.uid == userId;
       allow update: if isAdmin() || (request.auth != null && request.auth.uid == userId);
       allow delete: if isAdmin();
@@ -40,7 +42,7 @@ service cloud.firestore {
         allow delete: if isAdmin();
     }
     
-    // Admins have full access to branding settings
+    // Admins have full access to branding settings, anyone can read.
     match /settings/branding {
         allow read: if true;
         allow write: if isAdmin();
