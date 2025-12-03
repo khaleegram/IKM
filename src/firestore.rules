@@ -15,8 +15,8 @@ service cloud.firestore {
       allow write: if isAdmin() || (request.auth != null && request.auth.uid == request.resource.data.sellerId);
     }
 
-    // User profiles can be read by anyone.
-    // Listing all users is restricted to admins.
+    // User profiles can be read by anyone if they know the direct ID.
+    // Listing all users is restricted to admins only.
     // Otherwise, can only be created/updated by the owner.
     match /users/{userId} {
       allow get: if true;
