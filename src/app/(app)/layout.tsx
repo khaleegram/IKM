@@ -1,10 +1,9 @@
 
-
 "use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Settings, BarChart2, MessageSquare, LogOut, Wallet, ShoppingCart, Loader2, Store, User as UserIcon, ShieldCheck, Menu } from "lucide-react";
+import { LayoutDashboard, Package, Settings, BarChart2, LogOut, ShoppingCart, Loader2, Store, User as UserIcon, ShieldCheck, Menu } from "lucide-react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
@@ -12,7 +11,7 @@ import { CoPilotWidget } from "@/components/copilot-widget";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/lib/firebase/auth/use-user";
 import { useToast } from "@/hooks/use-toast";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { useCart } from "@/lib/cart-context";
 import { Badge } from "@/components/ui/badge";
 import { useOrdersBySeller } from "@/lib/firebase/firestore/orders";
@@ -23,6 +22,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { DynamicLogo } from "@/components/DynamicLogo";
 
 
 export default function AppLayout({
@@ -89,7 +89,7 @@ export default function AppLayout({
               <div id="sidebar-menu" className="flex flex-col h-full p-2">
                   <div className="p-2 pb-4">
                     <Link href="/seller/dashboard">
-                      <IkmLogo className="w-auto h-7 group-data-[collapsible=icon]:hidden" />
+                      <div className="group-data-[collapsible=icon]:hidden"><DynamicLogo className="w-auto h-7" /></div>
                       <LayoutDashboard className="w-7 h-7 hidden group-data-[collapsible=icon]:block" />
                     </Link>
                   </div>
@@ -148,7 +148,7 @@ export default function AppLayout({
       <div className="flex flex-col min-h-screen bg-background">
         <header className="p-4 sm:p-6 flex justify-between items-center border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
           <Link href="/">
-            <IkmLogo className="w-auto h-8" />
+            <DynamicLogo className="w-auto h-8" />
           </Link>
           <nav className="hidden md:flex items-center gap-2 sm:gap-4">
             <Link href="/stores">

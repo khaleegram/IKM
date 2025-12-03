@@ -8,7 +8,7 @@ import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButt
 import { useUser } from "@/lib/firebase/auth/use-user";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect } from "react";
-import { IkmLogo } from "@/components/icons";
+import { DynamicLogo } from "@/components/DynamicLogo";
 
 // The middleware now handles authentication and authorization.
 // This layout is just for the UI shell.
@@ -61,7 +61,7 @@ export default function AdminLayout({
           <div id="sidebar-menu" className="flex flex-col h-full p-2">
             <div className="p-2 pb-4">
               <Link href="/admin/dashboard">
-                <IkmLogo className="w-auto h-7 group-data-[collapsible=icon]:hidden" />
+                <div className="group-data-[collapsible=icon]:hidden"><DynamicLogo className="w-auto h-7" /></div>
                 <ShieldCheck className="w-7 h-7 hidden group-data-[collapsible=icon]:block" />
               </Link>
             </div>

@@ -9,18 +9,16 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Upload } from "lucide-react";
 import { useState, useTransition, useRef } from "react";
 import Image from "next/image";
-
-// In a real app, you would have a hook and server action to manage branding.
-// For this example, we'll simulate the state management.
+import { useBrandingSettings } from "@/lib/firebase/firestore/branding";
+import { updateBrandingSettings } from "@/lib/branding-actions";
 
 export default function AdminBrandingPage() {
     const { toast } = useToast();
+    const { data: brandingSettings } = useBrandingSettings();
     const [isPending, startTransition] = useTransition();
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-
-    // This would come from a hook like `useBranding()`
-    const currentLogoUrl = "/ikm-logo.svg"; // Placeholder
+    const formRef = useRef<HTMLFormElement>(null);
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -33,22 +31,31 @@ export default function AdminBrandingPage() {
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (!logoPreview) {
+        const formData = new FormData(e.currentTarget);
+        
+        if (!formData.get('logo') || (formData.get('logo') as File).size === 0) {
             toast({ variant: 'destructive', title: 'No logo selected', description: 'Please choose a file to upload.' });
             return;
         }
 
         startTransition(async () => {
-            // Here you would call a server action to upload the logo
-            // and update the branding settings in Firestore.
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            toast({
-                title: "Logo Updated!",
-                description: "Your new marketplace logo has been saved.",
-            });
-            // In a real app, the `currentLogoUrl` would update via the hook.
+            try {
+                const result = await updateBrandingSettings(formData);
+                if (result.success) {
+                    toast({
+                        title: "Logo Updated!",
+                        description: "Your new marketplace logo has been saved.",
+                    });
+                    setLogoPreview(null);
+                    formRef.current?.reset();
+                } else {
+                    throw new Error(result.message || "An unknown error occurred.");
+                }
+            } catch (error) {
+                 toast({ variant: 'destructive', title: 'Upload failed', description: (error as Error).message });
+            }
         });
     }
 
@@ -61,17 +68,21 @@ export default function AdminBrandingPage() {
                 </div>
             </header>
             <main className="flex-1 overflow-auto p-4 sm:p-6">
-                <form onSubmit={handleSubmit}>
+                <form ref={formRef} onSubmit={handleSubmit}>
                     <Card className="max-w-2xl">
                         <CardHeader>
                             <CardTitle>Marketplace Logo</CardTitle>
-                            <CardDescription>Upload a logo to be displayed in the site header.</CardDescription>
+                            <CardDescription>Upload a logo to be displayed in the site header. The current logo may be cached, so changes might take a moment to appear.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="space-y-2">
                                 <Label>Current Logo</Label>
                                 <div className="p-4 border rounded-lg bg-muted/50 w-fit">
-                                    <Image src={currentLogoUrl} alt="Current Logo" width={150} height={50} className="h-10 object-contain" />
+                                    {brandingSettings?.logoUrl ? (
+                                        <Image src={brandingSettings.logoUrl} alt="Current Logo" width={150} height={50} className="h-10 object-contain" />
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">No logo set</p>
+                                    )}
                                 </div>
                             </div>
                              <div className="space-y-2">

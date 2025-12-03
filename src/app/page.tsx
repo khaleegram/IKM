@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Product } from '@/lib/firebase/firestore/products';
-import { IkmLogo } from '@/components/icons';
+import { DynamicLogo } from '@/components/DynamicLogo';
 
 export default function StoreHomePage() {
   const { data: products, isLoading: isLoadingProducts } = useAllProducts(8);
@@ -53,7 +53,7 @@ export default function StoreHomePage() {
       <section className="relative overflow-hidden border-b bg-gradient-to-b from-background via-card/5 to-background">
          <div className="container relative z-10 mx-auto flex flex-col items-center justify-center space-y-6 px-4 py-12 sm:py-20 text-center animate-fade-in-up">
             <div className="flex items-center gap-2 sm:gap-4">
-              <IkmLogo className="w-auto h-12 sm:h-16" />
+              <DynamicLogo className="w-auto h-12 sm:h-16" />
               <h1 className="hidden sm:block text-4xl sm:text-5xl font-bold font-headline tracking-tight">IK Market Place</h1>
             </div>
             <div className="w-full max-w-xl">

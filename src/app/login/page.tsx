@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -5,15 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { IkmLogo } from '@/components/icons';
 import { useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, User } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { useFirebase } from '@/firebase/provider';
 import { grantAdminRoleToFirstUser } from '@/lib/admin-actions';
-import { IdTokenResult, User } from 'firebase/auth';
+import { DynamicLogo } from '@/components/DynamicLogo';
 
 export default function LoginPage() {
   const { auth, firestore } = useFirebase();
@@ -27,32 +27,39 @@ export default function LoginPage() {
 
   const handleAuthSuccess = async (user: User) => {
     const idToken = await user.getIdToken();
-    const response = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idToken }),
-    });
-
-    if (!response.ok) {
-        throw new Error('Failed to create session cookie.');
-    }
     
-    // The getIdTokenResult(true) is crucial to force a refresh from the server
-    // and get the latest custom claims.
-    const idTokenResult = await user.getIdTokenResult(true);
-    const isAdmin = idTokenResult.claims.isAdmin === true;
+    try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        });
 
-    toast({ title: 'Login Successful', description: "Welcome back!" });
-    
-    if (isAdmin) {
-        router.push('/admin/dashboard');
-    } else {
-        const redirectUrl = searchParams.get('redirect');
-        if (redirectUrl && !redirectUrl.startsWith('/admin')) {
-            router.push(redirectUrl);
-        } else {
-            router.push('/seller/dashboard');
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to create session cookie.');
         }
+        
+        // The getIdTokenResult(true) is crucial to force a refresh from the server
+        // and get the latest custom claims.
+        const idTokenResult = await user.getIdTokenResult(true);
+        const isAdmin = idTokenResult.claims.isAdmin === true;
+
+        toast({ title: 'Login Successful', description: "Welcome back!" });
+        
+        if (isAdmin) {
+            router.push('/admin/dashboard');
+        } else {
+            const redirectUrl = searchParams.get('redirect');
+            if (redirectUrl && !redirectUrl.startsWith('/admin')) {
+                router.push(redirectUrl);
+            } else {
+                router.push('/seller/dashboard');
+            }
+        }
+    } catch (error) {
+        console.error("Error during auth success handling:", error);
+        toast({ variant: 'destructive', title: 'Login Failed', description: (error as Error).message });
     }
   };
 
@@ -100,7 +107,7 @@ export default function LoginPage() {
           <CardHeader className="space-y-4">
             <div className="flex justify-center">
               <Link href="/">
-                <IkmLogo />
+                <DynamicLogo />
               </Link>
             </div>
             <CardTitle className="text-2xl font-headline">Seller Hub Login</CardTitle>
