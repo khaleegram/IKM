@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -12,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { useFirebase } from '@/firebase/provider';
 import { createAdminUser } from '@/lib/admin-actions';
+import { DynamicLogo } from '@/components/DynamicLogo';
 
 export default function AdminSignupPage() {
   const { auth } = useFirebase();
@@ -51,7 +53,7 @@ export default function AdminSignupPage() {
           <CardHeader className="space-y-4">
             <div className="flex justify-center">
               <Link href="/">
-                <IkmLogo />
+                <DynamicLogo />
               </Link>
             </div>
             <CardTitle className="text-2xl font-headline">Admin Account Creation</CardTitle>

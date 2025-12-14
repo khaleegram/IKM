@@ -8,16 +8,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { signInWithEmailAndPassword, User } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
+import { createUserWithEmailAndPassword, User } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 import { useFirebase } from '@/firebase/provider';
+import { grantAdminRoleToFirstUser } from '@/lib/admin-actions';
 import { DynamicLogo } from '@/components/DynamicLogo';
 
-export default function LoginPage() {
-  const { auth } = useFirebase();
+export default function SignupPage() {
+  const { auth, firestore } = useFirebase();
   const { toast } = useToast();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -38,35 +39,50 @@ export default function LoginPage() {
             throw new Error(errorData.error || 'Failed to create session cookie.');
         }
         
-        const idTokenResult = await user.getIdTokenResult(true);
-        const isAdmin = idTokenResult.claims.isAdmin === true;
+        toast({ title: 'Account Created!', description: "Welcome! Let's get your store set up." });
+        router.push('/seller/dashboard');
 
-        toast({ title: 'Login Successful', description: "Welcome back!" });
-        
-        if (isAdmin) {
-            router.push('/admin/dashboard');
-        } else {
-            const redirectUrl = searchParams.get('redirect');
-            if (redirectUrl) {
-                router.push(redirectUrl);
-            } else {
-                router.push('/seller/dashboard');
-            }
-        }
     } catch (error) {
         console.error("Error during auth success handling:", error);
         toast({ variant: 'destructive', title: 'Login Failed', description: (error as Error).message });
     }
   };
 
-
-  const handleLogin = () => {
+  const handleSignUp = () => {
     startTransition(async () => {
       try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        await handleAuthSuccess(userCredential.user);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Create the user profile in Firestore
+        await setDoc(doc(firestore, "users", user.uid), {
+            displayName: user.email?.split('@')[0] || 'New Seller',
+            email: user.email,
+            storeName: `${user.email?.split('@')[0]}'s Store`,
+            storeDescription: 'Welcome to my new store!',
+            whatsappNumber: ''
+        });
+
+        // This server action checks if it's the first user and makes them an admin if so.
+        await grantAdminRoleToFirstUser(user.uid);
+        
+        // Log the user in and create a session
+        await handleAuthSuccess(user);
+
       } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Login Failed', description: 'Invalid email or password.' });
+        if (error.code === 'auth/email-already-in-use') {
+            toast({
+                variant: 'destructive',
+                title: 'Sign Up Failed',
+                description: 'This email is already in use. Please log in instead.',
+            });
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Sign Up Failed',
+                description: error.message,
+            });
+        }
       }
     });
   };
@@ -81,27 +97,27 @@ export default function LoginPage() {
                 <DynamicLogo />
               </Link>
             </div>
-            <CardTitle className="text-2xl font-headline">Seller Hub Login</CardTitle>
-            <CardDescription>Enter your credentials to manage your store</CardDescription>
+            <CardTitle className="text-2xl font-headline">Create a New Store</CardTitle>
+            <CardDescription>Join our community of local sellers and start your business today.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <div className="grid gap-2 text-left">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="seller@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="grid gap-2 text-left">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
-            <Button className="w-full" onClick={handleLogin} disabled={isPending}>
-              {isPending ? 'Logging in...' : 'Login'}
+            <Button className="w-full" onClick={handleSignUp} disabled={isPending}>
+              {isPending ? 'Creating Account...' : 'Create My Store'}
             </Button>
             <div className="text-sm">
-                Don't have an account?{' '}
-                <Link href="/signup" className="underline">
-                    Create a Store
+                Already have an account?{' '}
+                <Link href="/login" className="underline">
+                    Login
                 </Link>
             </div>
           </CardFooter>
