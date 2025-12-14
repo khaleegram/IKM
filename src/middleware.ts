@@ -11,11 +11,8 @@ export const runtime = 'nodejs';
 export async function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get(process.env.AUTH_COOKIE_NAME || 'AuthToken')?.value;
 
-  // For API routes like /api/login, we don't want to redirect if there's no cookie.
-  // The route itself will handle logic. This middleware is for protecting UI pages.
-  if (request.nextUrl.pathname.startsWith('/api')) {
-      
-      // If it's an API route that requires auth, we can still add the UID header.
+  // For API routes that need the user's UID
+  if (request.nextUrl.pathname.startsWith('/api/')) {
       if (sessionCookie) {
          try {
             const adminApp = getAdminApp();
@@ -25,22 +22,18 @@ export async function middleware(request: NextRequest) {
             headers.set('X-User-UID', decodedToken.uid);
             return NextResponse.next({ request: { headers } });
          } catch (error) {
-            // Invalid cookie, but it's an API call so just continue without the header.
+            // Invalid cookie, continue without the header for public API routes.
          }
       }
-
       return NextResponse.next();
   }
   
+  // If no cookie, redirect to login for protected pages
   if (!sessionCookie) {
-    // If the user is trying to access a protected page, redirect to login
-    if (request.nextUrl.pathname !== '/login' && request.nextUrl.pathname !== '/signup' && request.nextUrl.pathname !== '/admin-signup') {
-        const url = request.nextUrl.clone();
-        url.pathname = '/login';
-        url.search = `redirect=${request.nextUrl.pathname}`;
-        return NextResponse.redirect(url);
-    }
-    return NextResponse.next();
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    url.search = `redirect=${request.nextUrl.pathname}`;
+    return NextResponse.redirect(url);
   }
 
   try {
@@ -53,8 +46,8 @@ export async function middleware(request: NextRequest) {
     // Check for admin routes
     if (pathname.startsWith('/admin')) {
       if (decodedToken.isAdmin !== true) {
-        // Not an admin, redirect to home
-        return NextResponse.redirect(new URL('/', request.url));
+        // Not an admin, redirect to seller dashboard
+        return NextResponse.redirect(new URL('/seller/dashboard', request.url));
       }
     }
 
@@ -77,16 +70,14 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   /*
-   * Match all request paths except for the ones starting with:
-   * - _next/static (static files)
-   * - _next/image (image optimization files)
-   * - favicon.ico (favicon file)
-   * - / (the root page, which is public)
-   * - /store/* (public store pages)
-   * - /product/* (public product pages)
-   * - /stores (public stores directory)
+   * Match all request paths except for the ones that should be public.
+   * This is a more robust way to define protected routes.
    */
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|store/.+|product/.+|stores|$).*)',
+    '/seller/:path*',
+    '/admin/:path*',
+    '/profile',
+    '/checkout',
+    '/api/verify-payment', // protect payment verification
   ],
 };
