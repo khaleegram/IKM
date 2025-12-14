@@ -140,7 +140,7 @@ export default function SellerSettingsPage() {
                     </div>
                 </CardContent>
                 <CardFooter className="flex justify-end">
-                    <Button type="submit" disabled={isPending}>{isPending ? 'Saving...' : 'Save Changes'}</Button>
+                    <Button type="submit" disabled={isPending}>{isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : 'Save Changes'}</Button>
                 </CardFooter>
             </Card>
         </form>
@@ -158,7 +158,7 @@ export default function SellerSettingsPage() {
                     </div>
                 </CardContent>
                 <CardFooter className="flex justify-end">
-                    <Button type="submit" disabled={isPending}>{isPending ? 'Saving...' : 'Save & Connect'}</Button>
+                    <Button type="submit" disabled={isPending}>{isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : 'Save & Connect'}</Button>
                 </CardFooter>
             </Card>
         </form>
@@ -178,10 +178,13 @@ export default function SellerSettingsPage() {
                             </Button>
                         </li>
                     ))}
+                     {userProfile?.deliveryLocations?.length === 0 && (
+                        <p className="text-sm text-center text-muted-foreground py-4">You haven't added any delivery locations yet.</p>
+                     )}
                 </ul>
-                <form onSubmit={handleAddLocation} className="flex gap-2">
+                <form onSubmit={handleAddLocation} className="flex gap-2 pt-4 border-t">
                     <Input placeholder="Enter new bus stop or location" value={newLocation} onChange={(e) => setNewLocation(e.target.value)} />
-                    <Button type="submit" disabled={isPending}>{isPending ? 'Adding...' : 'Add Location'}</Button>
+                    <Button type="submit" disabled={isPending}>{isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Adding...</> : 'Add Location'}</Button>
                 </form>
             </CardContent>
         </Card>
