@@ -1,10 +1,10 @@
-
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import 'dotenv/config';
 
 let adminApp: App;
 
 function initializeAdminSdk() {
+    // Check if the app is already initialized to avoid re-initializing
     if (!getApps().length) {
         try {
             const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
@@ -24,6 +24,7 @@ function initializeAdminSdk() {
             throw new Error('Firebase Admin SDK failed to initialize. Check server logs.');
         }
     } else {
+        // If already initialized, just get the first app instance
         adminApp = getApps()[0];
     }
 }

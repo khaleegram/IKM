@@ -1,14 +1,17 @@
+import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
-import { NextRequest } from 'next/server';
-import { auth } from 'next-firebase-auth-edge';
-import { clientConfig, serverConfig } from '@/lib/firebase/config.edge';
-
-export async function POST(request: NextRequest) {
-    // The auth.logout method also expects the full configuration.
-    return auth.logout(request, {
-        apiKey: clientConfig.apiKey,
-        cookieName: serverConfig.cookieName,
-        cookieSignatureKeys: serverConfig.cookieSignatureKeys,
-        cookieSerializeOptions: serverConfig.cookieSerializeOptions,
+export async function POST() {
+  try {
+    // Clear the session cookie by setting its maxAge to 0
+    cookies().set(process.env.AUTH_COOKIE_NAME || 'AuthToken', '', {
+      maxAge: -1,
+      path: '/',
     });
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (error) {
+    console.error('Logout error:', error);
+    return NextResponse.json({ success: false, error: 'Failed to log out.' }, { status: 500 });
+  }
 }

@@ -1,32 +1,38 @@
-
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from 'next-firebase-auth-edge';
-import { clientConfig, serverConfig } from '@/lib/firebase/config.edge';
+import { getAuth } from 'firebase-admin/auth';
+import { cookies } from 'next/headers';
+import { getAdminApp } from '@/lib/firebase/admin-sdk';
 
 export async function POST(request: NextRequest) {
   try {
     const { idToken } = await request.json();
 
-    const tokens = await auth.login(idToken, {
-      apiKey: clientConfig.apiKey,
-      cookieName: serverConfig.cookieName,
-      cookieSignatureKeys: serverConfig.cookieSignatureKeys,
-      cookieSerializeOptions: serverConfig.cookieSerializeOptions,
-      serviceAccount: serverConfig.serviceAccount,
+    if (!idToken) {
+      return NextResponse.json({ success: false, error: 'ID token is required.' }, { status: 400 });
+    }
+
+    const adminApp = getAdminApp();
+    const auth = getAuth(adminApp);
+    
+    const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 days
+    const sessionCookie = await auth.createSessionCookie(idToken, { expiresIn });
+
+    cookies().set(process.env.AUTH_COOKIE_NAME || 'AuthToken', sessionCookie, {
+      maxAge: expiresIn,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      sameSite: 'lax',
     });
 
-    return NextResponse.json(
-      { success: true },
-      { status: 200, headers: tokens.headers }
-    );
+    return NextResponse.json({ success: true }, { status: 200 });
+
   } catch (err: any) {
-    // Log the full error for detailed debugging
     console.error('FULL LOGIN ERROR:', err, err?.cause);
-    
-    // Return a 400 status to match observed behavior and provide a clearer error message
+    const errorMessage = err.message || 'Failed to create session cookie.';
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to create session cookie.' },
-      { status: 400 }
+      { success: false, error: errorMessage, code: err.code },
+      { status: 400 } // Use 400 for client errors like invalid token, 500 for server issues
     );
   }
 }

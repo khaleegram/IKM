@@ -52,7 +52,7 @@ export default function LoginPage() {
             router.push('/admin/dashboard');
         } else {
             const redirectUrl = searchParams.get('redirect');
-            if (redirectUrl && !redirectUrl.startsWith('/admin')) {
+            if (redirectUrl) {
                 router.push(redirectUrl);
             } else {
                 router.push('/seller/dashboard');
