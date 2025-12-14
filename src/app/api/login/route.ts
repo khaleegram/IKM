@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { cookies } from 'next/headers';
-import { getAdminApp } from '@/lib/firebase/admin-sdk';
+import { getAdminApp } from '@/lib/firebase/admin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,7 +11,8 @@ export async function POST(request: NextRequest) {
     if (!idToken) {
       return NextResponse.json({ success: false, error: 'ID token is required.' }, { status: 400 });
     }
-
+    
+    // getAdminApp will throw if not initialized, which is caught below.
     const adminApp = getAdminApp();
     const auth = getAuth(adminApp);
     
@@ -29,11 +30,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (err: any) {
-    console.error('FULL LOGIN ERROR:', err, err?.cause);
+    console.error('FULL LOGIN ERROR:', err);
     const errorMessage = err.message || 'Failed to create session cookie.';
     return NextResponse.json(
       { success: false, error: errorMessage, code: err.code },
-      { status: 400 } // Use 400 for client errors like invalid token, 500 for server issues
+      { status: 500 } // Use 500 for server issues like SDK initialization failure
     );
   }
 }

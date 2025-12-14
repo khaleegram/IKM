@@ -1,13 +1,26 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminApp } from '@/lib/firebase/admin-sdk';
+import { getAdminApp } from '@/lib/firebase/admin';
 import { getAuth } from 'firebase-admin/auth';
 
 export async function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get(process.env.AUTH_COOKIE_NAME || 'AuthToken')?.value;
 
+  // For API routes like /api/login, we don't want to redirect if there's no cookie.
+  // The route itself will handle logic. This middleware is for protecting UI pages.
+  if (request.nextUrl.pathname.startsWith('/api')) {
+      return NextResponse.next();
+  }
+  
   if (!sessionCookie) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    // If the user is trying to access a protected page, redirect to login
+    if (request.nextUrl.pathname !== '/login' && request.nextUrl.pathname !== '/signup' && request.nextUrl.pathname !== '/admin-signup') {
+        const url = request.nextUrl.clone();
+        url.pathname = '/login';
+        url.search = `redirect=${request.nextUrl.pathname}`;
+        return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
   }
 
   try {
@@ -43,8 +56,20 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // We are removing /api/login and /api/logout from the matcher
-  // because middleware runs *before* these routes, and for these routes,
-  // we need to allow unauthenticated access.
-  matcher: ['/admin/:path*', '/seller/:path*', '/profile', '/checkout'],
+  // Apply middleware to all routes except for static assets and public pages.
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - / (the root page, which is public)
+     * - /store/* (public store pages)
+     * - /product/* (public product pages)
+     * - /stores (public stores directory)
+     * - /api/verify-payment (public webhook)
+     * - /api/whatsapp (public webhook)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|store/.+|product/.+|stores|api/verify-payment|api/whatsapp|^/$).*)'
+  ],
 };

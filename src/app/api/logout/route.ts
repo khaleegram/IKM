@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 
 export async function POST() {
   try {
-    // Clear the session cookie by setting its maxAge to 0
+    // Clear the session cookie by setting its maxAge to -1
     cookies().set(process.env.AUTH_COOKIE_NAME || 'AuthToken', '', {
       maxAge: -1,
       path: '/',

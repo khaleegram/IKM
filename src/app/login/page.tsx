@@ -24,6 +24,7 @@ export default function LoginPage() {
   const [isPending, startTransition] = useTransition();
 
   const handleAuthSuccess = async (user: User) => {
+    // Force a token refresh to get the latest claims from the server
     const idToken = await user.getIdToken(true);
     
     try {
@@ -35,7 +36,7 @@ export default function LoginPage() {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to create session cookie.');
+            throw new Error(errorData.error || 'Failed to create session.');
         }
         
         const idTokenResult = await user.getIdTokenResult(true);
@@ -43,18 +44,16 @@ export default function LoginPage() {
 
         toast({ title: 'Login Successful', description: "Welcome back!" });
         
-        if (isAdmin) {
+        const redirectUrl = searchParams.get('redirect');
+        if (isAdmin && (!redirectUrl || !redirectUrl.startsWith('/seller'))) {
             router.push('/admin/dashboard');
+        } else if (redirectUrl) {
+            router.push(redirectUrl);
         } else {
-            const redirectUrl = searchParams.get('redirect');
-            if (redirectUrl) {
-                router.push(redirectUrl);
-            } else {
-                router.push('/seller/dashboard');
-            }
+            router.push('/seller/dashboard');
         }
     } catch (error) {
-        console.error("Error during auth success handling:", error);
+        console.error("Error creating session:", error);
         toast({ variant: 'destructive', title: 'Login Failed', description: (error as Error).message });
     }
   };

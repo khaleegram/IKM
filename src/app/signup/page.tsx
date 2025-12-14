@@ -36,21 +36,26 @@ export default function SignupPage() {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to create session cookie.');
+            throw new Error(errorData.error || 'Failed to create session.');
         }
         
         toast({ title: 'Account Created!', description: "Welcome! Let's get your store set up." });
         router.push('/seller/dashboard');
 
     } catch (error) {
-        console.error("Error during auth success handling:", error);
-        toast({ variant: 'destructive', title: 'Login Failed', description: (error as Error).message });
+        console.error("Error creating session:", error);
+        toast({ variant: 'destructive', title: 'Login Failed After Signup', description: (error as Error).message });
     }
   };
 
   const handleSignUp = () => {
     startTransition(async () => {
       try {
+        if (!email || !password) {
+          toast({ variant: 'destructive', title: 'Missing Fields', description: 'Please enter both email and password.' });
+          return;
+        }
+
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         
@@ -103,11 +108,11 @@ export default function SignupPage() {
           <CardContent className="grid gap-4">
             <div className="grid gap-2 text-left">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div className="grid gap-2 text-left">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
