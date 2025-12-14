@@ -26,7 +26,8 @@ export default function LoginPage() {
   const [isPending, startTransition] = useTransition();
 
   const handleAuthSuccess = async (user: User) => {
-    const idToken = await user.getIdToken();
+    // Force refresh of the token to ensure it's not stale.
+    const idToken = await user.getIdToken(true);
     
     try {
         const response = await fetch('/api/login', {

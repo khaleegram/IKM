@@ -7,7 +7,6 @@ export async function POST(request: NextRequest) {
   try {
     const { idToken } = await request.json();
 
-    // The auth.login method expects a single options object with all keys.
     const tokens = await auth.login(idToken, {
       apiKey: clientConfig.apiKey,
       cookieName: serverConfig.cookieName,
@@ -20,11 +19,14 @@ export async function POST(request: NextRequest) {
       { success: true },
       { status: 200, headers: tokens.headers }
     );
-  } catch (error) {
-    console.error('Login API Error:', error);
+  } catch (err: any) {
+    // Log the full error for detailed debugging
+    console.error('FULL LOGIN ERROR:', err, err?.cause);
+    
+    // Return a 400 status to match observed behavior and provide a clearer error message
     return NextResponse.json(
-      { success: false, error: (error as Error).message },
-      { status: 500 }
+      { success: false, error: err.message || 'Failed to create session cookie.' },
+      { status: 400 }
     );
   }
 }
