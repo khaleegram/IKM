@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminApp } from '@/lib/firebase/admin-sdk';
 import { getAuth } from 'firebase-admin/auth';

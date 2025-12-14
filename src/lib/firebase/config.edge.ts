@@ -1,3 +1,4 @@
+
 // This file is intentionally left blank.
 // The new manual authentication flow does not use next-firebase-auth-edge
 // and therefore does not require this edge-specific configuration file.
