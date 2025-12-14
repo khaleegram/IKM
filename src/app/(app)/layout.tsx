@@ -1,9 +1,8 @@
-
 "use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Settings, BarChart2, LogOut, ShoppingCart, Loader2, Store, User as UserIcon, ShieldCheck, Menu } from "lucide-react";
+import { LayoutDashboard, Package, Settings, BarChart2, LogOut, ShoppingCart, Loader2, Store, User as UserIcon, ShieldCheck, Menu, DollarSign } from "lucide-react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
@@ -71,6 +70,7 @@ export default function AppLayout({
     { href: "/seller/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/seller/products", label: "Products", icon: Package },
     { href: "/seller/orders", label: "Orders", icon: BarChart2 },
+    { href: "/seller/payouts", label: "Payouts", icon: DollarSign },
   ];
   
   if (isSellerRoute) {
