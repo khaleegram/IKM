@@ -151,6 +151,12 @@ export default function AppLayout({
             <DynamicLogo className="w-auto h-8" />
           </Link>
           <nav className="hidden md:flex items-center gap-2 sm:gap-4">
+            <Link href="/products">
+                <Button variant="ghost">
+                    <Package className="mr-2 h-4 w-4" />
+                    All Products
+                </Button>
+            </Link>
             <Link href="/stores">
               <Button variant="ghost">
                 <Store className="mr-2 h-4 w-4" />
@@ -211,6 +217,7 @@ export default function AppLayout({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                     <DropdownMenuItem asChild><Link href="/products">All Products</Link></DropdownMenuItem>
                      <DropdownMenuItem asChild><Link href="/stores">All Stores</Link></DropdownMenuItem>
                      <DropdownMenuItem asChild><Link href="/seller/dashboard">Seller Hub</Link></DropdownMenuItem>
                     {user && <DropdownMenuItem asChild><Link href="/profile">My Orders</Link></DropdownMenuItem>}
