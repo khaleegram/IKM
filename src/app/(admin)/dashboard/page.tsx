@@ -10,12 +10,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Package, Users, DollarSign, Loader2, FileWarning } from "lucide-react";
+import { Package, Users, DollarSign, Loader2, FileWarning, MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import { useAllUserProfiles } from "@/lib/firebase/firestore/users";
 import { useAllProducts } from "@/lib/firebase/firestore/products";
 import { useAllOrders } from "@/lib/firebase/firestore/orders";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import React from 'react';
+import Link from "next/link";
+import Image from "next/image";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 
 // This new component will be responsible for fetching and displaying stats.
 // This isolates data fetching from the main page component.
@@ -96,44 +105,106 @@ function DashboardStats() {
             </Card>
         </div>
 
-        <Card>
-            <CardHeader>
-                <CardTitle>Recent Users</CardTitle>
-                <CardDescription>A list of all users registered on the platform.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                        <TableHead>User</TableHead>
-                        <TableHead>Store Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {(users || []).map((user) => (
-                        <TableRow key={user.id}>
-                            <TableCell>
-                                <div className="flex items-center gap-3">
-                                    <Avatar className="h-8 w-8">
-                                        <AvatarFallback>{user.displayName?.charAt(0).toUpperCase()}</AvatarFallback>
-                                    </Avatar>
-                                    <span className="font-medium">{user.displayName}</span>
-                                </div>
-                            </TableCell>
-                            <TableCell>{user.storeName || 'N/A'}</TableCell>
-                            <TableCell>{user.email}</TableCell>
-                        </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-                 {(users?.length || 0) === 0 && (
-                    <div className="text-center p-8 text-muted-foreground">
-                        No users have signed up yet.
-                    </div>
-                )}
-            </CardContent>
-        </Card>
+        <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Recent Users</CardTitle>
+                    <CardDescription>A list of all users registered on the platform.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                            <TableHead>User</TableHead>
+                            <TableHead>Store Name</TableHead>
+                            <TableHead>Email</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {(users || []).map((user) => (
+                            <TableRow key={user.id}>
+                                <TableCell>
+                                    <div className="flex items-center gap-3">
+                                        <Avatar className="h-8 w-8">
+                                            <AvatarFallback>{user.displayName?.charAt(0).toUpperCase()}</AvatarFallback>
+                                        </Avatar>
+                                        <span className="font-medium">{user.displayName}</span>
+                                    </div>
+                                </TableCell>
+                                <TableCell>{user.storeName || 'N/A'}</TableCell>
+                                <TableCell>{user.email}</TableCell>
+                            </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    {(users?.length || 0) === 0 && (
+                        <div className="text-center p-8 text-muted-foreground">
+                            No users have signed up yet.
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>All Products</CardTitle>
+                    <CardDescription>All products listed on the marketplace.</CardDescription>
+                </CardHeader>
+                 <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                            <TableHead>Product</TableHead>
+                            <TableHead>Price</TableHead>
+                            <TableHead>Stock</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {(products || []).map((product) => (
+                            <TableRow key={product.id}>
+                                <TableCell>
+                                    <div className="flex items-center gap-3">
+                                        <Image src={product.imageUrl || `https://picsum.photos/seed/${product.id}/40/40`} alt={product.name} width={40} height={40} className="rounded-md object-cover" />
+                                        <span className="font-medium">{product.name}</span>
+                                    </div>
+                                </TableCell>
+                                <TableCell>₦{product.initialPrice?.toLocaleString()}</TableCell>
+                                <TableCell>
+                                    <Badge variant={product.stock > 0 ? "support" : "destructive"}>
+                                        {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <button className="p-1.5 rounded-md hover:bg-muted">
+                                                <MoreHorizontal className="h-4 w-4" />
+                                            </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem asChild>
+                                                <Link href={`/seller/products/edit/${product.id}`}>
+                                                    <Edit className="mr-2 h-4 w-4" /> Edit
+                                                </Link>
+                                            </DropdownMenuItem>
+                                             <DropdownMenuItem className="text-destructive">
+                                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </TableCell>
+                            </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    {(products?.length || 0) === 0 && (
+                        <div className="text-center p-8 text-muted-foreground">
+                            No products have been listed yet.
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
     </div>
   );
 }
