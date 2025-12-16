@@ -46,7 +46,6 @@ export default function AdminLayout({
 
   const navItems = [
     { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/admin/products", label: "Products", icon: Package },
     { href: "/admin/users", label: "Users", icon: Users },
     { href: "/admin/orders", label: "Orders", icon: BarChart2 },
     { href: "/admin/branding", label: "Branding", icon: Palette },
@@ -100,3 +99,5 @@ export default function AdminLayout({
     </SidebarProvider>
   );
 }
+
+    
