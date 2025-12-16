@@ -8,48 +8,43 @@ let adminApp: App;
 let adminFirestore: Firestore;
 let adminStorage: Storage;
 
-function initializeAdminApp() {
-    // Check if the app is already initialized to avoid re-initializing
-    if (getApps().find(app => app.name === '[DEFAULT]')) {
+// This function is self-invoking and runs only once when the module is first loaded on the server.
+// This ensures that the admin app is always initialized before it can be used by any API route or server action.
+(function initializeAdminApp() {
+    if (getApps().length > 0) {
         adminApp = getApps()[0];
-        adminFirestore = getFirestore(adminApp);
-        adminStorage = getStorage(adminApp);
-        return;
-    }
-
-    try {
-        const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-        if (!serviceAccountString) {
-            console.error('FIREBASE_SERVICE_ACCOUNT_KEY is not set. Admin SDK cannot be initialized.');
+    } else {
+        try {
+            const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+            if (!serviceAccountString) {
+                console.error('FIREBASE_SERVICE_ACCOUNT_KEY is not set. Admin SDK cannot be initialized.');
+                return;
+            }
+            const serviceAccount = JSON.parse(serviceAccountString);
+            
+            adminApp = initializeApp({
+                credential: cert(serviceAccount),
+                storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+            });
+            console.log("Firebase Admin SDK initialized successfully.");
+        } catch (e: any) {
+            console.error('Firebase Admin initialization error:', e.message);
+            // Don't throw here, as it can crash server startup. Functions that use it will fail.
             return;
         }
-        const serviceAccount = JSON.parse(serviceAccountString);
-        
-        adminApp = initializeApp({
-            credential: cert(serviceAccount),
-            storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-        });
-
-        adminFirestore = getFirestore(adminApp);
-        adminFirestore.settings({
-            ignoreUndefinedProperties: true,
-        });
-        adminStorage = getStorage(adminApp);
-        console.log("Firebase Admin SDK initialized successfully.");
-
-    } catch (e: any) {
-        console.error('Firebase Admin initialization error:', e.message);
-        // Don't throw here, as it can crash server startup. Instead, functions that use it will fail.
     }
-}
+    
+    adminFirestore = getFirestore(adminApp);
+    adminFirestore.settings({
+        ignoreUndefinedProperties: true,
+    });
+    adminStorage = getStorage(adminApp);
+})();
 
-// Initialize on module load
-initializeAdminApp();
 
 export function getAdminFirestore(): Firestore {
     if (!adminFirestore) {
-      console.error("Firestore Admin SDK is not available. Was there an initialization error?");
-      // This will cause downstream errors, but prevents a hard crash on import.
+      console.error("Firestore Admin SDK is not available. Check for initialization errors on server startup.");
       throw new Error("Firestore Admin SDK not initialized.");
     }
     return adminFirestore;
@@ -57,7 +52,7 @@ export function getAdminFirestore(): Firestore {
 
 export function getAdminStorage(): Storage {
      if (!adminStorage) {
-      console.error("Storage Admin SDK is not available. Was there an initialization error?");
+      console.error("Storage Admin SDK is not available. Check for initialization errors on server startup.");
        throw new Error("Storage Admin SDK not initialized.");
     }
     return adminStorage;
@@ -65,7 +60,7 @@ export function getAdminStorage(): Storage {
 
 export function getAdminApp(): App {
     if (!adminApp) {
-        console.error("Firebase Admin App is not available. Was there an initialization error?");
+        console.error("Firebase Admin App is not available. Check for initialization errors on server startup.");
         throw new Error("Firebase Admin App not initialized.");
     }
     return adminApp;

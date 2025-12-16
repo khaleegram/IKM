@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'ID token is required.' }, { status: 400 });
     }
     
-    // getAdminApp will throw if not initialized, which is caught below.
+    // getAdminApp will now throw if not initialized, which is caught below.
     const adminApp = getAdminApp();
     const auth = getAuth(adminApp);
     
