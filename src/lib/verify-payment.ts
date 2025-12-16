@@ -2,11 +2,11 @@
 'use server';
 
 import { z } from "zod";
-import { getAdminFirestore } from '@/lib/firebase/admin';
 import { headers } from "next/headers";
-import { serverTimestamp } from "firebase-admin/firestore";
 import type { Order } from "./firebase/firestore/orders";
 import type { CartItem } from "./cart-context";
+import { getAdminFirestore } from "./firebase/admin";
+import { serverTimestamp } from "firebase-admin/firestore";
 
 const verifyPaymentSchema = z.object({
   reference: z.string(),
@@ -24,6 +24,10 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
     const { reference, cartItems, total, deliveryAddress, customerInfo } = validation.data;
     
     const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackSecretKey) {
+        throw new Error("Paystack secret key is not configured on the server.");
+    }
+    
     const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
         headers: {
             Authorization: `Bearer ${paystackSecretKey}`,
@@ -47,10 +51,12 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
 
     if (!customerId) {
         console.warn("X-User-UID header not found. Order will be created without a customerId.");
+        // Decide if you want to throw an error or allow anonymous orders
+        throw new Error("User authentication not found. Cannot create order.");
     }
     
     const orderData: Omit<Order, 'id' | 'createdAt'> = {
-        customerId: customerId || "anonymous",
+        customerId: customerId,
         sellerId: sellerId,
         items: cartItems.map(({ id, name, price, quantity }: CartItem) => ({ productId: id, name, price, quantity })),
         total: total,

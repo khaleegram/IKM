@@ -42,10 +42,11 @@ export async function POST(req: NextRequest) {
 
         if (!customerId) {
             console.warn("X-User-UID header not found. Order will be created without a customerId.");
+            return NextResponse.json({ error: 'User is not authenticated' }, { status: 401 });
         }
         
         const orderData: Omit<Order, 'id' | 'createdAt'> = {
-            customerId: customerId || "anonymous", 
+            customerId: customerId, 
             sellerId: sellerId,
             items: cartItems.map(({ id, name, price, quantity }: CartItem) => ({ productId: id, name, price, quantity })),
             total: total,

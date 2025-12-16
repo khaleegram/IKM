@@ -15,7 +15,6 @@ import { useUser } from '@/lib/firebase/auth/use-user';
 import { useState, useTransition } from 'react';
 import { usePaystackPayment } from 'react-paystack';
 import type { PaystackProps } from 'react-paystack/dist/types';
-import { verifyPaymentAndCreateOrder } from '@/lib/verify-payment';
 
 export default function CheckoutPage() {
     const router = useRouter();
@@ -54,20 +53,26 @@ export default function CheckoutPage() {
     const onPaymentSuccess = (reference: any) => {
         startTransition(async () => {
             try {
-                const result = await verifyPaymentAndCreateOrder({
-                    reference: reference.reference,
-                    cartItems,
-                    total,
-                    deliveryAddress: formState.address,
-                    customerInfo: {
-                        name: `${formState.firstName} ${formState.lastName}`,
-                        email: formState.email,
-                        phone: formState.phone
-                    }
+                const response = await fetch('/api/verify-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        reference: reference.reference,
+                        cartItems,
+                        total,
+                        deliveryAddress: formState.address,
+                        customerInfo: {
+                            name: `${formState.firstName} ${formState.lastName}`,
+                            email: formState.email,
+                            phone: formState.phone
+                        }
+                    })
                 });
 
-                if (!result.success) {
-                    throw new Error('Payment verification failed.');
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || 'Payment verification failed.');
                 }
 
                 toast({
@@ -201,5 +206,3 @@ export default function CheckoutPage() {
         </div>
     );
 }
-
-    
