@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Performance optimizations
+  reactStrictMode: true,
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
   images: {
     remotePatterns: [
       {
@@ -28,8 +33,15 @@ const nextConfig: NextConfig = {
         hostname: 'firebasestorage.googleapis.com',
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+        port: '',
+        pathname: '/**',
       }
     ],
+    formats: ['image/avif', 'image/webp'],
   },
   async headers() {
     return [
@@ -44,7 +56,10 @@ const nextConfig: NextConfig = {
       },
     ]
   },
-  serverComponentsExternalPackages: ['firebase-admin'],
+  // Experimental features for better performance
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@/components/ui'],
+  },
 };
 
 export default nextConfig;

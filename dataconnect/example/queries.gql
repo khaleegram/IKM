@@ -1,0 +1,29 @@
+mutation AddNewReview($buyerId: UUID, $productId: UUID, $rating: Int!, $reviewText: String) @auth(level: USER) {
+  review_insert(data: {buyerId: $buyerId, productId: $productId, rating: $rating, reviewText: $reviewText})
+}
+
+query GetProductReviews($productId: UUID!) @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  reviews(where: {productId: {eq: $productId}}) {
+    id
+    buyerId
+    productId
+    rating
+    reviewText
+    createdAt
+  }
+}
+
+mutation UpdateProductInventory($productId: UUID!, $inventoryCount: Int!) @auth(level: USER) {
+  product_update(key: {id: $productId}, data: {inventoryCount: $inventoryCount})
+}
+
+query ListProductsByCategory($category: String!) @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  products(where: {category: {eq: $category}}) {
+    id
+    productName
+    productDescription
+    price
+    inventoryCount
+    imageUrls
+  }
+}

@@ -20,40 +20,44 @@ export default function CartPage() {
     const hasItems = cartItems.length > 0;
 
     return (
-        <div className="max-w-7xl mx-auto p-4 sm:p-6">
-            <h1 className="text-3xl font-bold font-headline mb-6">Shopping Cart</h1>
+        <div className="max-w-7xl mx-auto p-3 sm:p-4 md:p-6">
+            <h1 className="text-2xl sm:text-3xl font-bold font-headline mb-4 sm:mb-6">Shopping Cart</h1>
             {hasItems ? (
-                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
                     <div className="lg:col-span-2">
                         <Card>
                             <CardContent className="p-0">
                                 <ul className="divide-y divide-border">
                                     {cartItems.map((item) => (
-                                        <li key={item.id} className="flex items-center p-4 gap-4">
+                                        <li key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center p-3 sm:p-4 gap-3 sm:gap-4">
                                             <Image
                                                 src={item.imageUrl || `https://picsum.photos/seed/${item.id}/200/200`}
                                                 alt={item.name}
                                                 width={100}
                                                 height={100}
-                                                className="rounded-lg object-cover aspect-square"
+                                                className="rounded-lg object-cover aspect-square w-full sm:w-24 h-24 shrink-0"
                                             />
-                                            <div className="flex-grow">
-                                                <p className="font-semibold">{item.name}</p>
-                                                <p className="text-muted-foreground text-sm">₦{item.price.toLocaleString()}</p>
+                                            <div className="flex-grow w-full sm:w-auto">
+                                                <p className="font-semibold text-sm sm:text-base">{item.name}</p>
+                                                <p className="text-muted-foreground text-xs sm:text-sm mt-1">₦{item.price.toLocaleString()}</p>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.id!, item.quantity - 1)}>
-                                                    <Minus className="h-4 w-4" />
-                                                </Button>
-                                                <Input type="number" value={item.quantity} readOnly className="w-14 h-8 text-center" />
-                                                <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.id!, item.quantity + 1)}>
-                                                    <Plus className="h-4 w-4" />
-                                                </Button>
+                                            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+                                                <div className="flex items-center gap-2">
+                                                    <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => updateQuantity(item.id!, item.quantity - 1)}>
+                                                        <Minus className="h-4 w-4" />
+                                                    </Button>
+                                                    <Input type="number" value={item.quantity} readOnly className="w-16 h-9 text-center" />
+                                                    <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => updateQuantity(item.id!, item.quantity + 1)}>
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-semibold text-sm sm:text-base">₦{(item.price * item.quantity).toLocaleString()}</p>
+                                                    <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-destructive h-9 w-9" onClick={() => removeFromCart(item.id!)}>
+                                                        <Trash2 className="h-5 w-5" />
+                                                    </Button>
+                                                </div>
                                             </div>
-                                            <p className="font-semibold w-24 text-right">₦{(item.price * item.quantity).toLocaleString()}</p>
-                                            <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={() => removeFromCart(item.id!)}>
-                                                <Trash2 className="h-5 w-5" />
-                                            </Button>
                                         </li>
                                     ))}
                                 </ul>
@@ -61,11 +65,11 @@ export default function CartPage() {
                         </Card>
                     </div>
                     <div>
-                        <Card>
+                        <Card className="sticky top-4">
                             <CardHeader>
-                                <CardTitle>Order Summary</CardTitle>
+                                <CardTitle className="text-lg sm:text-xl">Order Summary</CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-4">
+                            <CardContent className="space-y-4 p-4 sm:p-6">
                                 <div className="flex justify-between">
                                     <p className="text-muted-foreground">Subtotal</p>
                                     <p className="font-semibold">₦{totalPrice.toLocaleString()}</p>
@@ -80,7 +84,7 @@ export default function CartPage() {
                                     <p>₦{total.toLocaleString()}</p>
                                 </div>
                                 <Link href="/checkout" className="w-full">
-                                    <Button size="lg" className="w-full mt-4">
+                                    <Button size="lg" className="w-full mt-4 text-base sm:text-lg">
                                         Proceed to Checkout
                                     </Button>
                                 </Link>

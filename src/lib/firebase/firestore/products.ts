@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   collection,
   doc,
@@ -19,10 +19,23 @@ import {
   getDocs,
   Firestore,
   orderBy,
+  startAfter,
+  QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase/provider';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { errorEmitter } from '@/firebase/error-emitter';
+
+export interface ProductVariant {
+  id: string;
+  name: string; // e.g., "Size", "Color"
+  options: {
+    value: string; // e.g., "Small", "Red"
+    priceModifier?: number; // Additional price for this variant
+    stock?: number; // Stock for this specific variant
+    sku?: string; // SKU for this variant
+  }[];
+}
 
 export interface Product extends DocumentData {
   id?: string;
@@ -36,6 +49,12 @@ export interface Product extends DocumentData {
   sellerId: string;
   category?: string;
   isFeatured?: boolean;
+  variants?: ProductVariant[]; // Product variants (size, color, etc.)
+  // Analytics
+  views?: number;
+  salesCount?: number;
+  averageRating?: number; // Average rating from reviews (1-5)
+  reviewCount?: number; // Total number of reviews
   createdAt?: any;
 }
 
@@ -67,14 +86,38 @@ export const useAllProducts = (productLimit?: number) => {
     const unsubscribe = onSnapshot(
       productsQuery,
       (snapshot) => {
-        const productsData = snapshot.docs.map(doc => ({ id: doc.id, price: doc.data().initialPrice, ...doc.data() } as Product));
-        productsData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+        
+        const productsData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          // Handle both Timestamp and Date objects
+          let createdAt = data.createdAt;
+          if (createdAt && typeof createdAt.toMillis === 'function') {
+            // It's a Firestore Timestamp
+            createdAt = createdAt;
+          } else if (createdAt && createdAt instanceof Date) {
+            // It's a Date object - convert to Timestamp-like object
+            createdAt = { toMillis: () => createdAt.getTime() };
+          }
+          
+          return { 
+            id: doc.id, 
+            price: data.initialPrice || data.price || 0, 
+            ...data,
+            createdAt 
+          } as Product;
+        });
+        
+        productsData.sort((a, b) => {
+          const aTime = a.createdAt?.toMillis?.() || a.createdAt?.getTime?.() || 0;
+          const bTime = b.createdAt?.toMillis?.() || b.createdAt?.getTime?.() || 0;
+          return bTime - aTime;
+        });
+        
         setProducts(productsData);
         setError(null);
         setIsLoading(false);
       },
       (err: any) => {
-        console.error("Error fetching all products: ", err);
         setError(err);
         setProducts([]);
         setIsLoading(false);
@@ -86,10 +129,129 @@ export const useAllProducts = (productLimit?: number) => {
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, [productsQuery]);
 
   return { data: products, isLoading, error };
+};
+
+// Hook for paginated products with infinite scroll support
+export const usePaginatedProducts = (pageSize: number = 20) => {
+  const { firestore } = useFirebase();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [error, setError] = useState<FirestoreError | null>(null);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+
+  const productsQuery = useMemo(() => {
+    if (!firestore) return null;
+    const coll = collection(firestore, 'products');
+    return query(coll, orderBy('createdAt', 'desc'), limit(pageSize));
+  }, [firestore, pageSize]);
+
+  // Initial load
+  useEffect(() => {
+    if (!productsQuery) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    setProducts([]);
+    setLastDoc(null);
+    setHasMore(true);
+
+    const unsubscribe = onSnapshot(
+      productsQuery,
+      (snapshot) => {
+        const productsData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          let createdAt = data.createdAt;
+          if (createdAt && typeof createdAt.toMillis === 'function') {
+            createdAt = createdAt;
+          } else if (createdAt && createdAt instanceof Date) {
+            createdAt = { toMillis: () => createdAt.getTime() };
+          }
+          
+          return { 
+            id: doc.id, 
+            price: data.initialPrice || data.price || 0, 
+            ...data,
+            createdAt 
+          } as Product;
+        });
+        
+        setProducts(productsData);
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+        setHasMore(snapshot.docs.length === pageSize);
+        setError(null);
+        setIsLoading(false);
+      },
+      (err: any) => {
+        setError(err);
+        setProducts([]);
+        setIsLoading(false);
+        const permissionError = new FirestorePermissionError({
+          path: 'products',
+          operation: 'list',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [productsQuery, pageSize]);
+
+  // Load more products
+  const loadMore = useCallback(async () => {
+    if (!firestore || !lastDoc || isLoadingMore || !hasMore) return;
+
+    setIsLoadingMore(true);
+    try {
+      const coll = collection(firestore, 'products');
+      const nextQuery = query(
+        coll,
+        orderBy('createdAt', 'desc'),
+        startAfter(lastDoc),
+        limit(pageSize)
+      );
+      
+      const snapshot = await getDocs(nextQuery);
+      const newProducts = snapshot.docs.map(doc => {
+        const data = doc.data();
+        let createdAt = data.createdAt;
+        if (createdAt && typeof createdAt.toMillis === 'function') {
+          createdAt = createdAt;
+        } else if (createdAt && createdAt instanceof Date) {
+          createdAt = { toMillis: () => createdAt.getTime() };
+        }
+        
+        return { 
+          id: doc.id, 
+          price: data.initialPrice || data.price || 0, 
+          ...data,
+          createdAt 
+        } as Product;
+      });
+
+      if (newProducts.length > 0) {
+        setProducts(prev => [...prev, ...newProducts]);
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+        setHasMore(snapshot.docs.length === pageSize);
+      } else {
+        setHasMore(false);
+      }
+    } catch (err: any) {
+      setError(err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [firestore, lastDoc, isLoadingMore, hasMore, pageSize]);
+
+  return { data: products, isLoading, isLoadingMore, error, loadMore, hasMore };
 };
 
 // Hook to get products for a specific seller
@@ -101,7 +263,8 @@ export const useProductsBySeller = (sellerId: string | undefined) => {
   
   const sellerProductsQuery = useMemo(() => {
       if (!firestore || !sellerId) return null;
-      return query(collection(firestore, 'products'), where('sellerId', '==', sellerId), orderBy('createdAt', 'desc'));
+      // Query products by sellerId - we sort client-side to avoid composite index requirement
+      return query(collection(firestore, 'products'), where('sellerId', '==', sellerId));
   }, [firestore, sellerId]);
 
 
@@ -116,20 +279,44 @@ export const useProductsBySeller = (sellerId: string | undefined) => {
     const unsubscribe = onSnapshot(
       sellerProductsQuery,
       (snapshot) => {
-        const productsData = snapshot.docs.map(doc => ({ id: doc.id, price: doc.data().initialPrice, ...doc.data() } as Product));
+        const productsData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          let createdAt = data.createdAt;
+          if (createdAt && typeof createdAt.toMillis === 'function') {
+            createdAt = createdAt;
+          } else if (createdAt && createdAt instanceof Date) {
+            createdAt = { toMillis: () => createdAt.getTime() };
+          }
+          return { 
+            id: doc.id, 
+            price: data.initialPrice || data.price || 0, 
+            ...data,
+            createdAt 
+          } as Product;
+        });
+        
+        // Sort by createdAt descending if not already sorted by Firestore
+        productsData.sort((a, b) => {
+          const aTime = a.createdAt?.toMillis?.() || a.createdAt?.getTime?.() || 0;
+          const bTime = b.createdAt?.toMillis?.() || b.createdAt?.getTime?.() || 0;
+          return bTime - aTime;
+        });
+        
         setProducts(productsData);
         setError(null);
         setIsLoading(false);
       },
       (err: any) => {
-        console.error("Error fetching seller products: ", err);
         setError(err);
         setIsLoading(false);
-        const permissionError = new FirestorePermissionError({
-          path: `users/${sellerId}/products`,
-          operation: 'list',
-        });
-        errorEmitter.emit('permission-error', permissionError);
+        // Only emit permission error if it's actually a permission error
+        if (err.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: `products`,
+            operation: 'list',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        }
       }
     );
 
@@ -170,7 +357,7 @@ export const useProduct = (productId: string) => {
         setIsLoading(false);
       },
       (err: any) => {
-        console.error("Error fetching product:", err);
+        // Error fetching product
         setError(err);
         setIsLoading(false);
         const permissionError = new FirestorePermissionError({

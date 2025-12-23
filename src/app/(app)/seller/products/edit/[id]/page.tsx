@@ -149,15 +149,15 @@ export default function EditProductPage() {
 
     return (
     <div className="flex flex-col h-full">
-      <header className="p-4 sm:p-6 bg-background border-b">
+      <header className="p-3 sm:p-4 md:p-6 bg-background border-b">
         <div>
-          <h1 className="text-2xl font-bold font-headline">Edit Product</h1>
-          <p className="text-muted-foreground">Update the details for "{product.name}".</p>
+          <h1 className="text-xl sm:text-2xl font-bold font-headline">Edit Product</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Update the details for "{product.name}".</p>
         </div>
       </header>
-      <main className="flex-1 overflow-auto p-4 sm:p-6">
+      <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
         <form onSubmit={handleSubmit}>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                 <div className="lg:col-span-2 space-y-6">
                     <Card>
                         <CardHeader>
@@ -245,11 +245,11 @@ export default function EditProductPage() {
                     </Card>
                 </div>
             </div>
-            <div className="mt-6 flex justify-end gap-2">
-                <Link href="/seller/products">
-                    <Button variant="outline" type="button">Cancel</Button>
+            <div className="mt-4 sm:mt-6 flex flex-col-reverse sm:flex-row justify-end gap-2">
+                <Link href="/seller/products" className="w-full sm:w-auto">
+                    <Button variant="outline" type="button" className="w-full sm:w-auto">Cancel</Button>
                 </Link>
-                <Button type="submit" disabled={isPending}>{isPending ? 'Saving...' : 'Save Changes'}</Button>
+                <Button type="submit" disabled={isPending} className="w-full sm:w-auto">{isPending ? 'Saving...' : 'Save Changes'}</Button>
             </div>
         </form>
 

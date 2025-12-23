@@ -1,0 +1,13 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/auto-release-escrow",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-payments",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}
+

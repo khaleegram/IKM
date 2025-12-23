@@ -1,0 +1,36 @@
+mutation CreateDemoData @auth(level: PUBLIC, insecureReason: "This operation is used to seed data and is safe to expose to the public") @transaction {
+  user_insertMany(data: [
+    {
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      displayName: "demouser1",
+      email: "demouser1@example.com",
+      userType: "buyer",
+      createdAt: "2024-04-28T12:00:00Z"
+    },
+    {
+      id: "550e8400-e29b-41d4-a716-446655440001",
+      displayName: "demouser2",
+      email: "demouser2@example.com",
+      userType: "seller",
+      createdAt: "2024-04-28T12:00:00Z"
+    }
+  ])
+  seller_insertMany(data: [
+    {
+      id: "650e8400-e29b-41d4-a716-446655440002",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+      storeName: "Demo Store",
+      createdAt: "2024-04-28T12:00:00Z"
+    }
+  ])
+  product_insertMany(data: [
+    {
+      id: "750e8400-e29b-41d4-a716-446655440003",
+      sellerId: "650e8400-e29b-41d4-a716-446655440002",
+      productName: "Demo Product",
+      inventoryCount: 100,
+      price: 25.00,
+      createdAt: "2024-04-28T12:00:00Z"
+    }
+  ])
+}

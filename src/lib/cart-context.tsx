@@ -27,15 +27,58 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [isAddingToCart, setAddingToCart] = useState(false);
   const { toast } = useToast();
 
+  // Load cart from localStorage on mount
   useEffect(() => {
-    const savedCart = localStorage.getItem('ikm-cart');
-    if (savedCart) {
-      setCartItems(JSON.parse(savedCart));
+    try {
+      const savedCart = localStorage.getItem('ikm-cart');
+      if (savedCart) {
+        const parsed = JSON.parse(savedCart);
+        // Validate cart items structure
+        if (Array.isArray(parsed)) {
+          setCartItems(parsed);
+        }
+      }
+    } catch (error) {
+      // Invalid cart data, clear it
+      localStorage.removeItem('ikm-cart');
     }
   }, []);
 
+  // Sync cart across tabs using storage event
   useEffect(() => {
-    localStorage.setItem('ikm-cart', JSON.stringify(cartItems));
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'ikm-cart' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) {
+            setCartItems(parsed);
+          }
+        } catch {
+          // Invalid data, ignore
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Debounce localStorage writes to avoid blocking
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      try {
+        localStorage.setItem('ikm-cart', JSON.stringify(cartItems));
+        // Broadcast to other tabs
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'ikm-cart',
+          newValue: JSON.stringify(cartItems),
+        }));
+      } catch (error) {
+        // localStorage might be full or unavailable
+        console.warn('Failed to save cart to localStorage:', error);
+      }
+    }, 300);
+    return () => clearTimeout(timeoutId);
   }, [cartItems]);
 
   const addToCart = (product: Product, quantity = 1) => {
@@ -49,12 +92,28 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setAddingToCart(false);
         return;
     }
+
+    // Check stock availability
+    const currentStock = product.stock || 0;
     setCartItems(prevItems => {
       const existingItem = prevItems.find(item => item.id === product.id);
+      const currentQuantity = existingItem ? existingItem.quantity : 0;
+      const newQuantity = currentQuantity + quantity;
+
+      if (newQuantity > currentStock) {
+        toast({
+          variant: "destructive",
+          title: "Insufficient Stock",
+          description: `Only ${currentStock} item(s) available in stock.`,
+        });
+        setAddingToCart(false);
+        return prevItems;
+      }
+
       if (existingItem) {
         // Update quantity of existing item
         return prevItems.map(item =>
-          item.id === product.id ? { ...item, quantity: item.quantity + quantity } : item
+          item.id === product.id ? { ...item, quantity: newQuantity } : item
         );
       } else {
         // Add new item to cart
@@ -80,11 +139,20 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     if (quantity <= 0) {
       removeFromCart(productId);
     } else {
-      setCartItems(prevItems =>
-        prevItems.map(item =>
+      setCartItems(prevItems => {
+        const item = prevItems.find(i => i.id === productId);
+        if (item && item.stock && quantity > item.stock) {
+          toast({
+            variant: "destructive",
+            title: "Insufficient Stock",
+            description: `Only ${item.stock} item(s) available in stock.`,
+          });
+          return prevItems;
+        }
+        return prevItems.map(item =>
           item.id === productId ? { ...item, quantity } : item
-        )
-      );
+        );
+      });
     }
   };
 

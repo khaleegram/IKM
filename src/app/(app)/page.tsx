@@ -7,8 +7,9 @@ import Image from 'next/image';
 import { ShoppingCart, Loader2, ArrowRight, Search, Sparkles, Star, Store } from 'lucide-react';
 import { useAllProducts } from '@/lib/firebase/firestore/products';
 import { useCart } from '@/lib/cart-context';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
+import { debounce } from '@/lib/debounce';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Product } from '@/lib/firebase/firestore/products';
@@ -18,14 +19,29 @@ export default function StoreHomePage() {
   const { data: products, isLoading: isLoadingProducts } = useAllProducts(8);
   const { addToCart, isAddingToCart } = useCart();
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [addingProductId, setAddingProductId] = useState<string | null>(null);
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+
+  // Debounce search term
+  useEffect(() => {
+    const debounced = debounce((value: string) => {
+      setDebouncedSearchTerm(value);
+    }, 300);
+
+    debounced(searchTerm);
+
+    return () => {
+      // Cleanup if component unmounts
+    };
+  }, [searchTerm]);
 
   const filteredProducts = useMemo(() => 
     (products || []).filter(product => 
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase()))
+      product.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      (product.description && product.description.toLowerCase().includes(debouncedSearchTerm.toLowerCase()))
     ),
-    [products, searchTerm]
+    [products, debouncedSearchTerm]
   );
 
   const handleAddToCart = useCallback((product: Product) => {
@@ -34,7 +50,7 @@ export default function StoreHomePage() {
     try {
       addToCart(product);
     } catch (error) {
-      console.error('Failed to add to cart:', error);
+      // Failed to add to cart
     } finally {
       // Add a small delay to show the loading state
       setTimeout(() => setAddingProductId(null), 500);
@@ -81,20 +97,20 @@ export default function StoreHomePage() {
       </section>
 
       {/* Featured Products Section */}
-      <section className="py-16 sm:py-24 px-4 sm:px-6 bg-background">
+      <section className="py-8 sm:py-12 md:py-16 lg:py-24 px-3 sm:px-4 md:px-6 bg-background">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-              <h2 className="text-3xl sm:text-4xl font-bold font-headline mb-2">
+          <div className="text-center mb-8 sm:mb-12">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold font-headline mb-2">
                 Featured Products
               </h2>
-              <p className="text-muted-foreground text-lg">
+              <p className="text-sm sm:text-base md:text-lg text-muted-foreground">
                 Handpicked items from our talented artisans
               </p>
             </div>
 
           {/* Loading State */}
           {isLoadingProducts && (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
               {Array.from({ length: 8 }).map((_, index) => (
                 <Card key={index} className="overflow-hidden border-0 shadow-sm">
                   <CardHeader className="p-0">
@@ -112,7 +128,7 @@ export default function StoreHomePage() {
           {/* Products Grid */}
           {!isLoadingProducts && filteredProducts.length > 0 && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
                 {filteredProducts.map((product, index) => (
                   <Card 
                     key={product.id} 

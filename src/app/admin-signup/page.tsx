@@ -33,10 +33,22 @@ export default function AdminSignupPage() {
         // This server action creates the admin user and sets the claim
         await createAdminUser(user.uid, user.email!, user.email!.split('@')[0]);
 
-        toast({ title: 'Admin Account Created!', description: "Redirecting to the admin dashboard." });
+        // Force token refresh to get the new custom claims
+        const idToken = await user.getIdToken(true);
         
-        // Ensure the ID token is refreshed to get the new custom claims
-        await user.getIdToken(true);
+        // Create session cookie (same as login flow)
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create session');
+        }
+
+        toast({ title: 'Admin Account Created!', description: "Redirecting to the admin dashboard." });
         
         router.push('/admin/dashboard');
 

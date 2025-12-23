@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import type { Order } from "./firebase/firestore/orders";
 import type { CartItem } from "./cart-context";
 import { getAdminFirestore } from "./firebase/admin";
-import { serverTimestamp } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 
 const verifyPaymentSchema = z.object({
   reference: z.string(),
@@ -47,7 +47,7 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
     }
 
     const sellerId = cartItems[0].sellerId;
-    const customerId = headers().get('X-User-UID'); 
+    const customerId = (await headers()).get('X-User-UID'); 
 
     if (!customerId) {
         console.warn("X-User-UID header not found. Order will be created without a customerId.");
@@ -63,14 +63,39 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
         status: 'Processing',
         deliveryAddress: deliveryAddress,
         customerInfo: customerInfo,
+        // Escrow: funds are held until order completion
+        escrowStatus: 'held',
     };
 
     const db = getAdminFirestore();
     const ordersCollectionRef = db.collection('orders');
     const orderRef = await ordersCollectionRef.add({
         ...orderData,
-        createdAt: serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
         paystackReference: reference,
+    });
+
+    // Create initial system messages in chat
+    const chatCollection = orderRef.collection('chat');
+    
+    // Order placed message
+    await chatCollection.add({
+        orderId: orderRef.id,
+        senderId: 'system',
+        senderType: 'system',
+        message: 'Order placed',
+        isSystemMessage: true,
+        createdAt: FieldValue.serverTimestamp(),
+    });
+
+    // Payment confirmed message
+    await chatCollection.add({
+        orderId: orderRef.id,
+        senderId: 'system',
+        senderType: 'system',
+        message: 'Payment confirmed',
+        isSystemMessage: true,
+        createdAt: FieldValue.serverTimestamp(),
     });
 
     return { success: true, orderId: orderRef.id };

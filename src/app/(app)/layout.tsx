@@ -2,18 +2,19 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Settings, BarChart2, LogOut, ShoppingCart, Loader2, Store, User as UserIcon, ShieldCheck, Menu, DollarSign } from "lucide-react";
+import { LayoutDashboard, Package, Settings, BarChart2, LogOut, ShoppingCart, Loader2, Store, User as UserIcon, ShieldCheck, Menu, DollarSign, Receipt, Heart, Bell, Users, TrendingUp, FileText, Megaphone, Truck, Palette, Globe, Search } from "lucide-react";
+import { NotificationsBell } from "@/components/notifications-bell";
+import { useEffect } from "react";
 
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
 import { IkmLogo } from "@/components/icons";
-import { CoPilotWidget } from "@/components/copilot-widget";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useUser } from "@/lib/firebase/auth/use-user";
 import { useToast } from "@/hooks/use-toast";
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import { useCart } from "@/lib/cart-context";
 import { Badge } from "@/components/ui/badge";
-import { useOrdersBySeller } from "@/lib/firebase/firestore/orders";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,19 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { DynamicLogo } from "@/components/DynamicLogo";
+import { ClientOnly } from "@/components/client-only";
+import { PaymentRecoveryBanner } from "@/components/payment-recovery-banner";
+import { GlobalSearch } from "@/components/global-search";
+import dynamic from "next/dynamic";
+
+// Lazy load heavy components to avoid blocking initial render
+const CoPilotWidget = dynamic(() => import('@/components/copilot-widget').then(mod => ({ default: mod.CoPilotWidget })), {
+  ssr: false,
+});
+
+const OrdersListener = dynamic(() => import('@/components/orders-listener').then(mod => ({ default: mod.OrdersListener })), {
+  ssr: false,
+});
 
 
 export default function AppLayout({
@@ -34,24 +48,11 @@ export default function AppLayout({
   const { user, isLoading, claims } = useUser();
   const { toast } = useToast();
   const { cartCount } = useCart();
-  const { data: orders, isLoading: isLoadingOrders } = useOrdersBySeller(user?.uid);
   
-  const isInitialLoad = useRef(true);
-  
-  useEffect(() => {
-    if (!isLoadingOrders) {
-      if (isInitialLoad.current) {
-        isInitialLoad.current = false;
-      } else {
-        toast({
-          title: "New Order Received!",
-          description: "A customer has placed a new order. Check your orders page.",
-        });
-      }
-    }
-  }, [orders, isLoadingOrders, toast]);
-
+  // Only fetch orders on seller routes and when user is available
   const isSellerRoute = pathname.startsWith('/seller');
+  const shouldFetchOrders = isSellerRoute && user?.uid;
+
   const isAdmin = claims?.isAdmin === true;
 
   const handleLogout = async () => {
@@ -70,16 +71,40 @@ export default function AppLayout({
     { href: "/seller/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/seller/products", label: "Products", icon: Package },
     { href: "/seller/orders", label: "Orders", icon: BarChart2 },
-    { href: "/seller/payouts", label: "Payouts", icon: DollarSign },
+    { href: "/seller/customers", label: "Customers", icon: Users },
+    { href: "/seller/analytics", label: "Analytics", icon: TrendingUp },
+    { href: "/seller/reports", label: "Reports", icon: FileText },
+    { href: "/seller/marketing", label: "Marketing", icon: Megaphone },
+    { href: "/seller/shipping", label: "Shipping", icon: Truck },
+    { href: "/seller/payouts", label: "Payments", icon: DollarSign },
+    { href: "/seller/storefront", label: "Storefront", icon: Palette },
+    { href: "/seller/domain", label: "Domain", icon: Globe },
   ];
+
+  // Handle redirect to login for seller routes - must be in useEffect
+  useEffect(() => {
+    if (isSellerRoute && !isLoading && !user) {
+      router.push('/login?redirect=' + encodeURIComponent(pathname));
+    }
+  }, [isSellerRoute, isLoading, user, router, pathname]);
   
   if (isSellerRoute) {
-    if (isLoading || !user) {
+    // Show loading only for auth, don't block on other data
+    if (isLoading) {
         return (
             <div className="flex items-center justify-center h-screen">
                 <Loader2 className="w-12 h-12 animate-spin text-primary" />
             </div>
         )
+    }
+
+    // Show loading while redirecting if not authenticated
+    if (!user) {
+      return (
+        <div className="flex items-center justify-center h-screen">
+          <Loader2 className="w-12 h-12 animate-spin text-primary" />
+        </div>
+      );
     }
 
     return (
@@ -135,8 +160,61 @@ export default function AppLayout({
               </div>
           </Sidebar>
           <SidebarInset className="flex-1 bg-muted/40">
+            {/* Seller Dashboard Header */}
+            <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+              <div className="flex h-14 items-center gap-4 px-4">
+                {/* Global Search */}
+                <GlobalSearch />
+
+                {/* Notifications */}
+                <div className="flex items-center gap-2">
+                  <NotificationsBell />
+                  
+                  {/* User Profile Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="rounded-full">
+                        <UserIcon className="h-5 w-5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <div className="px-2 py-1.5">
+                        <p className="text-sm font-medium">{user?.email}</p>
+                        <p className="text-xs text-muted-foreground">Seller Account</p>
+                      </div>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href="/seller/settings">
+                          <Settings className="mr-2 h-4 w-4" />
+                          Settings
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/profile">
+                          <UserIcon className="mr-2 h-4 w-4" />
+                          My Profile
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleLogout}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Logout
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            </div>
+
             {children}
-            <CoPilotWidget />
+            {shouldFetchOrders && (
+              <ClientOnly>
+                <OrdersListener />
+              </ClientOnly>
+            )}
+            <ClientOnly>
+              <CoPilotWidget />
+            </ClientOnly>
           </SidebarInset>
         </div>
       </SidebarProvider>
@@ -175,12 +253,27 @@ export default function AppLayout({
               </Link>
             )}
             {user && (
-              <Link href="/profile">
-                <Button variant="ghost">
-                  <UserIcon className="mr-2 h-4 w-4" />
-                  My Orders
-                </Button>
-              </Link>
+              <>
+                <NotificationsBell />
+                <Link href="/profile">
+                  <Button variant="ghost">
+                    <UserIcon className="mr-2 h-4 w-4" />
+                    My Orders
+                  </Button>
+                </Link>
+                <Link href="/profile/payments">
+                  <Button variant="ghost">
+                    <DollarSign className="mr-2 h-4 w-4" />
+                    Payments
+                  </Button>
+                </Link>
+                <Link href="/profile/wishlist">
+                  <Button variant="ghost">
+                    <Heart className="mr-2 h-4 w-4" />
+                    Wishlist
+                  </Button>
+                </Link>
+              </>
             )}
             <Link href="/cart" className="relative">
               <Button size="icon" variant="outline">
@@ -210,26 +303,30 @@ export default function AppLayout({
                     <Badge className="absolute -right-2 -top-2 h-5 w-5 justify-center p-0" variant="destructive">{cartCount}</Badge>
                   )}
                 </Link>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="icon">
-                      <Menu className="h-5 w-5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                     <DropdownMenuItem asChild><Link href="/products">All Products</Link></DropdownMenuItem>
-                     <DropdownMenuItem asChild><Link href="/stores">All Stores</Link></DropdownMenuItem>
-                     <DropdownMenuItem asChild><Link href="/seller/dashboard">Seller Hub</Link></DropdownMenuItem>
-                    {user && <DropdownMenuItem asChild><Link href="/profile">My Orders</Link></DropdownMenuItem>}
-                    {user && isAdmin && <DropdownMenuItem asChild><Link href="/admin/dashboard">Admin</Link></DropdownMenuItem>}
-                    <DropdownMenuSeparator />
-                    {user ? (
-                      <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem asChild><Link href="/login">Login</Link></DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <ClientOnly>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon">
+                        <Menu className="h-5 w-5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                       <DropdownMenuItem asChild><Link href="/products">All Products</Link></DropdownMenuItem>
+                       <DropdownMenuItem asChild><Link href="/stores">All Stores</Link></DropdownMenuItem>
+                       <DropdownMenuItem asChild><Link href="/seller/dashboard">Seller Hub</Link></DropdownMenuItem>
+                      {user && <DropdownMenuItem asChild><Link href="/profile">My Orders</Link></DropdownMenuItem>}
+                      {user && <DropdownMenuItem asChild><Link href="/profile/payments">Payment History</Link></DropdownMenuItem>}
+                      {user && <DropdownMenuItem asChild><Link href="/profile/wishlist">Wishlist</Link></DropdownMenuItem>}
+                      {user && isAdmin && <DropdownMenuItem asChild><Link href="/admin/dashboard">Admin</Link></DropdownMenuItem>}
+                      <DropdownMenuSeparator />
+                      {user ? (
+                        <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem asChild><Link href="/login">Login</Link></DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </ClientOnly>
             </div>
         </header>
         <main className="flex-1">
@@ -238,7 +335,9 @@ export default function AppLayout({
          <footer className="p-6 text-center text-sm text-muted-foreground border-t">
             <p>&copy; {new Date().getFullYear()} IK Market Place. All Rights Reserved.</p>
         </footer>
-        <CoPilotWidget />
+        <ClientOnly>
+          <CoPilotWidget />
+        </ClientOnly>
       </div>
   )
 }

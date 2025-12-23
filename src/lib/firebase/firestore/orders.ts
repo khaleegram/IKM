@@ -21,19 +21,80 @@ import {
 import { useFirebase } from '@/firebase/provider';
 import { CartItem } from '@/lib/cart-context';
 
+export interface OrderNote {
+  id: string;
+  note: string;
+  isInternal: boolean;
+  createdBy: string;
+  createdAt: any;
+}
+
+export interface Refund {
+  id: string;
+  orderId: string;
+  amount: number;
+  reason: string;
+  refundMethod: 'original_payment' | 'store_credit' | 'manual';
+  status: 'pending' | 'processed' | 'failed';
+  processedBy?: string;
+  createdAt: any;
+  processedAt?: any;
+}
+
+export interface OrderChatMessage {
+  id: string;
+  orderId: string;
+  senderId: string;
+  senderType: 'customer' | 'seller' | 'system';
+  message?: string;
+  imageUrl?: string;
+  isSystemMessage: boolean;
+  createdAt: any;
+}
+
+export interface OrderDispute {
+  id: string;
+  orderId: string;
+  openedBy: string; // customerId
+  type: 'item_not_received' | 'wrong_item' | 'damaged_item';
+  description: string;
+  status: 'open' | 'resolved' | 'closed';
+  photos?: string[];
+  resolvedBy?: string; // adminId
+  resolvedAt?: any;
+  createdAt: any;
+}
+
 export interface Order extends DocumentData {
   id?: string;
   customerId: string;
   sellerId: string;
   items: CartItem[];
   total: number;
-  status: 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
+  status: 'Processing' | 'Sent' | 'Received' | 'Completed' | 'Cancelled' | 'Disputed';
   deliveryAddress: string;
   customerInfo: {
     name: string;
     email: string;
     phone: string;
   };
+  notes?: OrderNote[];
+  refunds?: Refund[];
+  paymentReference?: string;
+  paymentMethod?: string;
+  commissionRate?: number; // Commission rate at time of order (for historical accuracy)
+  // Escrow fields
+  escrowStatus: 'held' | 'released' | 'refunded';
+  fundsReleasedAt?: any;
+  // Delivery tracking
+  sentAt?: any;
+  sentPhotoUrl?: string;
+  receivedAt?: any;
+  receivedPhotoUrl?: string;
+  // Auto-release
+  autoReleaseDate?: any; // Date when funds auto-release if no dispute
+  // Dispute
+  dispute?: OrderDispute;
   createdAt: any; // Firestore Timestamp
 }
 
@@ -225,8 +286,13 @@ export const useOrder = (orderId: string | undefined) => {
 };
 
 
-// Function to update an order's status
+/**
+ * @deprecated Use server action instead: updateOrderStatus from @/lib/order-actions
+ * Client-side writes are deprecated in favor of server actions for better security and validation.
+ * This function is kept for backward compatibility but should not be used in new code.
+ */
 export const updateOrderStatus = async (firestore: Firestore, orderId: string, status: Order['status']) => {
+    console.warn('⚠️ updateOrderStatus is deprecated. Use updateOrderStatus server action from @/lib/order-actions instead.');
     if (!firestore) throw new Error("Firestore is not initialized");
 
     const orderRef = doc(firestore, 'orders', orderId);

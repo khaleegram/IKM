@@ -3,9 +3,23 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    
+    // Allow public read on all files by default
+    match /{allPaths=**} {
+      allow read;
+    }
+
     function isAdmin() {
       return request.auth.token.isAdmin == true;
+    }
+
+    // Secure the ID verification path
+    match /id-verifications/{fileName} {
+      // Allow writes only if the user is authenticated
+      allow write: if request.auth != null;
+
+      // The file name must follow the format: {userId}-{timestamp}-{originalFileName}
+      // This rule ensures users can only upload files to their "own" sub-path indirectly
+      allow write: if request.auth != null && fileName.matches(request.auth.uid + '-.*');
     }
 
     // Product images can be uploaded by the seller who owns them
@@ -20,6 +34,37 @@ service firebase.storage {
     match /branding_assets/{fileName} {
       allow read: if true;
       allow write: if isAdmin()
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+    }
+
+    // Order chat images - can be uploaded by authenticated users (for their own orders)
+    match /order-chat/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+    }
+
+    // Order sent/received photos - can be uploaded by authenticated users (for their own orders)
+    match /order-sent-photos/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+    }
+
+    match /order-received-photos/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+    }
+
+    // Dispute photos - can be uploaded by authenticated users
+    match /dispute-photos/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
                     && request.resource.size < 5 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
     }

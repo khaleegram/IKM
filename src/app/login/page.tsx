@@ -12,6 +12,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { signInWithEmailAndPassword, User } from 'firebase/auth';
 import { useFirebase } from '@/firebase/provider';
 import { DynamicLogo } from '@/components/DynamicLogo';
+import { Home, ArrowLeft } from 'lucide-react';
 
 export default function LoginPage() {
   const { auth } = useFirebase();
@@ -34,13 +35,36 @@ export default function LoginPage() {
           body: JSON.stringify({ idToken }),
         });
 
+        // Check if response is actually JSON before parsing
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          console.error('Non-JSON response from /api/login:', text.substring(0, 200));
+          throw new Error(
+            'Server returned an error page. Please check your environment variables and server logs. ' +
+            'Ensure all Firebase environment variables are set in your .env.local file.'
+          );
+        }
+
         if (!response.ok) {
             const errorData = await response.json();
+            
+            // Handle network errors with user-friendly message
+            if (errorData.isNetworkError || errorData.code === 'NETWORK_ERROR') {
+                throw new Error(
+                    'Unable to connect to authentication service. Please check your internet connection and try again.'
+                );
+            }
+            
             throw new Error(errorData.error || 'Failed to create session.');
         }
         
-        const idTokenResult = await user.getIdTokenResult(true);
-        const isAdmin = idTokenResult.claims.isAdmin === true;
+        // Get admin status from server response (more reliable than client-side token)
+        const responseData = await response.json();
+        const isAdmin = responseData.isAdmin === true;
+        
+        // Force token refresh to sync custom claims on client
+        await user.getIdToken(true);
 
         toast({ title: 'Login Successful', description: "Welcome back!" });
         
@@ -75,10 +99,17 @@ export default function LoginPage() {
       <main className="flex w-full flex-1 flex-col items-center justify-center px-4 text-center">
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-4">
-            <div className="flex justify-center">
+            <div className="flex items-center justify-between">
               <Link href="/">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Home
+                </Button>
+              </Link>
+              <Link href="/" className="flex justify-center flex-1">
                 <DynamicLogo />
               </Link>
+              <div className="w-24" /> {/* Spacer for alignment */}
             </div>
             <CardTitle className="text-2xl font-headline">Seller Hub Login</CardTitle>
             <CardDescription>Enter your credentials to manage your store</CardDescription>
@@ -97,11 +128,19 @@ export default function LoginPage() {
             <Button className="w-full" onClick={handleLogin} disabled={isPending}>
               {isPending ? 'Logging in...' : 'Login'}
             </Button>
-            <div className="text-sm">
+            <div className="flex flex-col gap-2 text-sm">
+              <div>
                 Don't have an account?{' '}
                 <Link href="/signup" className="underline">
-                    Create a Store
+                  Create a Store
                 </Link>
+              </div>
+              <div className="pt-2 border-t">
+                <Link href="/" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <Home className="h-4 w-4" />
+                  Browse Marketplace
+                </Link>
+              </div>
             </div>
           </CardFooter>
         </Card>

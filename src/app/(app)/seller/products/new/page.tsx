@@ -6,7 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, DollarSign, Sparkles } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Upload, DollarSign, Sparkles, Plus, X, Package } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +23,7 @@ import { addProduct as addProductAction } from "@/lib/product-actions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useFirebase } from "@/firebase/provider";
 import Image from "next/image";
+import { PRODUCT_CATEGORIES } from "@/lib/constants/categories";
 
 
 export default function NewProductPage() {
@@ -40,6 +48,10 @@ export default function NewProductPage() {
         category: ''
     });
     const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [variants, setVariants] = useState<Array<{
+        name: string;
+        options: Array<{ value: string; priceModifier: string; stock: string; sku: string }>;
+    }>>([]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { id, value } = e.target;
@@ -98,6 +110,12 @@ export default function NewProductPage() {
         }
         
         const data = new FormData(e.currentTarget);
+        
+        // Add variants to form data if any
+        if (variants.length > 0) {
+            data.append('variants', JSON.stringify(variants));
+        }
+        
         startTransition(async () => {
             try {
                 await addProductAction(user.uid, data);
@@ -114,15 +132,15 @@ export default function NewProductPage() {
 
     return (
     <div className="flex flex-col h-full">
-      <header className="p-4 sm:p-6 bg-background border-b">
+      <header className="p-3 sm:p-4 md:p-6 bg-background border-b">
         <div>
-          <h1 className="text-2xl font-bold font-headline">Add a New Product</h1>
-          <p className="text-muted-foreground">Fill out the details below to list a new item in your store.</p>
+          <h1 className="text-xl sm:text-2xl font-bold font-headline">Add a New Product</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Fill out the details below to list a new item in your store.</p>
         </div>
       </header>
-      <main className="flex-1 overflow-auto p-4 sm:p-6">
+      <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
         <form ref={formRef} onSubmit={handleSubmit}>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                 <div className="lg:col-span-2 space-y-6">
                     <Card>
                         <CardHeader>
@@ -176,6 +194,113 @@ export default function NewProductPage() {
                             </div>
                         </CardContent>
                     </Card>
+                    
+                    {/* Product Variants */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Product Variants (Optional)</CardTitle>
+                            <CardDescription>Add variants like size, color, material, etc. Each variant can have different prices and stock levels.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {variants.map((variant, variantIdx) => (
+                                <div key={variantIdx} className="border rounded-lg p-4 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <Input
+                                            placeholder="Variant name (e.g., Size, Color)"
+                                            value={variant.name}
+                                            onChange={(e) => {
+                                                const newVariants = [...variants];
+                                                newVariants[variantIdx].name = e.target.value;
+                                                setVariants(newVariants);
+                                            }}
+                                            className="max-w-xs"
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => {
+                                                setVariants(variants.filter((_, i) => i !== variantIdx));
+                                            }}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {variant.options.map((option, optIdx) => (
+                                            <div key={optIdx} className="flex gap-2 items-center">
+                                                <Input
+                                                    placeholder="Option value (e.g., Small, Red)"
+                                                    value={option.value}
+                                                    onChange={(e) => {
+                                                        const newVariants = [...variants];
+                                                        newVariants[variantIdx].options[optIdx].value = e.target.value;
+                                                        setVariants(newVariants);
+                                                    }}
+                                                    className="flex-1"
+                                                />
+                                                <Input
+                                                    type="number"
+                                                    placeholder="Price +₦"
+                                                    value={option.priceModifier}
+                                                    onChange={(e) => {
+                                                        const newVariants = [...variants];
+                                                        newVariants[variantIdx].options[optIdx].priceModifier = e.target.value;
+                                                        setVariants(newVariants);
+                                                    }}
+                                                    className="w-24"
+                                                />
+                                                <Input
+                                                    type="number"
+                                                    placeholder="Stock"
+                                                    value={option.stock}
+                                                    onChange={(e) => {
+                                                        const newVariants = [...variants];
+                                                        newVariants[variantIdx].options[optIdx].stock = e.target.value;
+                                                        setVariants(newVariants);
+                                                    }}
+                                                    className="w-24"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => {
+                                                        const newVariants = [...variants];
+                                                        newVariants[variantIdx].options = newVariants[variantIdx].options.filter((_, i) => i !== optIdx);
+                                                        setVariants(newVariants);
+                                                    }}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                const newVariants = [...variants];
+                                                newVariants[variantIdx].options.push({ value: '', priceModifier: '', stock: '', sku: '' });
+                                                setVariants(newVariants);
+                                            }}
+                                        >
+                                            <Plus className="h-3 w-3 mr-1" /> Add Option
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                    setVariants([...variants, { name: '', options: [{ value: '', priceModifier: '', stock: '', sku: '' }] }]);
+                                }}
+                            >
+                                <Plus className="h-4 w-4 mr-2" /> Add Variant
+                            </Button>
+                        </CardContent>
+                    </Card>
                 </div>
                 <div className="space-y-6">
                     <Card>
@@ -199,22 +324,13 @@ export default function NewProductPage() {
                             </div>
                         </CardContent>
                     </Card>
-                     <Card>
-                         <CardHeader>
-                            <CardTitle>Category</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <Label htmlFor="category">Product Category</Label>
-                            <Input id="category" name="category" value={formData.category} onChange={handleInputChange} placeholder="e.g., Fashion, Bags" />
-                        </CardContent>
-                    </Card>
                 </div>
             </div>
-            <div className="mt-6 flex justify-end gap-2">
-                <Link href="/seller/products">
-                    <Button variant="outline" type="button">Cancel</Button>
+            <div className="mt-4 sm:mt-6 flex flex-col-reverse sm:flex-row justify-end gap-2">
+                <Link href="/seller/products" className="w-full sm:w-auto">
+                    <Button variant="outline" type="button" className="w-full sm:w-auto">Cancel</Button>
                 </Link>
-                <Button type="submit" disabled={isPending}>{isPending ? 'Saving...' : 'Save Product'}</Button>
+                <Button type="submit" disabled={isPending} className="w-full sm:w-auto">{isPending ? 'Saving...' : 'Save Product'}</Button>
             </div>
         </form>
 

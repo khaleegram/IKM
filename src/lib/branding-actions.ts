@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { getAdminFirestore, getAdminStorage } from "@/lib/firebase/admin";
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/auth-utils";
 
 const brandingSchema = z.object({
     logo: z.instanceof(File).optional(),
@@ -29,7 +30,15 @@ async function uploadLogo(file: File): Promise<string> {
 };
 
 
+/**
+ * Update branding settings
+ * Write Contract: 1. Input Validation, 2. Authorization, 3. Domain Logic, 4. Firestore Write
+ */
 export async function updateBrandingSettings(data: FormData) {
+    // 2. Authorization Check - only admins can update branding
+    await requireAdmin();
+
+    // 1. Input Validation
     const rawData: Record<string, any> = {};
     data.forEach((value, key) => {
         rawData[key] = value;

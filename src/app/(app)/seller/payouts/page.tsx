@@ -5,12 +5,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { DollarSign, Loader2, CheckCircle, AlertCircle, Banknote } from "lucide-react";
+import { DollarSign, Loader2, CheckCircle, AlertCircle, Banknote, TrendingUp, Wallet, ArrowDownCircle, History, X } from "lucide-react";
 import { useState, useTransition, useEffect } from "react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { getBanksForAccountNumber, savePayoutDetails } from "@/lib/payout-actions";
 import { useUser } from "@/lib/firebase/auth/use-user";
 import { useUserProfile } from "@/lib/firebase/firestore/users";
+import { requestPayout, cancelPayoutRequest } from "@/lib/payout-request-actions";
+import { calculateSellerEarnings } from "@/lib/earnings-actions";
+import { getMinimumPayoutAmount } from "@/lib/platform-settings-actions";
+import { useSellerPayouts, useSellerTransactions } from "@/lib/firebase/firestore/earnings";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface ResolvedBank {
     bank_id: number;
@@ -23,13 +31,24 @@ export default function SellerPayoutsPage() {
     const { toast } = useToast();
     const { user: authUser } = useUser();
     const { data: userProfile, isLoading: isLoadingProfile } = useUserProfile(authUser?.uid);
+    const { data: payouts, isLoading: isLoadingPayouts } = useSellerPayouts(authUser?.uid);
+    const { data: transactions, isLoading: isLoadingTransactions } = useSellerTransactions(authUser?.uid, 20);
 
     const [isFinding, startFindTransition] = useTransition();
     const [isSaving, startSaveTransition] = useTransition();
+    const [isRequesting, startRequestTransition] = useTransition();
+    const [isCalculating, startCalculateTransition] = useTransition();
+    const [isCancelling, startCancelTransition] = useTransition();
 
     const [accountNumber, setAccountNumber] = useState('');
     const [resolvedBanks, setResolvedBanks] = useState<ResolvedBank[]>([]);
     const [selectedBank, setSelectedBank] = useState<ResolvedBank | null>(null);
+    const [earnings, setEarnings] = useState<any>(null);
+    const [payoutAmount, setPayoutAmount] = useState('');
+    const [showPayoutDialog, setShowPayoutDialog] = useState(false);
+    const [showTransactions, setShowTransactions] = useState(false);
+    const [payoutToCancel, setPayoutToCancel] = useState<string | null>(null);
+    const [minimumPayout, setMinimumPayout] = useState(1000); // Default fallback
 
     // Reset state when account number changes
     useEffect(() => {
@@ -37,9 +56,88 @@ export default function SellerPayoutsPage() {
         setSelectedBank(null);
     }, [accountNumber]);
 
+    // Calculate earnings and fetch minimum payout
+    useEffect(() => {
+        if (!authUser?.uid) return;
+        
+        startCalculateTransition(async () => {
+            try {
+                const result = await calculateSellerEarnings(authUser.uid);
+                setEarnings(result);
+                // Also fetch minimum payout amount
+                const minPayout = await getMinimumPayoutAmount();
+                setMinimumPayout(minPayout);
+            } catch (error) {
+                console.error('Error calculating earnings:', error);
+            }
+        });
+    }, [authUser?.uid, payouts]);
+
+    const handleRequestPayout = () => {
+        if (!earnings || !userProfile?.payoutDetails) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please set up your bank account first.' });
+            return;
+        }
+
+        const amount = parseFloat(payoutAmount);
+        if (isNaN(amount) || amount <= 0) {
+            toast({ variant: 'destructive', title: 'Invalid Amount', description: 'Please enter a valid amount.' });
+            return;
+        }
+
+        if (amount < minimumPayout) {
+            toast({ variant: 'destructive', title: 'Minimum Amount', description: `Minimum payout is ₦${minimumPayout.toLocaleString()}` });
+            return;
+        }
+
+        if (amount > earnings.availableBalance) {
+            toast({ variant: 'destructive', title: 'Insufficient Balance', description: `Available balance: ₦${earnings.availableBalance.toLocaleString()}` });
+            return;
+        }
+
+        startRequestTransition(async () => {
+            try {
+                await requestPayout(authUser.uid, { amount });
+                toast({
+                    title: "Payout Requested!",
+                    description: "Your payout request has been submitted and will be processed within 1-3 business days.",
+                });
+                setShowPayoutDialog(false);
+                setPayoutAmount('');
+            } catch (error) {
+                toast({ variant: 'destructive', title: 'Request Failed', description: (error as Error).message });
+            }
+        });
+    };
+
+    const handleCancelPayout = async (payoutId: string) => {
+        if (!authUser?.uid) return;
+        
+        startCancelTransition(async () => {
+            try {
+                await cancelPayoutRequest(payoutId, authUser.uid);
+                toast({
+                    title: "Payout Cancelled",
+                    description: "Your payout request has been cancelled.",
+                });
+                setPayoutToCancel(null);
+            } catch (error) {
+                toast({ variant: 'destructive', title: 'Cancellation Failed', description: (error as Error).message });
+            }
+        });
+    };
+
+    const pendingPayout = payouts?.find(p => p.status === 'pending');
+
     const handleFindBanks = () => {
         if (accountNumber.length !== 10) {
             toast({ variant: 'destructive', title: 'Invalid Account Number', description: 'Please enter a valid 10-digit NUBAN account number.' });
+            return;
+        }
+
+        // Validate it's all digits
+        if (!/^\d{10}$/.test(accountNumber)) {
+            toast({ variant: 'destructive', title: 'Invalid Account Number', description: 'Account number must contain only digits.' });
             return;
         }
 
@@ -47,11 +145,40 @@ export default function SellerPayoutsPage() {
             try {
                 const result = await getBanksForAccountNumber(accountNumber);
                 if (result.length === 0) {
-                    toast({ variant: 'destructive', title: 'No Banks Found', description: 'We could not find any bank associated with this account number. Please double-check it.' });
+                    toast({ 
+                        variant: 'destructive', 
+                        title: 'No Banks Found', 
+                        description: 'We could not find any bank associated with this account number. Please verify:\n• The account number is correct (10 digits)\n• The account exists in a supported Nigerian bank\n• Your internet connection is stable' 
+                    });
+                    setResolvedBanks([]);
+                    setSelectedBank(null);
+                } else {
+                    setResolvedBanks(result);
+                    // Auto-select if only one bank found
+                    if (result.length === 1) {
+                        setSelectedBank(result[0]);
+                        toast({
+                            title: "Bank Found",
+                            description: `Account verified: ${result[0].account_name}`,
+                        });
+                    } else {
+                        toast({
+                            title: "Multiple Banks Found",
+                            description: `Found ${result.length} bank(s). Please select the correct one.`,
+                        });
+                    }
                 }
-                setResolvedBanks(result);
             } catch (error) {
-                toast({ variant: 'destructive', title: 'Error', description: (error as Error).message });
+                const errorMessage = (error as Error).message;
+                toast({ 
+                    variant: 'destructive', 
+                    title: 'Error', 
+                    description: errorMessage.includes('Paystack secret key') 
+                        ? 'Payment service is not configured. Please contact support.'
+                        : errorMessage
+                });
+                setResolvedBanks([]);
+                setSelectedBank(null);
             }
         });
     }
@@ -164,13 +291,108 @@ export default function SellerPayoutsPage() {
 
     return (
         <div className="flex flex-col h-full">
-            <header className="p-4 sm:p-6 bg-background border-b">
-                <div>
-                  <h1 className="text-2xl font-bold font-headline">Payout Settings</h1>
-                  <p className="text-muted-foreground">Manage how you receive payments for your sales.</p>
+            <header className="p-3 sm:p-4 md:p-6 bg-background border-b">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <h1 className="text-xl sm:text-2xl font-bold font-headline">Earnings & Payouts</h1>
+                      <p className="text-sm sm:text-base text-muted-foreground">Manage your earnings and request payouts.</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={() => setShowTransactions(!showTransactions)} size="sm" className="w-full sm:w-auto">
+                            <History className="mr-2 h-4 w-4" />
+                            Transactions
+                        </Button>
+                        {userProfile?.payoutDetails && earnings && earnings.availableBalance >= minimumPayout && !pendingPayout && (
+                            <Button onClick={() => setShowPayoutDialog(true)} size="sm" className="w-full sm:w-auto">
+                                <ArrowDownCircle className="mr-2 h-4 w-4" />
+                                Request Payout
+                            </Button>
+                        )}
+                    </div>
                 </div>
             </header>
-            <main className="flex-1 overflow-auto p-4 sm:p-6">
+            <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
+                {/* Earnings Dashboard */}
+                {earnings && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-xs sm:text-sm font-medium">Available Balance</CardTitle>
+                                <Wallet className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent className="p-3 sm:p-6">
+                                <div className="text-xl sm:text-2xl font-bold">₦{earnings.availableBalance.toLocaleString()}</div>
+                                <p className="text-xs text-muted-foreground mt-1">Ready to withdraw</p>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-xs sm:text-sm font-medium">Total Earnings</CardTitle>
+                                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent className="p-3 sm:p-6">
+                                <div className="text-xl sm:text-2xl font-bold">₦{earnings.totalEarnings.toLocaleString()}</div>
+                                <p className="text-xs text-muted-foreground mt-1">All time</p>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-xs sm:text-sm font-medium">Pending Payouts</CardTitle>
+                                <ArrowDownCircle className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent className="p-3 sm:p-6">
+                                <div className="text-xl sm:text-2xl font-bold">₦{earnings.pendingPayouts.toLocaleString()}</div>
+                                <p className="text-xs text-muted-foreground mt-1">In processing</p>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-xs sm:text-sm font-medium">Total Payouts</CardTitle>
+                                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent className="p-3 sm:p-6">
+                                <div className="text-xl sm:text-2xl font-bold">₦{earnings.totalPayouts.toLocaleString()}</div>
+                                <p className="text-xs text-muted-foreground mt-1">Withdrawn</p>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Pending Payout Alert */}
+                {pendingPayout && (
+                    <Card className="border-primary/50 bg-primary/5">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                                <AlertCircle className="h-5 w-5 text-primary" />
+                                Pending Payout Request
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="font-semibold text-lg">₦{pendingPayout.amount.toLocaleString()}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Requested on {pendingPayout.requestedAt ? format(pendingPayout.requestedAt.toDate(), 'PPP') : 'N/A'}
+                                    </p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Badge variant="secondary">Pending</Badge>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={() => setPayoutToCancel(pendingPayout.id!)}
+                                        disabled={isCancelling}
+                                    >
+                                        <X className="h-4 w-4 mr-1" />
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Bank Account Setup */}
                 {isLoadingProfile ? (
                      <div className="flex items-center justify-center h-full">
                         <Loader2 className="w-12 h-12 animate-spin text-primary" />
@@ -180,7 +402,154 @@ export default function SellerPayoutsPage() {
                 ) : (
                     renderSetupState()
                 )}
+
+                {/* Payout History */}
+                {payouts && payouts.length > 0 && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg sm:text-xl">Payout History</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead>Amount</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Account</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {payouts.slice(0, 10).map((payout) => (
+                                            <TableRow key={payout.id}>
+                                                <TableCell className="text-sm">
+                                                    {payout.createdAt ? format(payout.createdAt.toDate(), 'MMM dd, yyyy') : 'N/A'}
+                                                </TableCell>
+                                                <TableCell className="font-semibold">₦{payout.amount.toLocaleString()}</TableCell>
+                                                <TableCell>
+                                                    <Badge 
+                                                        variant={
+                                                            payout.status === 'completed' ? 'default' :
+                                                            payout.status === 'pending' ? 'secondary' :
+                                                            payout.status === 'failed' ? 'destructive' : 'outline'
+                                                        }
+                                                    >
+                                                        {payout.status}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-sm text-muted-foreground">
+                                                    {payout.accountName} - {payout.bankName}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
             </main>
+
+            {/* Request Payout Dialog */}
+            <Dialog open={showPayoutDialog} onOpenChange={setShowPayoutDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Request Payout</DialogTitle>
+                        <DialogDescription>
+                            Enter the amount you want to withdraw. Minimum: ₦{minimumPayout.toLocaleString()}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div>
+                            <Label htmlFor="payoutAmount">Amount (₦)</Label>
+                            <Input
+                                id="payoutAmount"
+                                type="number"
+                                value={payoutAmount}
+                                onChange={(e) => setPayoutAmount(e.target.value)}
+                                placeholder={`Min: ₦${minimumPayout.toLocaleString()}`}
+                                min={minimumPayout}
+                                max={earnings?.availableBalance || 0}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Available: ₦{earnings?.availableBalance.toLocaleString() || '0'}
+                            </p>
+                        </div>
+                        {earnings && parseFloat(payoutAmount) > 0 && (
+                            <div className="p-3 bg-muted rounded-lg">
+                                <p className="text-sm text-muted-foreground">You will receive:</p>
+                                <p className="text-2xl font-bold">₦{parseFloat(payoutAmount || '0').toLocaleString()}</p>
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowPayoutDialog(false)}>Cancel</Button>
+                        <Button onClick={handleRequestPayout} disabled={isRequesting || !payoutAmount || parseFloat(payoutAmount) < minimumPayout}>
+                            {isRequesting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : 'Request Payout'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Cancel Payout Dialog */}
+            <Dialog open={!!payoutToCancel} onOpenChange={() => setPayoutToCancel(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Cancel Payout Request?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to cancel this payout request? The amount will be returned to your available balance.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setPayoutToCancel(null)}>No, Keep It</Button>
+                        <Button variant="destructive" onClick={() => payoutToCancel && handleCancelPayout(payoutToCancel)} disabled={isCancelling}>
+                            {isCancelling ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Cancelling...</> : 'Yes, Cancel'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Transactions Dialog */}
+            <Dialog open={showTransactions} onOpenChange={setShowTransactions}>
+                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Transaction History</DialogTitle>
+                        <DialogDescription>View all your earnings and payout transactions.</DialogDescription>
+                    </DialogHeader>
+                    {isLoadingTransactions ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        </div>
+                    ) : transactions && transactions.length > 0 ? (
+                        <div className="space-y-2">
+                            {transactions.map((transaction) => (
+                                <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg">
+                                    <div className="flex-1">
+                                        <p className="font-medium">{transaction.description}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {transaction.createdAt ? format(transaction.createdAt.toDate(), 'MMM dd, yyyy HH:mm') : 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className={`font-bold ${transaction.amount >= 0 ? 'text-support' : 'text-destructive'}`}>
+                                            {transaction.amount >= 0 ? '+' : ''}₦{Math.abs(transaction.amount).toLocaleString()}
+                                        </p>
+                                        <Badge variant={transaction.status === 'completed' ? 'default' : transaction.status === 'pending' ? 'secondary' : 'destructive'} className="text-xs">
+                                            {transaction.status}
+                                        </Badge>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                            <History className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                            <p>No transactions yet</p>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

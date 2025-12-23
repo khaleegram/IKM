@@ -1,49 +1,255 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    function isAdmin() {
-      return request.auth.token.isAdmin == true;
-    }
-
-    // Products can be read by anyone. Admins have full access.
-    // Otherwise, only the owner (seller) can write.
-    match /products/{productId} {
-      allow read: if true;
-      allow write: if isAdmin() || (request.auth != null && request.auth.uid == request.resource.data.sellerId);
-    }
-
-    // User profiles can be read by anyone. Admins have full access.
-    // Otherwise, can only be created/updated by the owner.
-    match /users/{userId} {
-      allow read: if true;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if isAdmin() || (request.auth != null && request.auth.uid == userId);
-      allow delete: if isAdmin();
-    }
-
-    // Sellers can manage their own delivery locations. Admins have full access.
-    match /users/{userId}/deliveryLocations/{locationId} {
-      allow read, write: if isAdmin() || (request.auth != null && request.auth.uid == userId);
-    }
-
-    // Admins can read/write all orders.
-    // Otherwise, orders can be created by any authenticated user.
-    // They can be read by the customer who created them or the seller.
-    // They can only be updated by the seller.
-    match /orders/{orderId} {
-        allow create: if request.auth != null;
-        allow read: if isAdmin() || (request.auth != null && (request.auth.uid == resource.data.customerId || request.auth.uid == resource.data.sellerId));
-        allow update: if isAdmin() || (request.auth != null && request.auth.uid == resource.data.sellerId);
-        allow delete: if isAdmin();
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
     }
     
-    // Admins have full access to branding settings, anyone can read.
-    match /settings/branding {
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.isAdmin == true;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isValidEmail(email) {
+      return email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+    }
+    
+    // Products Collection
+    // - Public read access (anyone can view products)
+    // - Only sellers can create/update their own products
+    // - Admins have full access
+    match /products/{productId} {
+      // Anyone can read products (public marketplace)
+      allow read: if true;
+      allow list: if true; // Allow listing all products, including filtered queries
+      
+      // Only authenticated users can create products
+      // Note: Server actions use initialPrice, not price
+      // createdAt is optional (can be set by server timestamp)
+      allow create: if isAuthenticated() 
+        && request.resource.data.sellerId == request.auth.uid
+        && request.resource.data.keys().hasAll(['name', 'description', 'initialPrice', 'sellerId'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 200
+        && request.resource.data.description is string
+        && request.resource.data.description.size() >= 10
+        && request.resource.data.initialPrice is number
+        && request.resource.data.initialPrice > 0;
+      
+      // Only product owner or admin can update
+      allow update: if isAdmin() 
+        || (isAuthenticated() 
+          && resource.data.sellerId == request.auth.uid
+          && request.resource.data.sellerId == resource.data.sellerId); // Prevent sellerId changes
+      
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }
+    
+    // Stores Collection
+    // Uses userId as document ID for direct access
+    // - Public read access (anyone can browse stores)
+    // - Sellers can create/update their own store (storeId must match their userId)
+    // - Admins have full access
+    match /stores/{storeId} {
+      // Public read access for store browsing
+      allow read: if true;
+      allow list: if true;
+      
+      // Sellers can create their own store (storeId must equal their userId)
+      allow create: if isAuthenticated() 
+        && storeId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'storeName'])
+        && request.resource.data.storeName is string
+        && request.resource.data.storeName.size() > 0
+        && request.resource.data.storeName.size() <= 100;
+      
+      // Sellers can update their own store (storeId must equal their userId), admins can update any
+      allow update: if isAdmin() 
+        || (isAuthenticated() 
+          && storeId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid // Prevent userId changes
+          // Validate store name if provided
+          && (!request.resource.data.keys().hasAny(['storeName']) 
+            || (request.resource.data.storeName is string 
+              && request.resource.data.storeName.size() > 0 
+              && request.resource.data.storeName.size() <= 100))
+          // Validate store description if provided
+          && (!request.resource.data.keys().hasAny(['storeDescription'])
+            || (request.resource.data.storeDescription is string
+              && request.resource.data.storeDescription.size() >= 10)));
+      
+      // Only admin can delete stores
+      allow delete: if isAdmin();
+    }
+    
+    // Users Collection
+    // - Public read access for user profiles (limited fields)
+    // - Users can only create/update their own profile
+    // - Admins have full access
+    match /users/{userId} {
+      // Public read access (anyone can see user profile)
+      // But sensitive data should be filtered client-side
+      allow read: if true;
+      
+      // Users can create their own profile during signup
+      allow create: if isAuthenticated() 
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasAll(['email', 'displayName'])
+        && isValidEmail(request.resource.data.email)
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0;
+      
+      // Users can update their own profile, admins can update any
+      allow update: if isAdmin() 
+        || (isOwner(userId)
+          // Prevent email and UID changes
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['email', 'id'])));
+      
+      // Only admin can delete user profiles
+      allow delete: if isAdmin();
+      
+      // Delivery Locations Subcollection
+      // - Only owner can manage their delivery locations
+      match /deliveryLocations/{locationId} {
+        // Anyone can read (for checkout/delivery options)
         allow read: if true;
-        allow write: if isAdmin();
+        
+        // Only owner can create/update/delete
+        allow write: if isAdmin() || isOwner(userId);
+      }
+    }
+    
+    // Orders Collection
+    // - Customers can create orders
+    // - Customers and sellers can read their own orders
+    // - Sellers can update order status
+    // - Admins have full access
+    match /orders/{orderId} {
+      // Customers and sellers can read their own orders, admins can read all
+      allow read: if isAdmin() 
+        || (isAuthenticated() 
+          && (resource.data.customerId == request.auth.uid 
+            || resource.data.sellerId == request.auth.uid));
+      
+      // Any authenticated user can create an order
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['customerId', 'sellerId', 'items', 'total', 'status', 'createdAt'])
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.total is number
+        && request.resource.data.total > 0
+        && request.resource.data.status == 'pending'
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0;
+      
+      // Only seller or admin can update order (for status changes)
+      allow update: if isAdmin() 
+        || (isAuthenticated() 
+          && resource.data.sellerId == request.auth.uid
+          // Prevent changing customerId or sellerId
+          && request.resource.data.customerId == resource.data.customerId
+          && request.resource.data.sellerId == resource.data.sellerId
+          // Only allow status updates
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
+      
+      // Only admin can delete orders
+      allow delete: if isAdmin();
+    }
+    
+    // Settings Collection (Global Settings)
+    // - Public read access
+    // - Only admins can write
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Payments Collection
+    // - Customers can read their own payments
+    // - Sellers can read payments for their orders
+    // - Admins have full access
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.customerId == request.auth.uid) || (isAuthenticated() && resource.data.sellerId == request.auth.uid);
+      allow create: if isAdmin(); // Only server actions can create payments
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // Payouts Collection
+    // - Sellers can read/create their own payouts
+    // - Sellers can cancel their pending payouts
+    // - Admins have full access
+    match /payouts/{payoutId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.sellerId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.sellerId == request.auth.uid;
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.sellerId == request.auth.uid && request.resource.data.status == 'cancelled' && resource.data.status == 'pending');
+      allow delete: if isAdmin();
+    }
+    
+    // Transactions Collection
+    // - Sellers can read their own transactions
+    // - Admins have full access
+    match /transactions/{transactionId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.sellerId == request.auth.uid);
+      allow create: if isAdmin(); // Only server actions can create transactions
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // Reviews Collection
+    // - Public read access
+    // - Authenticated users can create their own reviews
+    // - Users can update/delete their own reviews
+    // - Sellers can reply to reviews for their products
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+    
+    // Wishlists Collection
+    // - Users can read/create/delete their own wishlist items
+    // - Admins have full access
+    match /wishlists/{wishlistId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+    
+    // Notifications Collection
+    // - Users can read their own notifications
+    // - Only server actions can create notifications
+    match /notifications/{notificationId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin(); // Only server actions can create notifications
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+    
+    // Addresses Collection
+    // - Users can manage their own addresses
+    // - Admins have full access
+    match /addresses/{addressId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    // Platform settings - admin only (server-side writes)
+    match /platform_settings/{settingsId} {
+      allow read: if isAuthenticated(); // Authenticated users can read (for commission rate display)
+      allow write: if false; // Only server-side (admin actions) can write
     }
   }
 }

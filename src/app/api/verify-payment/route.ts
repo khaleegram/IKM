@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFirestore } from '@/lib/firebase/admin';
-import { serverTimestamp } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 import type { CartItem } from '@/lib/cart-context';
 import type { Order } from '@/lib/firebase/firestore/orders';
 import { headers } from 'next/headers';
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
         // 3. Create the order in Firestore using Firebase Admin SDK
         const sellerId = cartItems[0].sellerId;
-        const customerId = headers().get('X-User-UID'); 
+        const customerId = (await headers()).get('X-User-UID'); 
 
         if (!customerId) {
             console.warn("X-User-UID header not found. Order will be created without a customerId.");
@@ -59,9 +59,54 @@ export async function POST(req: NextRequest) {
         const ordersCollection = db.collection('orders');
         const orderRef = await ordersCollection.add({
             ...orderData,
-            createdAt: serverTimestamp(),
-            paystackReference: reference,
+            createdAt: FieldValue.serverTimestamp(),
+            paymentReference: reference,
+            paymentMethod: 'Paystack',
+            paymentStatus: 'completed',
         });
+
+        // Create payment record
+        await db.collection('payments').add({
+            orderId: orderRef.id,
+            customerId: customerId,
+            sellerId: sellerId,
+            amount: total,
+            reference: reference,
+            status: 'completed',
+            method: 'Paystack',
+            createdAt: FieldValue.serverTimestamp(),
+        });
+
+        // Send email notifications
+        try {
+            const { sendOrderConfirmationEmail, sendPaymentReceiptEmail, sendNewOrderNotificationEmail } = await import('@/lib/email-actions');
+            
+            // Get customer email
+            const customerDoc = await db.collection('users').doc(customerId).get();
+            const customerData = customerDoc.data();
+            
+            // Get seller email
+            const sellerDoc = await db.collection('users').doc(sellerId).get();
+            const sellerData = sellerDoc.data();
+            
+            // Send to customer
+            if (customerData?.email) {
+                await sendOrderConfirmationEmail(orderRef.id, customerData.email, orderData);
+                await sendPaymentReceiptEmail(orderRef.id, customerData.email, {
+                    reference,
+                    amount: total,
+                    method: 'Paystack',
+                });
+            }
+            
+            // Send to seller
+            if (sellerData?.email) {
+                await sendNewOrderNotificationEmail(sellerData.email, orderRef.id, orderData);
+            }
+        } catch (error) {
+            console.error('Error sending email notifications:', error);
+            // Don't fail the payment verification if email fails
+        }
 
         return NextResponse.json({ success: true, orderId: orderRef.id }, { status: 200 });
 

@@ -5,6 +5,7 @@ import 'dotenv/config';
 import { getAuth } from 'firebase-admin/auth';
 import { getAdminFirestore, getAdminApp } from '@/lib/firebase/admin';
 import { revalidatePath } from 'next/cache';
+import { requireAdmin } from '@/lib/auth-utils';
 
 export async function createAdminUser(userId: string, email: string, displayName: string): Promise<void> {
     const adminApp = getAdminApp();
@@ -27,24 +28,78 @@ export async function createAdminUser(userId: string, email: string, displayName
 }
 
 
+/**
+ * Grant admin role to user
+ * Write Contract: 1. Input Validation, 2. Authorization, 3. Domain Logic, 4. Firestore Write
+ */
 export async function grantAdminRole(userId: string): Promise<void> {
+  // 2. Authorization Check - only admins can grant admin role
+  await requireAdmin();
+
+  // 1. Input Validation
+  if (!userId) {
+    throw new Error('User ID is required');
+  }
+
+  // 3. Domain Logic
   const adminApp = getAdminApp();
   const auth = getAuth(adminApp);
+  
+  // 4. Firestore Write
   await auth.setCustomUserClaims(userId, { isAdmin: true });
+  
+  // Revoke all existing sessions to force token refresh with new claims
+  // This ensures the user gets the updated admin status immediately
+  try {
+    await auth.revokeRefreshTokens(userId);
+  } catch (error) {
+    console.warn('Could not revoke refresh tokens (user might not exist):', error);
+  }
+  
   // Also update the user's document in Firestore to reflect the change immediately in the UI
   const firestore = getAdminFirestore();
   await firestore.collection('users').doc(userId).update({ isAdmin: true });
+  
   revalidatePath('/admin/users');
   revalidatePath('/admin/dashboard'); // Revalidate admin pages
 }
 
+/**
+ * Revoke admin role from user
+ * Write Contract: 1. Input Validation, 2. Authorization, 3. Domain Logic, 4. Firestore Write
+ */
 export async function revokeAdminRole(userId: string): Promise<void> {
+  // 2. Authorization Check - only admins can revoke admin role
+  await requireAdmin();
+
+  // 1. Input Validation
+  if (!userId) {
+    throw new Error('User ID is required');
+  }
+
+  // 3. Domain Logic - prevent self-revocation
+  const auth = await requireAdmin();
+  if (auth.uid === userId) {
+    throw new Error('Cannot revoke your own admin role');
+  }
+
+  // 4. Firestore Write
   const adminApp = getAdminApp();
-  const auth = getAuth(adminApp);
-  await auth.setCustomUserClaims(userId, { isAdmin: false });
+  const adminAuth = getAuth(adminApp);
+  await adminAuth.setCustomUserClaims(userId, { isAdmin: false });
+  
+  // Revoke all existing sessions to force token refresh with new claims
+  // This ensures the user loses admin access immediately
+  try {
+    await adminAuth.revokeRefreshTokens(userId);
+  } catch (error) {
+    console.warn('Could not revoke refresh tokens (user might not exist):', error);
+  }
+  
   // Also update the user's document in Firestore
   const firestore = getAdminFirestore();
   await firestore.collection('users').doc(userId).update({ isAdmin: false });
+  
   revalidatePath('/admin/users');
 }
 

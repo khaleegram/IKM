@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFirestore } from '@/lib/firebase/admin';
-import { serverTimestamp } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 import type { CartItem } from '@/lib/cart-context';
 import type { Order } from '@/lib/firebase/firestore/orders';
 import { headers } from 'next/headers';
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
         // 3. Create the order in Firestore using Firebase Admin SDK
         const sellerId = cartItems[0].sellerId;
-        const customerId = headers().get('X-User-UID'); 
+        const customerId = (await headers()).get('X-User-UID'); 
 
         if (!customerId) {
             console.warn("X-User-UID header not found. Order will be created without a customerId.");
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
         const ordersCollection = db.collection('orders');
         const orderRef = await ordersCollection.add({
             ...orderData,
-            createdAt: serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
             paystackReference: reference,
         });
 
