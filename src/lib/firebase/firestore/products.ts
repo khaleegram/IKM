@@ -1,30 +1,29 @@
 
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import {
-  collection,
-  doc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  onSnapshot,
-  DocumentData,
-  FirestoreError,
-  getDoc,
-  serverTimestamp,
-  limit,
-  getDocs,
-  Firestore,
-  orderBy,
-  startAfter,
-  QueryDocumentSnapshot,
-} from 'firebase/firestore';
-import { useFirebase } from '@/firebase/provider';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { useFirebase } from '@/firebase/provider';
+import {
+  DocumentData,
+  Firestore,
+  FirestoreError,
+  QueryDocumentSnapshot,
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  startAfter,
+  updateDoc,
+  where
+} from 'firebase/firestore';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export interface ProductVariant {
   id: string;
@@ -67,6 +66,8 @@ export const useAllProducts = (productLimit?: number) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | null>(null);
 
+  const cacheKey = useMemo(() => generateCacheKey('products', 'all', productLimit || 'unlimited'), [productLimit]);
+
   const productsQuery = useMemo(() => {
     if (!firestore) return null;
     const coll = collection(firestore, 'products');
@@ -83,7 +84,15 @@ export const useAllProducts = (productLimit?: number) => {
         setIsLoading(false);
         return;
     }
-    setIsLoading(true);
+
+    // Check cache first
+    const cachedData = firestoreCache.get<Product[]>(cacheKey);
+    if (cachedData) {
+      setProducts(cachedData);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
 
     const unsubscribe = onSnapshot(
       productsQuery,
@@ -115,6 +124,9 @@ export const useAllProducts = (productLimit?: number) => {
           return bTime - aTime;
         });
         
+        // Cache the results
+        firestoreCache.set(cacheKey, productsData, 5 * 60 * 1000); // 5 minutes
+        
         setProducts(productsData);
         setError(null);
         setIsLoading(false);
@@ -134,7 +146,7 @@ export const useAllProducts = (productLimit?: number) => {
     return () => {
       unsubscribe();
     };
-  }, [productsQuery]);
+  }, [productsQuery, cacheKey]);
 
   return { data: products, isLoading, error };
 };

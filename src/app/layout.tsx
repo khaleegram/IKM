@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
-import { Toaster } from "@/components/ui/toaster"
+import { ErrorBoundaryWrapper } from "@/components/error-boundary-wrapper";
+import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from "@/firebase/client-provider";
 import { CartProvider } from "@/lib/cart-context";
-import { ErrorBoundaryWrapper } from "@/components/error-boundary-wrapper";
+import type { Metadata } from "next";
 import { PT_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -35,6 +36,7 @@ export default function RootLayout({
             </CartProvider>
           </FirebaseClientProvider>
         </ErrorBoundaryWrapper>
+        <ServiceWorkerRegister />
         <Toaster />
       </body>
     </html>
