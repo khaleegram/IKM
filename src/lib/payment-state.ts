@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+// cSpell:ignore uuidv
 import { v4 as uuidv4 } from 'uuid';
 
 export type PaymentStatus = 
@@ -15,6 +16,7 @@ export type PaymentStatus =
 
 export interface PaymentAttempt {
   id: string; // Idempotency key
+  // cSpell:word Paystack
   reference: string; // Paystack reference
   amount: number;
   cartItems: any[];
@@ -31,6 +33,11 @@ export interface PaymentAttempt {
 
 const STORAGE_KEY = 'ikm_payment_state';
 const PAYMENT_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+// cSpell:ignore uuidv
+function generateId(): string {
+  return uuidv4();
+}
 
 /**
  * Payment State Manager

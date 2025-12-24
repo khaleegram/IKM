@@ -31,15 +31,10 @@ const shippingZoneSchema = z.object({
 });
 
 /**
- * Get shipping zones for a seller
+ * Get shipping zones for a seller (public - no auth required)
+ * Used for checkout and public-facing features
  */
-export async function getShippingZones(sellerId: string): Promise<ShippingZone[]> {
-  const auth = await requireOwnerOrAdmin(sellerId);
-  
-  if (auth.uid !== sellerId && !auth.isAdmin) {
-    throw new Error('Unauthorized');
-  }
-
+export async function getPublicShippingZones(sellerId: string): Promise<ShippingZone[]> {
   const firestore = getAdminFirestore();
   const zonesQuery = await firestore
     .collection('shipping_zones')
@@ -53,6 +48,21 @@ export async function getShippingZones(sellerId: string): Promise<ShippingZone[]
   } as ShippingZone));
   
   return serializeFirestoreData(zones) as ShippingZone[];
+}
+
+/**
+ * Get shipping zones for a seller (requires authentication)
+ * Used for seller dashboard and admin features
+ */
+export async function getShippingZones(sellerId: string): Promise<ShippingZone[]> {
+  const auth = await requireOwnerOrAdmin(sellerId);
+  
+  if (auth.uid !== sellerId && !auth.isAdmin) {
+    throw new Error('Unauthorized');
+  }
+
+  // Use the public function to avoid code duplication
+  return getPublicShippingZones(sellerId);
 }
 
 /**

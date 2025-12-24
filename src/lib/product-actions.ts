@@ -5,6 +5,7 @@ import { getAdminFirestore, getAdminStorage } from "@/lib/firebase/admin";
 import { FIREBASE_STORAGE_BUCKET } from "@/config/env";
 import { revalidatePath } from "next/cache";
 import { requireAuth, requireOwnerOrAdmin } from "@/lib/auth-utils";
+import { getPublicShippingZones } from "./shipping-actions";
 
 const variantOptionSchema = z.object({
   value: z.string().min(1, "Variant option value is required"),
@@ -24,38 +25,79 @@ const variantSchema = z.object({
   options: z.array(variantOptionSchema).min(1, "At least one variant option is required"),
 });
 
+// Helper function to safely convert string to number
+const safeNumber = (val: any): number | undefined => {
+  if (val === "" || val === undefined || val === null) {
+    return undefined;
+  }
+  const num = Number(val);
+  if (isNaN(num) || !isFinite(num)) {
+    return undefined;
+  }
+  return num;
+};
+
 const productSchema = z.object({
     name: z.string().min(1, "Name is required"),
-    description: z.string(),
-    initialPrice: z.preprocess(
-      (val) => (val === "" ? undefined : Number(val)),
-      z.number().positive("Price must be a positive number")
+    description: z.string().optional().default(""),
+    price: z.preprocess(
+      safeNumber,
+      z.number({ 
+        required_error: "Price is required",
+        invalid_type_error: "Price must be a valid number"
+      }).positive("Price must be a positive number")
     ),
-    lastPrice: z.preprocess(
-      (val) => (val === "" ? undefined : Number(val)),
-      z.number().positive("Last price must be a positive number")
+    compareAtPrice: z.preprocess(
+      safeNumber,
+      z.number().positive("Compare at price must be a positive number").optional()
     ),
     stock: z.preprocess(
-      (val) => (val === "" ? undefined : Number(val)),
-      z.number().int().min(0, "Stock cannot be negative")
+      safeNumber,
+      z.number({ 
+        required_error: "Stock is required",
+        invalid_type_error: "Stock must be a valid number"
+      }).int("Stock must be a whole number").min(0, "Stock cannot be negative")
     ),
-    category: z.string().optional(),
+    sku: z.string().optional().default(""),
+    category: z.string().optional().default(""),
+    status: z.enum(['active', 'draft', 'inactive']).optional().default('draft'),
+    allowShipping: z.preprocess(
+      (val) => {
+        if (val === undefined || val === null) return undefined;
+        if (typeof val === 'boolean') return val;
+        if (typeof val === 'string') {
+          return val === 'true' || val === 'on';
+        }
+        return Boolean(val);
+      },
+      z.boolean().optional()
+    ),
     image: z.instanceof(File).optional(),
     variants: z.preprocess(
       (val) => {
         if (!val || val === "") return undefined;
         try {
-          return JSON.parse(val as string);
+          const parsed = JSON.parse(val as string);
+          return Array.isArray(parsed) ? parsed : undefined;
         } catch {
           return undefined;
         }
       },
       z.array(variantSchema).optional()
     ),
-}).refine(data => data.lastPrice <= data.initialPrice, {
-    message: "Lowest price cannot be greater than the initial price.",
-    path: ["lastPrice"],
-});
+}).refine(
+  (data) => {
+    // If compareAtPrice is provided, it must be greater than price
+    if (data.compareAtPrice !== undefined && data.price !== undefined) {
+      return data.compareAtPrice > data.price;
+    }
+    return true;
+  },
+  {
+    message: "Compare at price must be greater than the selling price.",
+    path: ["compareAtPrice"],
+  }
+);
 
 async function uploadImage(userId: string, file: File): Promise<string> {
     const storage = getAdminStorage();
@@ -110,6 +152,14 @@ export async function addProduct(userId: string, data: FormData) {
     const firestore = getAdminFirestore();
     const { image, ...productData } = validation.data;
 
+    // Determine default allowShipping based on whether seller has shipping zones
+    let allowShipping = productData.allowShipping;
+    if (allowShipping === undefined) {
+      // Check if seller has shipping zones
+      const zones = await getPublicShippingZones(userId);
+      allowShipping = zones.length > 0; // Default to true if zones exist, false otherwise
+    }
+
     // Calculate price for display (use compareAtPrice if available, otherwise price)
     const displayPrice = productData.compareAtPrice || productData.price;
     
@@ -122,6 +172,7 @@ export async function addProduct(userId: string, data: FormData) {
         sku: productData.sku || '',
         category: productData.category || '',
         status: productData.status || 'active',
+        allowShipping: allowShipping,
         sellerId: userId,
         views: 0,
         salesCount: 0,
@@ -145,7 +196,7 @@ export async function addProduct(userId: string, data: FormData) {
     
     console.log('💾 Saving product:', {
         name: dataToSave.name,
-        initialPrice: dataToSave.initialPrice,
+        price: dataToSave.price,
         sellerId: dataToSave.sellerId,
         hasImage: !!imageUrl,
         hasVariants: !!(dataToSave.variants && dataToSave.variants.length > 0),
@@ -207,6 +258,21 @@ export async function updateProduct(productId: string, userId: string, data: For
         imageUrl = await uploadImage(userId, image);
     }
 
+    // Determine allowShipping - use provided value or keep existing, or set default based on zones
+    let allowShipping = productData.allowShipping;
+    if (allowShipping === undefined) {
+      // If not provided, check existing product or set default based on zones
+      const existingProduct = productDoc.data() as { allowShipping?: boolean };
+      if (existingProduct.allowShipping === undefined) {
+        // No existing value, check if seller has shipping zones
+        const zones = await getPublicShippingZones(product.sellerId);
+        allowShipping = zones.length > 0;
+      } else {
+        // Keep existing value
+        allowShipping = existingProduct.allowShipping;
+      }
+    }
+
     const dataToUpdate: any = {
         name: productData.name,
         description: productData.description || '',
@@ -216,6 +282,7 @@ export async function updateProduct(productId: string, userId: string, data: For
         sku: productData.sku || '',
         category: productData.category || '',
         status: productData.status || 'active',
+        allowShipping: allowShipping,
         updatedAt: new Date(),
     };
 

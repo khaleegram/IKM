@@ -1,13 +1,14 @@
 'use server';
 
-import { z } from 'zod';
-import { headers } from 'next/headers';
-import { getAdminFirestore } from './firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
-import type { Order } from './firebase/firestore/orders';
+import { headers } from 'next/headers';
+import { z } from 'zod';
 import type { CartItem } from './cart-context';
 import { incrementDiscountCodeUsage } from './discount-actions';
+import { getAdminFirestore } from './firebase/admin';
+import type { Order } from './firebase/firestore/orders';
+import { getPlatformCommissionRate } from './platform-settings-actions';
 
 const verifyPaymentSchema = z.object({
   reference: z.string(),
@@ -31,7 +32,7 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
     throw new Error('Invalid payment verification data.');
   }
 
-  const { reference, idempotencyKey, cartItems, total, deliveryAddress, customerInfo, discountCode } = validation.data;
+  const { reference, idempotencyKey, cartItems, total, deliveryAddress, customerInfo, discountCode, shippingType, shippingPrice } = validation.data;
   
   const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
   if (!paystackSecretKey) {
@@ -269,6 +270,122 @@ export async function retryPaymentVerification(data: unknown) {
   });
 
   return result;
+}
+
+/**
+ * Find recent Paystack transaction by email and amount
+ * Useful when we don't have the exact reference
+ */
+export async function findRecentTransactionByEmail(email: string, amount: number) {
+  const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
+  if (!paystackSecretKey) {
+    throw new Error("Paystack secret key is not configured.");
+  }
+
+  try {
+    // Amount is in kobo, so multiply by 100
+    const amountInKobo = Math.round(amount * 100);
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/216e8403-ed09-402a-a608-99b1722965bb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'payment-actions.ts:279',message:'findRecentTransactionByEmail entry',data:{email,amount,amountInKobo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    
+    // Query all recent transactions (Paystack API doesn't support filtering by email directly)
+    // We'll get the most recent 100 transactions and filter client-side
+    const response = await fetch(
+      `https://api.paystack.co/transaction?perPage=100`,
+      {
+        headers: {
+          Authorization: `Bearer ${paystackSecretKey}`,
+        },
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/216e8403-ed09-402a-a608-99b1722965bb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'payment-actions.ts:305',message:'Paystack API error',data:{status:response.status,errorData},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+      console.error('Paystack transaction list error:', errorData);
+      return null;
+    }
+
+    const result = await response.json();
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/216e8403-ed09-402a-a608-99b1722965bb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'payment-actions.ts:311',message:'Paystack API response',data:{resultStatus:result.status,hasData:!!result.data,dataLength:result.data?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    
+    if (!result.status || !result.data) {
+      console.log('No transaction data returned from Paystack');
+      return null;
+    }
+
+    // Find transaction matching email and amount (within 1 kobo tolerance)
+    const transactions = result.data || [];
+    console.log(`🔍 Checking ${transactions.length} recent transactions for email: ${email}, amount: ${amountInKobo} kobo`);
+    
+    // Filter to only recent transactions (last 10 minutes) to avoid false matches
+    const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/216e8403-ed09-402a-a608-99b1722965bb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'payment-actions.ts:320',message:'Starting transaction search',data:{transactionCount:transactions.length,email,amountInKobo,tenMinutesAgo,now:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    
+    const matchingTransaction = transactions.find((tx: any) => {
+      const txEmail = tx.customer?.email || tx.customer_email || '';
+      const txAmount = tx.amount || 0;
+      const emailMatch = txEmail.toLowerCase() === email.toLowerCase();
+      const amountMatch = Math.abs(txAmount - amountInKobo) <= 1; // Allow 1 kobo difference
+      
+      // Check if transaction is recent (within last 10 minutes)
+      const txDate = tx.paid_at ? new Date(tx.paid_at) : null;
+      const txTimestamp = txDate ? txDate.getTime() : 0;
+      const isRecent = txTimestamp > tenMinutesAgo;
+      
+      const matches = emailMatch && amountMatch && tx.status === 'success' && isRecent;
+      
+      // #region agent log
+      if (txEmail || txAmount > 0) {
+        fetch('http://127.0.0.1:7242/ingest/216e8403-ed09-402a-a608-99b1722965bb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'payment-actions.ts:332',message:'Transaction check',data:{txReference:tx.reference,txEmail,txAmount,emailMatch,amountMatch,isRecent,txStatus:tx.status,matches,paidAt:tx.paid_at},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      }
+      // #endregion
+      
+      if (emailMatch && amountMatch && isRecent) {
+        console.log(`🔍 Found candidate transaction:`, {
+          reference: tx.reference,
+          status: tx.status,
+          email: txEmail,
+          amount: txAmount,
+          paidAt: tx.paid_at,
+          matches
+        });
+      }
+      
+      return matches;
+    });
+
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/216e8403-ed09-402a-a608-99b1722965bb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'payment-actions.ts:352',message:'Transaction search result',data:{found:!!matchingTransaction,matchingReference:matchingTransaction?.reference},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+
+    if (matchingTransaction) {
+      console.log('✅ Found matching transaction:', matchingTransaction.reference);
+      return {
+        reference: matchingTransaction.reference,
+        status: matchingTransaction.status,
+        amount: matchingTransaction.amount / 100,
+        paidAt: matchingTransaction.paid_at,
+      };
+    }
+
+    console.log('❌ No matching transaction found');
+    return null;
+  } catch (error: any) {
+    console.error('Error finding recent transaction:', error);
+    return null;
+  }
 }
 
 /**

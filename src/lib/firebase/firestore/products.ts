@@ -24,6 +24,7 @@ import {
   where
 } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { firestoreCache, generateCacheKey } from './cache';
 
 export interface ProductVariant {
   id: string;
@@ -49,6 +50,7 @@ export interface Product extends DocumentData {
   category?: string;
   status?: 'active' | 'draft' | 'inactive'; // Product status
   isFeatured?: boolean;
+  allowShipping?: boolean; // Whether this product can be shipped (defaults based on seller's shipping zones)
   variants?: ProductVariant[]; // Product variants (size, color, etc.)
   // Analytics
   views?: number;
@@ -112,7 +114,7 @@ export const useAllProducts = (productLimit?: number) => {
           
           return { 
             id: doc.id, 
-            price: data.initialPrice || data.price || 0, 
+            price: data.price || 0, 
             ...data,
             createdAt 
           } as Product;
@@ -192,7 +194,7 @@ export const usePaginatedProducts = (pageSize: number = 20) => {
           
           return { 
             id: doc.id, 
-            price: data.initialPrice || data.price || 0, 
+            price: data.price || 0, 
             ...data,
             createdAt 
           } as Product;
@@ -303,7 +305,7 @@ export const useProductsBySeller = (sellerId: string | undefined) => {
           }
           return { 
             id: doc.id, 
-            price: data.initialPrice || data.price || 0, 
+            price: data.price || 0, 
             ...data,
             createdAt 
           } as Product;
@@ -363,7 +365,8 @@ export const useProduct = (productId: string) => {
       productRef,
       (doc) => {
         if (doc.exists()) {
-          setProduct({ id: doc.id, price: doc.data().initialPrice, ...doc.data() } as Product);
+          const data = doc.data();
+          setProduct({ id: doc.id, price: data.price || 0, ...data } as Product);
         } else {
           setProduct(null);
         }

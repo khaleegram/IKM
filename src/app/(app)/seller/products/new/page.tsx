@@ -18,7 +18,7 @@ import { Upload, DollarSign, Sparkles, Plus, X, Package, Eye, EyeOff, Save } fro
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { getProductDescription } from "@/lib/actions";
 import { addProduct as addProductAction } from "@/lib/product-actions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -28,6 +28,7 @@ import { PRODUCT_CATEGORIES } from "@/lib/constants/categories";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { getPublicShippingZones } from "@/lib/shipping-actions";
 
 
 export default function NewProductPage() {
@@ -52,6 +53,7 @@ export default function NewProductPage() {
         sku: '',
         category: '',
         status: 'active' as 'active' | 'draft' | 'inactive',
+        allowShipping: true, // Default, will be updated based on shipping zones
     });
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [variants, setVariants] = useState<Array<{
@@ -59,6 +61,26 @@ export default function NewProductPage() {
         options: Array<{ value: string; priceModifier: string; stock: string; sku: string }>;
     }>>([]);
     const [showComparePrice, setShowComparePrice] = useState(false);
+    const [hasShippingZones, setHasShippingZones] = useState<boolean | null>(null);
+
+    // Check if seller has shipping zones to set default allowShipping
+    useEffect(() => {
+        const checkShippingZones = async () => {
+            if (!user?.uid) return;
+            try {
+                const zones = await getPublicShippingZones(user.uid);
+                const hasZones = zones.length > 0;
+                setHasShippingZones(hasZones);
+                // Set default allowShipping based on whether zones exist
+                setFormData(prev => ({ ...prev, allowShipping: hasZones }));
+            } catch (error) {
+                console.error('Failed to check shipping zones:', error);
+                setHasShippingZones(false);
+                setFormData(prev => ({ ...prev, allowShipping: false }));
+            }
+        };
+        checkShippingZones();
+    }, [user?.uid]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { id, value } = e.target;
@@ -114,7 +136,45 @@ export default function NewProductPage() {
             return;
         }
         
+        // Validate required fields
+        if (!formData.name || !formData.name.trim()) {
+            toast({ variant: 'destructive', title: 'Validation Error', description: 'Product name is required.' });
+            return;
+        }
+        
+        if (!formData.price || formData.price.trim() === '' || isNaN(parseFloat(formData.price))) {
+            toast({ variant: 'destructive', title: 'Validation Error', description: 'Valid selling price is required.' });
+            return;
+        }
+        
+        if (!formData.stock || formData.stock.trim() === '' || isNaN(parseInt(formData.stock))) {
+            toast({ variant: 'destructive', title: 'Validation Error', description: 'Valid stock quantity is required.' });
+            return;
+        }
+        
         const data = new FormData(e.currentTarget);
+        
+        // Explicitly append all required fields to ensure they're in FormData
+        data.set('name', formData.name);
+        data.set('price', formData.price);
+        data.set('stock', formData.stock);
+        data.set('status', formData.status);
+        
+        if (formData.description) {
+            data.set('description', formData.description);
+        }
+        if (formData.category) {
+            data.set('category', formData.category);
+        }
+        if (formData.sku) {
+            data.set('sku', formData.sku);
+        }
+        if (showComparePrice && formData.compareAtPrice && formData.compareAtPrice.trim() !== '') {
+            data.set('compareAtPrice', formData.compareAtPrice);
+        }
+        
+        // Add allowShipping to form data
+        data.set('allowShipping', formData.allowShipping ? 'true' : 'false');
         
         // Add variants to form data if any
         if (variants.length > 0) {
@@ -396,12 +456,36 @@ export default function NewProductPage() {
                           value={formData.stock} 
                           onChange={handleInputChange} 
                           placeholder="25" 
-                          className="mt-1"
+                          className="mt-1" 
                           required
                         />
                         <p className="text-xs text-muted-foreground mt-1">
                           Enter 0 if out of stock
                         </p>
+                      </div>
+
+                      <Separator />
+
+                      <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              id="allowShipping"
+                              checked={formData.allowShipping}
+                              onCheckedChange={(checked) => setFormData(prev => ({ ...prev, allowShipping: checked }))}
+                            />
+                            <Label htmlFor="allowShipping" className="cursor-pointer font-medium">
+                              Allow shipping for this product
+                            </Label>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1 ml-8">
+                            {hasShippingZones === null 
+                              ? 'Checking shipping zones...'
+                              : hasShippingZones 
+                                ? 'You have shipping zones configured. Customers can have this product delivered.'
+                                : 'No shipping zones found. Set up shipping zones in Shipping Settings to enable delivery.'}
+                          </p>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

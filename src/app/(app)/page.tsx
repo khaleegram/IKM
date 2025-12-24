@@ -10,7 +10,7 @@ import { PRODUCT_CATEGORIES } from '@/lib/constants/categories';
 import { debounce } from '@/lib/debounce';
 import type { Product } from '@/lib/firebase/firestore/products';
 import { useAllProducts } from '@/lib/firebase/firestore/products';
-import { ArrowRight, Search, Sparkles, Store } from 'lucide-react';
+import { ArrowRight, Search, ShoppingCart, Sparkles, Store } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -126,7 +126,6 @@ export default function StoreHomePage() {
                   </Button>
                 </Link>
               </div>
-            </div>
             </div>
           </div>
       </section>

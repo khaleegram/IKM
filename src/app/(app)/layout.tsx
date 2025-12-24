@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Settings, BarChart2, LogOut, ShoppingCart, Loader2, Store, User as UserIcon, ShieldCheck, Menu, DollarSign, Receipt, Heart, Bell, Users, TrendingUp, FileText, Megaphone, Truck, Palette, Globe, Search } from "lucide-react";
+import { LayoutDashboard, Package, Settings, BarChart2, LogOut, ShoppingCart, Loader2, Store, User as UserIcon, Menu, DollarSign, Users, TrendingUp, FileText, Megaphone, Truck, Palette, Globe } from "lucide-react";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { useEffect } from "react";
 
@@ -221,60 +221,17 @@ export default function AppLayout({
     );
   }
 
-  // Layout for customer-facing routes
+  // Layout for customer-facing routes - Clean and minimal
   return (
       <div className="flex flex-col min-h-screen bg-background">
         <header className="p-4 sm:p-6 flex justify-between items-center border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
           <Link href="/">
             <DynamicLogo className="w-auto h-8" />
           </Link>
-          <nav className="hidden md:flex items-center gap-2 sm:gap-4">
-            <Link href="/products">
-                <Button variant="ghost">
-                    <Package className="mr-2 h-4 w-4" />
-                    All Products
-                </Button>
-            </Link>
-            <Link href="/stores">
-              <Button variant="ghost">
-                <Store className="mr-2 h-4 w-4" />
-                All Stores
-              </Button>
-            </Link>
-            <Link href="/seller/dashboard">
-              <Button variant="ghost">Seller Hub</Button>
-            </Link>
-             {isAdmin && (
-              <Link href="/admin/dashboard">
-                <Button variant="outline">
-                  <ShieldCheck className="mr-2 h-4 w-4" />
-                  Admin
-                </Button>
-              </Link>
-            )}
-            {user && (
-              <>
-                <NotificationsBell />
-                <Link href="/profile">
-                  <Button variant="ghost">
-                    <UserIcon className="mr-2 h-4 w-4" />
-                    My Orders
-                  </Button>
-                </Link>
-                <Link href="/profile/payments">
-                  <Button variant="ghost">
-                    <DollarSign className="mr-2 h-4 w-4" />
-                    Payments
-                  </Button>
-                </Link>
-                <Link href="/profile/wishlist">
-                  <Button variant="ghost">
-                    <Heart className="mr-2 h-4 w-4" />
-                    Wishlist
-                  </Button>
-                </Link>
-              </>
-            )}
+          
+          {/* Cart and Menu */}
+          <div className="flex items-center gap-2">
+            {/* Shopping Cart */}
             <Link href="/cart" className="relative">
               <Button size="icon" variant="outline">
                 <ShoppingCart className="h-5 w-5" />
@@ -284,50 +241,41 @@ export default function AppLayout({
                 <Badge className="absolute -right-2 -top-2 h-5 w-5 justify-center p-0" variant="destructive">{cartCount}</Badge>
               )}
             </Link>
-             {!user && !isLoading && (
-              <Link href="/login">
-                <Button>Login</Button>
-              </Link>
-            )}
-            {user && (
-                 <Button variant="ghost" size="icon" onClick={handleLogout}><LogOut className="h-5 w-5" /></Button>
-            )}
-          </nav>
-           <div className="md:hidden flex items-center gap-2">
-                <Link href="/cart" className="relative">
-                  <Button size="icon" variant="outline">
-                    <ShoppingCart className="h-5 w-5" />
-                    <span className="sr-only">Shopping Cart</span>
+
+            {/* Hamburger Menu - Only Seller Hub and Login */}
+            <ClientOnly>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <Menu className="h-5 w-5" />
+                    <span className="sr-only">Menu</span>
                   </Button>
-                  {cartCount > 0 && (
-                    <Badge className="absolute -right-2 -top-2 h-5 w-5 justify-center p-0" variant="destructive">{cartCount}</Badge>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <Link href="/seller/dashboard">
+                      <Store className="mr-2 h-4 w-4" />
+                      Seller Hub
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {user ? (
+                    <DropdownMenuItem onClick={handleLogout}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Logout
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem asChild>
+                      <Link href="/login">
+                        <UserIcon className="mr-2 h-4 w-4" />
+                        Login
+                      </Link>
+                    </DropdownMenuItem>
                   )}
-                </Link>
-                <ClientOnly>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon">
-                        <Menu className="h-5 w-5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                       <DropdownMenuItem asChild><Link href="/products">All Products</Link></DropdownMenuItem>
-                       <DropdownMenuItem asChild><Link href="/stores">All Stores</Link></DropdownMenuItem>
-                       <DropdownMenuItem asChild><Link href="/seller/dashboard">Seller Hub</Link></DropdownMenuItem>
-                      {user && <DropdownMenuItem asChild><Link href="/profile">My Orders</Link></DropdownMenuItem>}
-                      {user && <DropdownMenuItem asChild><Link href="/profile/payments">Payment History</Link></DropdownMenuItem>}
-                      {user && <DropdownMenuItem asChild><Link href="/profile/wishlist">Wishlist</Link></DropdownMenuItem>}
-                      {user && isAdmin && <DropdownMenuItem asChild><Link href="/admin/dashboard">Admin</Link></DropdownMenuItem>}
-                      <DropdownMenuSeparator />
-                      {user ? (
-                        <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
-                      ) : (
-                        <DropdownMenuItem asChild><Link href="/login">Login</Link></DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </ClientOnly>
-            </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </ClientOnly>
+          </div>
         </header>
         <main className="flex-1">
             {children}

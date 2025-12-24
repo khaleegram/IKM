@@ -1,0 +1,28 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "uuidv",
+    "Paystack",
+    "paystack",
+    "uuidv4",
+    "firestore"
+  ],
+  "ignoreWords": [
+    "uuidv",
+    "Paystack"
+  ],
+  "dictionaries": [
+    "typescript",
+    "node",
+    "npm",
+    "html",
+    "css",
+    "bash",
+    "fonts",
+    "filetypes",
+    "npm",
+    "software-terms"
+  ]
+}
+

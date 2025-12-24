@@ -1,9 +1,8 @@
 'use server';
 
-import { getAdminFirestore } from '@/lib/firebase/admin';
+import { getAdminFirestore, getAdminAuth } from '@/lib/firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import { getAdminAuth } from '@/lib/firebase/admin';
 import { generateAvailableSubdomain } from '@/lib/subdomain-actions';
 
 /**

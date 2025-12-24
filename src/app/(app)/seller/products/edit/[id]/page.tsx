@@ -29,6 +29,7 @@ import { PRODUCT_CATEGORIES } from "@/lib/constants/categories";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { getPublicShippingZones } from "@/lib/shipping-actions";
 
 
 export default function EditProductPage() {
@@ -55,10 +56,12 @@ export default function EditProductPage() {
         sku: '',
         category: '',
         status: 'active' as 'active' | 'draft' | 'inactive',
+        allowShipping: true,
     });
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showComparePrice, setShowComparePrice] = useState(false);
+    const [hasShippingZones, setHasShippingZones] = useState<boolean | null>(null);
 
     useEffect(() => {
       if(product) {
@@ -71,6 +74,7 @@ export default function EditProductPage() {
             sku: product.sku || '',
             category: product.category || '',
             status: product.status || 'active',
+            allowShipping: product.allowShipping !== false, // Default to true if not set
         })
         if (product.imageUrl) {
             setImagePreview(product.imageUrl);
@@ -78,6 +82,21 @@ export default function EditProductPage() {
         setShowComparePrice(!!product.compareAtPrice);
       }
     }, [product]);
+
+    // Check if seller has shipping zones
+    useEffect(() => {
+        const checkShippingZones = async () => {
+            if (!user?.uid) return;
+            try {
+                const zones = await getPublicShippingZones(user.uid);
+                setHasShippingZones(zones.length > 0);
+            } catch (error) {
+                console.error('Failed to check shipping zones:', error);
+                setHasShippingZones(false);
+            }
+        };
+        checkShippingZones();
+    }, [user?.uid]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { id, value } = e.target;
@@ -134,6 +153,8 @@ export default function EditProductPage() {
         }
         
         const data = new FormData(e.currentTarget);
+        // Add allowShipping to form data
+        data.set('allowShipping', formData.allowShipping ? 'true' : 'false');
         startTransition(async () => {
             try {
                 await updateProductAction(productId, user.uid, data);
@@ -431,6 +452,30 @@ export default function EditProductPage() {
                         <p className="text-xs text-muted-foreground mt-1">
                           Enter 0 if out of stock
                         </p>
+                      </div>
+
+                      <Separator />
+
+                      <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              id="allowShipping"
+                              checked={formData.allowShipping}
+                              onCheckedChange={(checked) => setFormData(prev => ({ ...prev, allowShipping: checked }))}
+                            />
+                            <Label htmlFor="allowShipping" className="cursor-pointer font-medium">
+                              Allow shipping for this product
+                            </Label>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1 ml-8">
+                            {hasShippingZones === null 
+                              ? 'Checking shipping zones...'
+                              : hasShippingZones 
+                                ? 'You have shipping zones configured. Customers can have this product delivered.'
+                                : 'No shipping zones found. Set up shipping zones in Shipping Settings to enable delivery.'}
+                          </p>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

@@ -9,12 +9,14 @@
 import { initializeApp, getApps, App, cert, AppOptions } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getStorage, Storage } from 'firebase-admin/storage';
+import { getAuth, Auth } from 'firebase-admin/auth';
 import { getFirebaseAdminEnv, firebaseClientEnv, FIREBASE_STORAGE_BUCKET } from '@/config/env';
 
 // Lazy-loaded instances
 let adminApp: App | null = null;
 let adminFirestore: Firestore | null = null;
 let adminStorage: Storage | null = null;
+let adminAuth: Auth | null = null;
 let initializationError: Error | null = null;
 let firestoreSettingsApplied: boolean = false;
 
@@ -178,6 +180,20 @@ export function getAdminStorage(): Storage {
 }
 
 /**
+ * Gets the Auth Admin instance
+ * Initializes the app and Auth if they haven't been initialized yet
+ * 
+ * @throws {Error} If initialization fails
+ */
+export function getAdminAuth(): Auth {
+  if (!adminAuth) {
+    const app = getAdminApp();
+    adminAuth = getAuth(app);
+  }
+  return adminAuth;
+}
+
+/**
  * Resets all admin instances (useful for testing)
  * @internal
  */
@@ -185,6 +201,7 @@ export function resetAdminInstances(): void {
   adminApp = null;
   adminFirestore = null;
   adminStorage = null;
+  adminAuth = null;
   initializationError = null;
   firestoreSettingsApplied = false;
 }

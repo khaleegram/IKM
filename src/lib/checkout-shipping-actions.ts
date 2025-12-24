@@ -1,7 +1,7 @@
 'use server';
 
 import { getAdminFirestore } from './firebase/admin';
-import { getShippingZones, type ShippingZone } from './shipping-actions';
+import { getPublicShippingZones, type ShippingZone } from './shipping-actions';
 
 export interface ShippingOption {
   type: 'delivery' | 'pickup';
@@ -23,15 +23,29 @@ export interface ShippingCalculation {
 
 /**
  * Calculate shipping options for a customer based on their state and seller's shipping zones
+ * Also checks if products in the cart allow shipping
  */
 export async function calculateShippingOptions(
   sellerId: string,
-  customerState: string
+  customerState: string,
+  productIds?: string[] // Optional: product IDs to check allowShipping
 ): Promise<ShippingCalculation> {
   const firestore = getAdminFirestore();
 
-  // Get seller's shipping zones
-  const zones = await getShippingZones(sellerId);
+  // Get seller's shipping zones (public - no auth required for checkout)
+  const zones = await getPublicShippingZones(sellerId);
+
+  // Check if any products don't allow shipping
+  let allProductsAllowShipping = true;
+  if (productIds && productIds.length > 0) {
+    const productDocs = await Promise.all(
+      productIds.map(id => firestore.collection('products').doc(id).get())
+    );
+    allProductsAllowShipping = productDocs.every(doc => {
+      const data = doc.data();
+      return data?.allowShipping !== false; // Default to true if not set
+    });
+  }
 
   // Get seller's store info for pickup address and phone
   const storeDoc = await firestore.collection('stores').doc(sellerId).get();
@@ -54,7 +68,8 @@ export async function calculateShippingOptions(
 
   const options: ShippingOption[] = [];
 
-  if (matchingZone) {
+  // Only offer delivery if products allow shipping and there's a matching zone
+  if (allProductsAllowShipping && matchingZone) {
     // Seller ships to this state - offer delivery
     // Note: Free shipping will be calculated on checkout based on order total
     options.push({
@@ -67,22 +82,10 @@ export async function calculateShippingOptions(
       estimatedDays: 3,
       available: true,
     });
-  } else {
-    // Seller doesn't ship to this state - offer pickup only
-    if (sellerPickupAddress) {
-      options.push({
-        type: 'pickup',
-        price: 0,
-        name: 'Pickup from Store',
-        description: `Pick up your order from our store location`,
-        pickupAddress: sellerPickupAddress,
-        available: true,
-      });
-    }
   }
 
   // Always offer pickup option if seller has pickup address
-  if (sellerPickupAddress && !options.some(o => o.type === 'pickup')) {
+  if (sellerPickupAddress) {
     options.push({
       type: 'pickup',
       price: 0,
@@ -93,12 +96,18 @@ export async function calculateShippingOptions(
     });
   }
 
+  // Build message
+  let message: string | undefined;
+  if (!allProductsAllowShipping) {
+    message = 'Some products in your cart do not allow shipping. Please choose pickup.';
+  } else if (!matchingZone) {
+    message = `We don't currently ship to ${customerState}. Please choose pickup or contact us to arrange delivery.`;
+  }
+
   return {
     available: options.length > 0,
     options,
-    message: matchingZone 
-      ? undefined 
-      : `We don't currently ship to ${customerState}. Please choose pickup or contact us to arrange delivery.`,
+    message,
     sellerPhone,
     sellerPickupAddress,
   };
@@ -117,7 +126,7 @@ export async function getShippingPrice(
     return 0;
   }
 
-  const zones = await getShippingZones(sellerId);
+  const zones = await getPublicShippingZones(sellerId);
   const matchingZone = zones.find(zone => {
     if (zone.states && zone.states.length > 0) {
       return zone.states.some(state => 
@@ -140,31 +149,4 @@ export async function getShippingPrice(
   return matchingZone.rate;
 }
 
-/**
- * Calculate final shipping price with free threshold check (client-side helper)
- */
-export function calculateFinalShippingPrice(
-  selectedOption: ShippingOption | null,
-  orderSubtotal: number,
-  zones: ShippingZone[]
-): number {
-  if (!selectedOption || selectedOption.type === 'pickup') {
-    return 0;
-  }
-
-  // Find matching zone to check free threshold
-  // Match by price or by description containing zone name
-  const zone = zones.find(z => {
-    if (z.rate === selectedOption.price) return true;
-    // Try to match by zone name in description
-    if (selectedOption.description?.includes(z.name)) return true;
-    return false;
-  });
-  
-  if (zone && zone.freeThreshold && orderSubtotal >= zone.freeThreshold) {
-    return 0; // Free shipping
-  }
-
-  return selectedOption.price;
-}
 
