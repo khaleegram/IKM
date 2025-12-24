@@ -60,6 +60,7 @@ export interface StoreProfile extends DocumentData {
   email?: string;
   phone?: string;
   website?: string;
+  pickupAddress?: string; // Default pickup address for customers who can't receive delivery
   // Store theme
   primaryColor?: string;
   secondaryColor?: string;

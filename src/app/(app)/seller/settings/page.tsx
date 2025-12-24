@@ -77,6 +77,7 @@ export default function SellerSettingsPage() {
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [website, setWebsite] = useState('');
+    const [pickupAddress, setPickupAddress] = useState('');
 
     // Store theme
     const [primaryColor, setPrimaryColor] = useState('');
@@ -161,6 +162,7 @@ export default function SellerSettingsPage() {
             setEmail(store.email || '');
             setPhone(store.phone || '');
             setWebsite(store.website || '');
+            setPickupAddress(store.pickupAddress || '');
 
             // Store theme
             setPrimaryColor(store.primaryColor || '');
@@ -319,6 +321,7 @@ export default function SellerSettingsPage() {
                 if (email) formData.append('email', email);
                 if (phone) formData.append('phone', phone);
                 if (website) formData.append('website', website);
+                if (pickupAddress) formData.append('pickupAddress', pickupAddress);
 
                 await updateStoreSettings(authUser.uid, formData);
                 toast({
@@ -969,6 +972,19 @@ export default function SellerSettingsPage() {
                             value={website} 
                             onChange={(e) => setWebsite(e.target.value)} 
                         />
+                    </div>
+                    <div>
+                        <Label htmlFor="pickupAddress">Pickup Address</Label>
+                        <Textarea 
+                            id="pickupAddress" 
+                            placeholder="Enter your store pickup address for customers who can't receive delivery" 
+                            value={pickupAddress} 
+                            onChange={(e) => setPickupAddress(e.target.value)} 
+                            rows={3}
+                        />
+                        <p className="text-sm text-muted-foreground mt-1">
+                            This address will be shown to customers when you don't ship to their state
+                        </p>
                     </div>
                 </CardContent>
                 <CardFooter className="flex justify-end">

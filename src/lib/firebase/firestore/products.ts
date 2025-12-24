@@ -40,14 +40,15 @@ export interface ProductVariant {
 export interface Product extends DocumentData {
   id?: string;
   name: string;
-  description: string;
-  price: number; // This will now be the initial price for client-side display
-  initialPrice: number;
-  lastPrice: number;
+  description?: string;
+  price: number; // Selling price
+  compareAtPrice?: number; // Original price (for showing discounts)
   stock: number;
+  sku?: string; // Stock Keeping Unit
   imageUrl?: string;
   sellerId: string;
   category?: string;
+  status?: 'active' | 'draft' | 'inactive'; // Product status
   isFeatured?: boolean;
   variants?: ProductVariant[]; // Product variants (size, color, etc.)
   // Analytics
@@ -56,6 +57,7 @@ export interface Product extends DocumentData {
   averageRating?: number; // Average rating from reviews (1-5)
   reviewCount?: number; // Total number of reviews
   createdAt?: any;
+  updatedAt?: any;
 }
 
 // Hook to get all products for the storefront

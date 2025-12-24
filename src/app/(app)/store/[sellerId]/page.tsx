@@ -1,15 +1,20 @@
-
 'use client';
 
 import Link from 'next/link';
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import Image from 'next/image';
-import { ShoppingCart, Loader2, Store } from 'lucide-react';
+import { ShoppingCart, Loader2, Store, MapPin, Phone, Mail, Globe, Facebook, Instagram, Twitter, Clock, Star, Filter, Grid3x3, List } from 'lucide-react';
 import { useProductsBySeller } from '@/lib/firebase/firestore/products';
 import { useStoreByUserId } from '@/lib/firebase/firestore/stores';
 import { useCart } from '@/lib/cart-context';
 import { useParams, notFound } from 'next/navigation';
+import { ProductCard } from '@/components/product-card';
+import { ProductGridSkeleton } from '@/components/loading-skeleton';
+import { EmptyState } from '@/components/empty-state';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState, useMemo } from 'react';
+import { PRODUCT_CATEGORIES } from '@/lib/constants/categories';
 
 
 export default function SellerStorePage() {

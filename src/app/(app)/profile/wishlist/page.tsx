@@ -116,7 +116,7 @@ export default function WishlistPage() {
                 </Link>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-base sm:text-lg font-bold text-primary">
-                    ₦{(product.price || product.initialPrice || 0).toLocaleString()}
+                    ₦{(product.price || 0).toLocaleString()}
                   </p>
                   {product.averageRating && product.reviewCount ? (
                     <div className="flex items-center gap-1">

@@ -22,7 +22,8 @@ export async function createAdminUser(userId: string, email: string, displayName
     await firestore.collection('users').doc(userId).set({
         displayName: displayName,
         email: email,
-        isAdmin: true, // Also store it in the document for easy querying/UI
+        role: 'admin', // Admin role
+        isAdmin: true, // Also store it in the document for easy querying/UI (backward compatibility)
         createdAt: new Date(),
     });
 }
@@ -58,7 +59,10 @@ export async function grantAdminRole(userId: string): Promise<void> {
   
   // Also update the user's document in Firestore to reflect the change immediately in the UI
   const firestore = getAdminFirestore();
-  await firestore.collection('users').doc(userId).update({ isAdmin: true });
+  await firestore.collection('users').doc(userId).update({ 
+    isAdmin: true,
+    role: 'admin' // Update role field
+  });
   
   revalidatePath('/admin/users');
   revalidatePath('/admin/dashboard'); // Revalidate admin pages
@@ -98,7 +102,15 @@ export async function revokeAdminRole(userId: string): Promise<void> {
   
   // Also update the user's document in Firestore
   const firestore = getAdminFirestore();
-  await firestore.collection('users').doc(userId).update({ isAdmin: false });
+  
+  // Determine new role: if user has a store, they're a seller, otherwise buyer
+  const hasStore = await firestore.collection('stores').doc(userId).get();
+  const newRole = hasStore.exists ? 'seller' : 'buyer';
+  
+  await firestore.collection('users').doc(userId).update({ 
+    isAdmin: false,
+    role: newRole // Update role based on whether they have a store
+  });
   
   revalidatePath('/admin/users');
 }

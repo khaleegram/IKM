@@ -1,21 +1,22 @@
 'use client';
 
-import Link from 'next/link';
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import Image from 'next/image';
-import { ShoppingCart, Loader2, ArrowRight, Search, Sparkles, Star, Store } from 'lucide-react';
-import { useAllProducts } from '@/lib/firebase/firestore/products';
-import { useCart } from '@/lib/cart-context';
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
-import { debounce } from '@/lib/debounce';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import type { Product } from '@/lib/firebase/firestore/products';
 import { DynamicLogo } from '@/components/DynamicLogo';
+import { ProductGridSkeleton } from '@/components/loading-skeleton';
+import { ProductCard } from '@/components/product-card';
+import { Button } from "@/components/ui/button";
+import { Input } from '@/components/ui/input';
+import { useCart } from '@/lib/cart-context';
+import { PRODUCT_CATEGORIES } from '@/lib/constants/categories';
+import { debounce } from '@/lib/debounce';
+import type { Product } from '@/lib/firebase/firestore/products';
+import { useAllProducts } from '@/lib/firebase/firestore/products';
+import { ArrowRight, Search, Sparkles, Store } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function StoreHomePage() {
+  const router = useRouter();
   const { data: products, isLoading: isLoadingProducts } = useAllProducts(8);
   const { addToCart, isAddingToCart } = useCart();
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,6 +60,7 @@ export default function StoreHomePage() {
   
 
   const categoryLinks = [
+    { name: 'Browse All Products', icon: ShoppingCart, href: '/products'},
     { name: 'Browse All Stores', icon: Store, href: '/stores'},
   ]
 
@@ -79,6 +81,11 @@ export default function StoreHomePage() {
                   className="h-12 sm:h-14 w-full rounded-full bg-card/80 pl-12 pr-4 text-base"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchTerm.trim()) {
+                      router.push(`/products?q=${encodeURIComponent(searchTerm.trim())}`);
+                    }
+                  }}
                 />
               </div>
                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -91,6 +98,34 @@ export default function StoreHomePage() {
                         </Button>
                     </Link>
                 ))}
+            </div>
+            </div>
+            
+            {/* Popular Categories */}
+            <div className="mt-8 w-full max-w-4xl">
+              <h3 className="text-sm font-semibold text-muted-foreground mb-4 text-center">Shop by Category</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {PRODUCT_CATEGORIES.slice(0, 12).map(category => (
+                  <Link
+                    key={category.value}
+                    href={`/products?category=${category.value}`}
+                    className="flex flex-col items-center justify-center p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary transition-all duration-200 group"
+                  >
+                    <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">{category.icon}</span>
+                    <span className="text-xs font-medium text-center line-clamp-2 group-hover:text-primary transition-colors">
+                      {category.label}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+              <div className="text-center mt-6">
+                <Link href="/products">
+                  <Button variant="outline" size="sm">
+                    View All Categories
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
             </div>
             </div>
           </div>
@@ -110,19 +145,7 @@ export default function StoreHomePage() {
 
           {/* Loading State */}
           {isLoadingProducts && (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-              {Array.from({ length: 8 }).map((_, index) => (
-                <Card key={index} className="overflow-hidden border-0 shadow-sm">
-                  <CardHeader className="p-0">
-                    <Skeleton className="aspect-square w-full" />
-                  </CardHeader>
-                  <CardContent className="p-4 space-y-3">
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-6 w-1/2" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <ProductGridSkeleton count={8} />
           )}
 
           {/* Products Grid */}
@@ -130,62 +153,14 @@ export default function StoreHomePage() {
             <>
               <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
                 {filteredProducts.map((product, index) => (
-                  <Card 
-                    key={product.id} 
-                    className="group overflow-hidden relative border-0 shadow-sm hover:shadow-lg transition-all duration-300 bg-card"
-                  >
-                    <Link href={`/product/${product.id}`} className="block">
-                      <CardHeader className="p-0 relative">
-                        <Image 
-                          src={product.imageUrl || `https://picsum.photos/seed/${product.id}/600/400`} 
-                          alt={product.name} 
-                          width={600} 
-                          height={400} 
-                          className="aspect-square object-cover group-hover:scale-105 transition-transform duration-300"
-                          loading={index < 4 ? "eager" : "lazy"}
-                          data-ai-hint="product image"
-                        />
-                        {product.isFeatured && (
-                          <Badge className="absolute top-3 left-3 bg-primary text-primary-foreground">
-                            <Star className="h-3 w-3 mr-1.5 fill-current" />
-                            Featured
-                          </Badge>
-                        )}
-                      </CardHeader>
-                    </Link>
-                    
-                    <CardContent className="p-4 space-y-3">
-                      <div className="space-y-1 h-20">
-                        <h3 className="font-semibold text-base line-clamp-2 group-hover:text-primary transition-colors">
-                          {product.name}
-                        </h3>
-                        {product.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {product.description}
-                          </p>
-                        )}
-                      </div>
-                      
-                      <div className="flex justify-between items-center pt-2">
-                        <p className="font-bold text-primary text-lg">
-                          ₦{product.price.toLocaleString()}
-                        </p>
-                        <Button 
-                          size="icon" 
-                          className="h-9 w-9 rounded-full bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-110"
-                          onClick={() => handleAddToCart(product)}
-                          disabled={addingProductId === product.id || isAddingToCart}
-                          aria-label={`Add ${product.name} to cart`}
-                        >
-                          {addingProductId === product.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <ShoppingCart className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    index={index}
+                    onAddToCart={handleAddToCart}
+                    isAddingToCart={addingProductId === product.id || isAddingToCart}
+                    viewMode="grid"
+                  />
                 ))}
               </div>
 

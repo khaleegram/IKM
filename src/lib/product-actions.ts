@@ -110,8 +110,18 @@ export async function addProduct(userId: string, data: FormData) {
     const firestore = getAdminFirestore();
     const { image, ...productData } = validation.data;
 
+    // Calculate price for display (use compareAtPrice if available, otherwise price)
+    const displayPrice = productData.compareAtPrice || productData.price;
+    
     const dataToSave: any = {
-        ...productData,
+        name: productData.name,
+        description: productData.description || '',
+        price: productData.price,
+        compareAtPrice: productData.compareAtPrice,
+        stock: productData.stock || 0,
+        sku: productData.sku || '',
+        category: productData.category || '',
+        status: productData.status || 'active',
         sellerId: userId,
         views: 0,
         salesCount: 0,
@@ -198,7 +208,14 @@ export async function updateProduct(productId: string, userId: string, data: For
     }
 
     const dataToUpdate: any = {
-        ...productData,
+        name: productData.name,
+        description: productData.description || '',
+        price: productData.price,
+        compareAtPrice: productData.compareAtPrice,
+        stock: productData.stock || 0,
+        sku: productData.sku || '',
+        category: productData.category || '',
+        status: productData.status || 'active',
         updatedAt: new Date(),
     };
 

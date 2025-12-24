@@ -89,8 +89,10 @@ export default function ProductsPage() {
     return Array.from(categories);
   }, [products]);
 
-  const getStatus = (stock: number) => {
-    if (stock > 0) return { text: 'Active', variant: 'support' as const };
+  const getStatus = (product: typeof filteredProducts[0]) => {
+    if (product.status === 'draft') return { text: 'Draft', variant: 'secondary' as const };
+    if (product.status === 'inactive') return { text: 'Inactive', variant: 'outline' as const };
+    if (product.stock > 0) return { text: 'In Stock', variant: 'default' as const };
     return { text: 'Out of Stock', variant: 'destructive' as const };
   }
 
@@ -342,7 +344,7 @@ export default function ProductsPage() {
         {hasProducts && (
           <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredProducts.map((product) => {
-              const status = getStatus(product.stock);
+              const status = getStatus(product);
               const isSelected = selectedProducts.has(product.id!);
               return (
                 <Card 
@@ -379,9 +381,34 @@ export default function ProductsPage() {
                     )}
                   </CardHeader>
                   <CardContent className="p-4 flex-1">
-                    <h3 className="font-semibold text-lg">{product.name}</h3>
-                    <p className="font-bold text-primary text-xl mt-1">₦{product.price.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Stock: {product.stock}</p>
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-semibold text-lg flex-1">{product.name}</h3>
+                      {product.status === 'draft' && (
+                        <Badge variant="secondary" className="ml-2">Draft</Badge>
+                      )}
+                      {product.status === 'inactive' && (
+                        <Badge variant="outline" className="ml-2">Inactive</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className="font-bold text-primary text-xl">
+                        ₦{(product.price || 0).toLocaleString()}
+                      </p>
+                      {product.compareAtPrice && product.compareAtPrice > product.price && (
+                        <>
+                          <p className="text-sm text-muted-foreground line-through">
+                            ₦{product.compareAtPrice.toLocaleString()}
+                          </p>
+                          <Badge variant="destructive" className="text-xs">
+                            {Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)}% OFF
+                          </Badge>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>Stock: {product.stock || 0}</span>
+                      {product.sku && <span>SKU: {product.sku}</span>}
+                    </div>
                   </CardContent>
                   <CardFooter className="p-4 pt-0 flex justify-between items-center">
                       <Badge variant={status.variant}>{status.text}</Badge>

@@ -17,6 +17,8 @@ const verifyPaymentSchema = z.object({
   deliveryAddress: z.string(),
   customerInfo: z.any(),
   discountCode: z.string().optional(),
+  shippingType: z.enum(['delivery', 'pickup']).optional(),
+  shippingPrice: z.number().optional(),
 });
 
 /**
@@ -39,8 +41,38 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
   const firestore = getAdminFirestore();
   const customerId = (await headers()).get('X-User-UID');
   
+  // For guest checkout, use email as identifier or create guest user
+  let finalCustomerId = customerId;
+  let isGuestOrder = false;
+  
   if (!customerId) {
-    throw new Error("User authentication not found. Cannot create order.");
+    // Guest checkout - use email to create or find guest user
+    if (!customerInfo?.email) {
+      throw new Error("Email is required for guest checkout.");
+    }
+    
+    isGuestOrder = true;
+    // Create a guest user record or use email-based ID
+    const guestId = `guest_${customerInfo.email.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
+    
+    // Check if guest user exists, otherwise create one
+    const guestUserRef = firestore.collection('users').doc(guestId);
+    const guestUserDoc = await guestUserRef.get();
+    
+    if (!guestUserDoc.exists) {
+      await guestUserRef.set({
+        email: customerInfo.email,
+        displayName: customerInfo.name || `${customerInfo.firstName || ''} ${customerInfo.lastName || ''}`.trim(),
+        firstName: customerInfo.firstName || '',
+        lastName: customerInfo.lastName || '',
+        phone: customerInfo.phone || '',
+        role: 'buyer', // Guest users are buyers
+        isGuest: true,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    
+    finalCustomerId = guestId;
   }
 
   // Check for existing order with same idempotency key (prevent duplicates)
@@ -95,7 +127,7 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
         await firestore.collection('failed_payments').add({
           reference,
           idempotencyKey,
-          customerId,
+          customerId: finalCustomerId,
           amount: total,
           error: error.message || 'Payment verification failed after retries',
           retryCount: retries,
@@ -124,7 +156,7 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
       idempotencyKey,
       expectedAmount: total,
       actualAmount: amount / 100,
-      customerId,
+      customerId: finalCustomerId,
       createdAt: FieldValue.serverTimestamp(),
     });
 
@@ -136,17 +168,22 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
   const commissionRate = await getPlatformCommissionRate();
   
   const orderData: Omit<Order, 'id' | 'createdAt'> = {
-    customerId: customerId,
+    customerId: finalCustomerId,
     sellerId: sellerId,
     items: cartItems.map(({ id, name, price, quantity }: CartItem) => ({ productId: id, name, price, quantity })),
     total: total,
     status: 'Processing',
     deliveryAddress: deliveryAddress,
-    customerInfo: customerInfo,
+    customerInfo: {
+      ...customerInfo,
+      isGuest: isGuestOrder, // Mark as guest order
+    },
     escrowStatus: 'held',
     paymentReference: reference,
     idempotencyKey, // Store idempotency key
     commissionRate: commissionRate, // Store commission rate for historical accuracy
+    shippingType: shippingType || 'delivery', // Store shipping type (delivery or pickup)
+    shippingPrice: shippingPrice || 0, // Store shipping price
   };
 
   const ordersCollectionRef = firestore.collection('orders');
@@ -169,7 +206,7 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
   // Create payment record
   await firestore.collection('payments').add({
     orderId: orderRef.id,
-    customerId: customerId,
+    customerId: finalCustomerId,
     sellerId: sellerId,
     amount: total,
     reference: reference,
@@ -177,6 +214,7 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
     status: 'completed',
     method: 'Paystack',
     discountCode: discountCode || null,
+    isGuest: isGuestOrder,
     verifiedAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
   });

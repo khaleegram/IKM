@@ -29,6 +29,7 @@ export interface UserProfile extends DocumentData {
   id?: string;
   displayName: string;
   email: string;
+  role?: 'buyer' | 'seller' | 'admin'; // User role: buyer, seller, or admin
   storeName?: string;
   storeDescription?: string;
   whatsappNumber?: string;
@@ -39,7 +40,7 @@ export interface UserProfile extends DocumentData {
     accountNumber: string;
     accountName: string;
   };
-  isAdmin?: boolean; // Added for UI reactivity
+  isAdmin?: boolean; // Added for UI reactivity (deprecated, use role instead)
   
   // Store setup fields (from onboarding)
   storeLogoUrl?: string;

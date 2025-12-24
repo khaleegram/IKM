@@ -45,6 +45,7 @@ export async function createUserProfile(userId: string, email: string) {
   await userRef.set({
     displayName: defaultStoreName,
     email: email,
+    role: 'seller', // Default role for signup is seller (they get a store)
     whatsappNumber: '',
     createdAt: FieldValue.serverTimestamp(),
   });

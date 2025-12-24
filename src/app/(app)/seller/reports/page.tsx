@@ -13,18 +13,68 @@ import { useOrdersBySeller } from "@/lib/firebase/firestore/orders";
 import { format as formatDate, subDays } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { useTransition } from "react";
+import { generateSalesReport, generateCustomerReport, generateProductReport } from "@/lib/report-actions";
+import { Loader2 } from "lucide-react";
 
 export default function ReportsPage() {
   const { user } = useUser();
+  const { toast } = useToast();
   const { data: orders } = useOrdersBySeller(user?.uid);
   const [reportType, setReportType] = useState('sales');
   const [dateRange, setDateRange] = useState('30');
   const [format, setFormat] = useState('pdf');
   const [emailReport, setEmailReport] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [generatedReport, setGeneratedReport] = useState<any>(null);
 
   const handleGenerateReport = () => {
-    // In a real implementation, this would generate and download/email the report
-    alert(`Generating ${reportType} report for last ${dateRange} days in ${format} format${emailReport ? ' and emailing it' : ''}`);
+    if (!user?.uid) {
+      toast({ variant: 'destructive', title: 'Error', description: 'User not authenticated' });
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const days = parseInt(dateRange);
+        let report;
+
+        switch (reportType) {
+          case 'sales':
+          case 'revenue':
+            report = await generateSalesReport(user.uid, days);
+            break;
+          case 'customers':
+            report = await generateCustomerReport(user.uid, days);
+            break;
+          case 'products':
+            report = await generateProductReport(user.uid, days);
+            break;
+          default:
+            throw new Error('Invalid report type');
+        }
+
+        setGeneratedReport(report);
+        toast({ title: 'Success', description: 'Report generated successfully!' });
+
+        // If PDF format, download as JSON for now (PDF generation would require a library)
+        if (format === 'pdf') {
+          const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${reportType}-report-${Date.now()}.json`;
+          a.click();
+        }
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: error instanceof Error ? error.message : 'Failed to generate report',
+        });
+      }
+    });
   };
 
   const handleExportData = () => {
@@ -119,9 +169,22 @@ export default function ReportsPage() {
               <Label htmlFor="email" className="cursor-pointer">Email report when ready</Label>
             </div>
 
-            <Button onClick={handleGenerateReport} className="w-full">
-              <FileText className="mr-2 h-4 w-4" />
-              Generate Report
+            <Button 
+              onClick={handleGenerateReport} 
+              className="w-full"
+              disabled={isPending}
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Generate Report
+                </>
+              )}
             </Button>
           </CardContent>
         </Card>

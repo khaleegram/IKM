@@ -168,6 +168,7 @@ const storeUpdateSchema = z.object({
     email: z.string().email().optional().or(z.literal('')),
     phone: z.string().optional(),
     website: z.string().url().optional().or(z.literal('')),
+    pickupAddress: z.string().optional(), // Default pickup address for customers who can't receive delivery
     // Store theme
     primaryColor: z.string().optional(),
     secondaryColor: z.string().optional(),
@@ -481,6 +482,9 @@ export async function updateStoreSettings(userId: string, data: FormData) {
     }
     if (validation.data.website !== undefined) {
         updateData.website = validation.data.website || null;
+    }
+    if (validation.data.pickupAddress !== undefined) {
+        updateData.pickupAddress = validation.data.pickupAddress || null;
     }
 
     // Update store theme

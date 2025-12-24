@@ -1,5 +1,5 @@
 
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -42,6 +42,9 @@ const nextConfig: NextConfig = {
       }
     ],
     formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 60,
   },
   async headers() {
     return [
@@ -59,7 +62,12 @@ const nextConfig: NextConfig = {
   // Experimental features for better performance
   experimental: {
     optimizePackageImports: ['lucide-react', '@/components/ui'],
+    optimizeCss: true,
   },
+  // Compression
+  compress: true,
+  // Power optimizations
+  poweredByHeader: false,
 };
 
 export default nextConfig;

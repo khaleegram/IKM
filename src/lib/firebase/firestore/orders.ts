@@ -95,6 +95,10 @@ export interface Order extends DocumentData {
   autoReleaseDate?: any; // Date when funds auto-release if no dispute
   // Dispute
   dispute?: OrderDispute;
+  // Shipping
+  shippingType?: 'delivery' | 'pickup';
+  shippingPrice?: number;
+  idempotencyKey?: string; // For preventing duplicate orders
   createdAt: any; // Firestore Timestamp
 }
 

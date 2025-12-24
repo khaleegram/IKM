@@ -136,13 +136,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Other protected routes - require authentication
-  if ((pathname === '/profile' || pathname === '/checkout') && !decodedToken) {
+  // Profile route requires authentication
+  if (pathname === '/profile' && !decodedToken) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.search = `redirect=${encodeURIComponent(pathname)}`;
     return NextResponse.redirect(url);
   }
+
+  // Checkout route allows guest checkout - no redirect needed
 
   return NextResponse.next({ request: { headers } });
 }
