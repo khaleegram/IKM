@@ -1,10 +1,10 @@
 'use server';
 
+import { requireOwnerOrAdmin } from '@/lib/auth-utils';
 import { getAdminFirestore } from '@/lib/firebase/admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { requireOwnerOrAdmin } from '@/lib/auth-utils';
-import { FieldValue } from 'firebase-admin/firestore';
 
 /**
  * Server Actions for User Profile Operations
@@ -16,8 +16,11 @@ const whatsappNumberSchema = z.string().regex(/^\+?[1-9]\d{1,14}$/, 'Invalid Wha
 /**
  * Create user profile in Firestore
  * Called after user account creation to ensure the profile is created server-side
+ * @param userId - The user's Firebase Auth UID
+ * @param email - The user's email address
+ * @param role - Optional role ('buyer' or 'seller'). Defaults to 'buyer'
  */
-export async function createUserProfile(userId: string, email: string) {
+export async function createUserProfile(userId: string, email: string, role: 'buyer' | 'seller' = 'buyer') {
   if (!userId || !email) {
     throw new Error('User ID and email are required');
   }
@@ -40,38 +43,41 @@ export async function createUserProfile(userId: string, email: string) {
   }
   
   // Create the profile with default values
-  const defaultStoreName = email.split('@')[0] || 'New Seller';
+  const defaultDisplayName = email.split('@')[0] || (role === 'seller' ? 'New Seller' : 'User');
   
   await userRef.set({
-    displayName: defaultStoreName,
+    displayName: defaultDisplayName,
     email: email,
-    role: 'seller', // Default role for signup is seller (they get a store)
+    role: role, // Use provided role (buyer or seller)
     whatsappNumber: '',
     createdAt: FieldValue.serverTimestamp(),
   });
   
-  // Also initialize a store for this user (using userId as document ID)
-  const storeRef = firestore.collection('stores').doc(userId);
-  const storeDoc = await storeRef.get();
-  
-  if (!storeDoc.exists) {
-    const storeName = `${defaultStoreName}'s Store`;
-    // Generate subdomain from store name
-    const subdomain = await generateAvailableSubdomain(storeName, userId);
+  // Only initialize a store if the user is a seller
+  if (role === 'seller') {
+    const { generateAvailableSubdomain } = await import('./subdomain-actions');
+    const storeRef = firestore.collection('stores').doc(userId);
+    const storeDoc = await storeRef.get();
     
-    await storeRef.set({
-      userId,
-      storeName,
-      storeDescription: 'Welcome to my new store!',
-      subdomain, // Auto-generated subdomain
-      onboardingCompleted: false,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    console.log(`✨ Store initialized for new user: ${userId} with subdomain: ${subdomain}`);
+    if (!storeDoc.exists) {
+      const storeName = `${defaultDisplayName}'s Store`;
+      // Generate subdomain from store name
+      const subdomain = await generateAvailableSubdomain(storeName, userId);
+      
+      await storeRef.set({
+        userId,
+        storeName,
+        storeDescription: 'Welcome to my new store!',
+        subdomain, // Auto-generated subdomain
+        onboardingCompleted: false,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      console.log(`✨ Store initialized for new seller: ${userId} with subdomain: ${subdomain}`);
+    }
   }
   
-  console.log(`User profile created successfully for ${userId}`);
+  console.log(`User profile created successfully for ${userId} with role: ${role}`);
   return { success: true, alreadyExists: false };
 }
 

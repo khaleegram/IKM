@@ -1,4 +1,3 @@
-
 'use client';
 
 import { DynamicLogo } from '@/components/DynamicLogo';
@@ -8,21 +7,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFirebase } from '@/firebase/provider';
 import { useToast } from '@/hooks/use-toast';
-import { grantAdminRoleToFirstUser } from '@/lib/admin-actions';
+import { linkGuestOrdersToAccount } from '@/lib/guest-order-actions';
 import { createUserProfile } from '@/lib/user-actions';
 import { User, createUserWithEmailAndPassword } from 'firebase/auth';
-import { ArrowLeft, Home } from 'lucide-react';
+import { ArrowLeft, Home, ShoppingBag } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
-export default function SignupPage() {
+export default function BuyerSignupPage() {
   const { auth, firestore } = useFirebase();
   const { toast } = useToast();
   const router = useRouter();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isPending, startTransition] = useTransition();
 
   // Check if Firebase is initialized
@@ -64,8 +64,22 @@ export default function SignupPage() {
             throw new Error(errorData.error || 'Failed to create session.');
         }
         
-        toast({ title: 'Account Created!', description: "Welcome! Let's get your store set up." });
-        router.push('/seller/onboarding');
+        // Link any guest orders to this account
+        try {
+          const linkResult = await linkGuestOrdersToAccount();
+          if (linkResult.linkedCount > 0) {
+            toast({ 
+              title: 'Orders Linked!', 
+              description: `We found ${linkResult.linkedCount} previous order(s) and linked them to your account.` 
+            });
+          }
+        } catch (linkError) {
+          console.error('Error linking guest orders:', linkError);
+          // Don't block signup if linking fails
+        }
+        
+        toast({ title: 'Account Created!', description: "Welcome! Your account is ready." });
+        router.push('/profile');
 
     } catch (error) {
         console.error("Error creating session:", error);
@@ -76,8 +90,13 @@ export default function SignupPage() {
   const handleSignUp = () => {
     startTransition(async () => {
       try {
-        if (!email || !password) {
-          toast({ variant: 'destructive', title: 'Missing Fields', description: 'Please enter both email and password.' });
+        if (!email || !password || !confirmPassword) {
+          toast({ variant: 'destructive', title: 'Missing Fields', description: 'Please fill in all fields.' });
+          return;
+        }
+
+        if (password !== confirmPassword) {
+          toast({ variant: 'destructive', title: 'Password Mismatch', description: 'Passwords do not match.' });
           return;
         }
 
@@ -91,10 +110,10 @@ export default function SignupPage() {
         const user = userCredential.user;
         console.log('Step 1: ✅ User created successfully:', user.uid);
         
-        // Create the user profile in Firestore via server action (as seller)
+        // Create the user profile in Firestore via server action (as buyer)
         console.log('Step 2: Creating user profile via server action...');
         try {
-          await createUserProfile(user.uid, user.email || email, 'seller');
+          await createUserProfile(user.uid, user.email || email, 'buyer');
           console.log('Step 2: ✅ User profile created successfully');
         } catch (profileError: any) {
           console.error('Step 2: ❌ Profile creation error:', profileError);
@@ -105,24 +124,15 @@ export default function SignupPage() {
             description: 'Your account was created. Profile setup had an issue but you can continue.',
           });
         }
-
-        // This server action checks if it's the first user and makes them an admin if so.
-        // Run this in the background - don't wait for it
-        console.log('Step 3: Checking admin role (background)...');
-        grantAdminRoleToFirstUser(user.uid).then(() => {
-          console.log('Step 3: Admin role check completed');
-        }).catch((adminError: any) => {
-          console.error('Step 3: Admin role error (non-critical):', adminError);
-        });
         
         // Log the user in and create a session
-        console.log('Step 4: Creating session...');
+        console.log('Step 3: Creating session...');
         try {
           await handleAuthSuccess(user);
-          console.log('Step 4: Session created successfully - signup complete!');
+          console.log('Step 3: Session created successfully - signup complete!');
         } catch (sessionError: any) {
-          console.error('Step 4: Session creation error:', sessionError);
-          console.error('Step 4: Session error details:', {
+          console.error('Step 3: Session creation error:', sessionError);
+          console.error('Step 3: Session error details:', {
             message: sessionError.message,
             code: sessionError.code,
             stack: sessionError.stack
@@ -134,7 +144,7 @@ export default function SignupPage() {
             title: 'Account Created!',
             description: 'Your account was created successfully. However, there was an issue creating your session. Please try logging in manually.',
           });
-          router.push('/login');
+          router.push('/buyer-login');
           return;
         }
 
@@ -186,8 +196,11 @@ export default function SignupPage() {
               </Link>
               <div className="w-24" /> {/* Spacer for alignment */}
             </div>
-            <CardTitle className="text-2xl font-headline">Create a New Store</CardTitle>
-            <CardDescription>Join our community of local sellers and start your business today.</CardDescription>
+            <CardTitle className="text-2xl font-headline flex items-center justify-center gap-2">
+              <ShoppingBag className="h-6 w-6" />
+              Create Buyer Account
+            </CardTitle>
+            <CardDescription>Sign up to track your orders and enjoy a better shopping experience</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <form onSubmit={(e) => { e.preventDefault(); handleSignUp(); }} className="space-y-4">
@@ -217,8 +230,21 @@ export default function SignupPage() {
                 />
                 <p className="text-xs text-muted-foreground">Password must be at least 6 characters</p>
               </div>
+              <div className="grid gap-2 text-left">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input 
+                  id="confirmPassword" 
+                  type="password" 
+                  placeholder="••••••••" 
+                  value={confirmPassword} 
+                  onChange={(e) => setConfirmPassword(e.target.value)} 
+                  required 
+                  minLength={6}
+                  disabled={isPending}
+                />
+              </div>
               <Button type="submit" className="w-full" disabled={isPending}>
-                {isPending ? 'Creating Account...' : 'Create My Store'}
+                {isPending ? 'Creating Account...' : 'Create Account'}
               </Button>
             </form>
           </CardContent>
@@ -226,12 +252,15 @@ export default function SignupPage() {
             <div className="flex flex-col gap-2 text-sm">
               <div>
                 Already have an account?{' '}
-                <Link href="/login" className="underline">
+                <Link href="/buyer-login" className="underline">
                   Login
                 </Link>
               </div>
-              <div className="pt-2 border-t">
-                <Link href="/" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+              <div className="pt-2 border-t flex items-center justify-between">
+                <Link href="/signup" className="text-muted-foreground hover:text-foreground text-xs">
+                  Create a Store Instead
+                </Link>
+                <Link href="/" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs">
                   <Home className="h-4 w-4" />
                   Browse Marketplace
                 </Link>
@@ -243,3 +272,4 @@ export default function SignupPage() {
     </div>
   );
 }
+

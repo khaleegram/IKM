@@ -1,32 +1,29 @@
 "use client";
 
+import { NotificationsBell } from "@/components/notifications-bell";
+import { BarChart2, DollarSign, FileText, Globe, LayoutDashboard, Loader2, LogOut, Megaphone, Menu, Package, Palette, Settings, ShoppingCart, Store, TrendingUp, Truck, User as UserIcon, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Settings, BarChart2, LogOut, ShoppingCart, Loader2, Store, User as UserIcon, Menu, DollarSign, Users, TrendingUp, FileText, Megaphone, Truck, Palette, Globe } from "lucide-react";
-import { NotificationsBell } from "@/components/notifications-bell";
 import { useEffect } from "react";
 
-import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarFooter } from "@/components/ui/sidebar";
-import { IkmLogo } from "@/components/icons";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useUser } from "@/lib/firebase/auth/use-user";
-import { useToast } from "@/hooks/use-toast";
-import React from "react";
-import { useCart } from "@/lib/cart-context";
+import { DynamicLogo } from "@/components/DynamicLogo";
+import { ClientOnly } from "@/components/client-only";
+import { GlobalSearch } from "@/components/global-search";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { DynamicLogo } from "@/components/DynamicLogo";
-import { ClientOnly } from "@/components/client-only";
-import { PaymentRecoveryBanner } from "@/components/payment-recovery-banner";
-import { GlobalSearch } from "@/components/global-search";
+import { Sidebar, SidebarFooter, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider } from "@/components/ui/sidebar";
+import { useToast } from "@/hooks/use-toast";
+import { useCart } from "@/lib/cart-context";
+import { useUser } from "@/lib/firebase/auth/use-user";
 import dynamic from "next/dynamic";
+import React from "react";
 
 // Lazy load heavy components to avoid blocking initial render
 const CoPilotWidget = dynamic(() => import('@/components/copilot-widget').then(mod => ({ default: mod.CoPilotWidget })), {
@@ -242,35 +239,97 @@ export default function AppLayout({
               )}
             </Link>
 
-            {/* Hamburger Menu - Only Seller Hub and Login */}
+            {/* Desktop Navigation - Hidden on mobile */}
+            <nav className="hidden md:flex items-center gap-2 sm:gap-4">
+              {user ? (
+                <>
+                  <Link href="/profile">
+                    <Button variant="ghost" size="sm">
+                      <UserIcon className="h-4 w-4 mr-2" />
+                      My Account
+                    </Button>
+                  </Link>
+                  <Link href="/seller/dashboard">
+                    <Button variant="ghost" size="sm">
+                      <Store className="h-4 w-4 mr-2" />
+                      Seller Hub
+                    </Button>
+                  </Link>
+                  <Button variant="ghost" size="icon" onClick={handleLogout}>
+                    <LogOut className="h-5 w-5" />
+                    <span className="sr-only">Logout</span>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Link href="/buyer-login">
+                    <Button variant="ghost" size="sm">Login</Button>
+                  </Link>
+                  <Link href="/buyer-signup">
+                    <Button size="sm">Sign Up</Button>
+                  </Link>
+                  <Link href="/seller/dashboard">
+                    <Button variant="ghost" size="sm">
+                      <Store className="h-4 w-4 mr-2" />
+                      Seller Hub
+                    </Button>
+                  </Link>
+                </>
+              )}
+            </nav>
+
+            {/* Hamburger Menu - Mobile */}
             <ClientOnly>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon">
+                  <Button variant="outline" size="icon" className="md:hidden">
                     <Menu className="h-5 w-5" />
                     <span className="sr-only">Menu</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <Link href="/seller/dashboard">
-                      <Store className="mr-2 h-4 w-4" />
-                      Seller Hub
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
                   {user ? (
-                    <DropdownMenuItem onClick={handleLogout}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Logout
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link href="/profile">
+                          <UserIcon className="mr-2 h-4 w-4" />
+                          My Account
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/seller/dashboard">
+                          <Store className="mr-2 h-4 w-4" />
+                          Seller Hub
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleLogout}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Logout
+                      </DropdownMenuItem>
+                    </>
                   ) : (
-                    <DropdownMenuItem asChild>
-                      <Link href="/login">
-                        <UserIcon className="mr-2 h-4 w-4" />
-                        Login
-                      </Link>
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link href="/buyer-login">
+                          <UserIcon className="mr-2 h-4 w-4" />
+                          Login
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/buyer-signup">
+                          <UserIcon className="mr-2 h-4 w-4" />
+                          Sign Up
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href="/seller/dashboard">
+                          <Store className="mr-2 h-4 w-4" />
+                          Seller Hub
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
