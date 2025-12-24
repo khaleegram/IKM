@@ -180,19 +180,22 @@ service cloud.firestore {
       // - Customers and sellers can read/write messages for their orders
       match /chat/{messageId} {
         // Customers and sellers can read messages for their orders
+        // Also allow reading if user is the sender (for their own messages)
         allow read: if isAdmin() 
           || (isAuthenticated() 
-            && (get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid
-              || get(/databases/$(database)/documents/orders/$(orderId)).data.sellerId == request.auth.uid));
+            && (resource.data.senderId == request.auth.uid
+              || (exists(/databases/$(database)/documents/orders/$(orderId))
+                && (get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid
+                  || get(/databases/$(database)/documents/orders/$(orderId)).data.sellerId == request.auth.uid))));
         
         // Customers and sellers can create messages for their orders
         allow create: if isAuthenticated()
-          && request.resource.data.keys().hasAll(['orderId', 'senderId', 'message'])
+          && request.resource.data.keys().hasAll(['orderId', 'senderId'])
           && request.resource.data.senderId == request.auth.uid
-          && request.resource.data.message is string
-          && request.resource.data.message.size() > 0
-          && request.resource.data.message.size() <= 1000
           && request.resource.data.orderId == orderId
+          && (request.resource.data.message == null || (request.resource.data.message is string && request.resource.data.message.size() <= 1000))
+          && (request.resource.data.imageUrl == null || request.resource.data.imageUrl is string)
+          && exists(/databases/$(database)/documents/orders/$(orderId))
           && (get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid
             || get(/databases/$(database)/documents/orders/$(orderId)).data.sellerId == request.auth.uid);
         

@@ -1,14 +1,33 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { getAdminApp } from '@/lib/firebase/admin';
 import { uploadImageToStorage } from '@/lib/storage-actions';
-import { headers } from 'next/headers';
+import { getAuth } from 'firebase-admin/auth';
+import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
   try {
-    // Verify authentication
-    const userId = (await headers()).get('X-User-UID');
-    if (!userId) {
+    // Verify authentication by checking session cookie
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get(process.env.AUTH_COOKIE_NAME || 'AuthToken')?.value;
+    
+    if (!sessionCookie) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized - Please log in to upload images' },
+        { status: 401 }
+      );
+    }
+
+    // Verify the session cookie
+    let userId: string;
+    try {
+      const adminApp = getAdminApp();
+      const auth = getAuth(adminApp);
+      const decodedToken = await auth.verifySessionCookie(sessionCookie, true);
+      userId = decodedToken.uid;
+    } catch (error) {
+      console.error('Session cookie verification failed:', error);
+      return NextResponse.json(
+        { error: 'Unauthorized - Invalid session' },
         { status: 401 }
       );
     }

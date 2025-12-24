@@ -1,19 +1,18 @@
 'use server';
 
+import { requireAuth } from '@/lib/auth-utils';
 import { getAdminFirestore } from '@/lib/firebase/admin';
+import { getPlatformCommissionRate } from '@/lib/platform-settings-actions';
 import { FieldValue } from 'firebase-admin/firestore';
-import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { requireAuth } from '@/lib/auth-utils';
-import { getPlatformCommissionRate } from '@/lib/platform-settings-actions';
 
 // Auto-release days (configurable)
 const AUTO_RELEASE_DAYS = 7; // 7 days after "Sent" if no dispute
 
 const markAsSentSchema = z.object({
   orderId: z.string(),
-  photoUrl: z.string().url().optional(),
+  photoUrl: z.union([z.string().url(), z.literal(''), z.undefined()]).optional(),
 });
 
 /**
@@ -42,13 +41,17 @@ export async function markOrderAsSent(data: unknown) {
 
   const order = orderDoc.data();
   
+  if (!order) {
+    throw new Error('Order data not found');
+  }
+  
   // Verify seller owns this order
-  if (order?.sellerId !== auth.uid && !auth.isAdmin) {
+  if (order.sellerId !== auth.uid && !auth.isAdmin) {
     throw new Error('Unauthorized: Only the seller can mark order as sent');
   }
 
   // Verify order is in correct status
-  if (order?.status !== 'Processing') {
+  if (order.status !== 'Processing') {
     throw new Error(`Cannot mark order as sent. Current status: ${order.status}`);
   }
 
@@ -93,7 +96,7 @@ export async function markOrderAsSent(data: unknown) {
 
 const markAsReceivedSchema = z.object({
   orderId: z.string(),
-  photoUrl: z.string().url().optional(),
+  photoUrl: z.union([z.string().url(), z.literal(''), z.undefined()]).optional(),
 });
 
 /**
@@ -122,24 +125,29 @@ export async function markOrderAsReceived(data: unknown) {
 
   const order = orderDoc.data();
   
+  if (!order) {
+    throw new Error('Order data not found');
+  }
+  
   // Verify customer owns this order
-  if (order?.customerId !== auth.uid && !auth.isAdmin) {
+  if (order.customerId !== auth.uid && !auth.isAdmin) {
     throw new Error('Unauthorized: Only the customer can mark order as received');
   }
 
   // Verify order is in correct status
-  if (order?.status !== 'Sent') {
+  if (order.status !== 'Sent') {
     throw new Error(`Cannot mark order as received. Current status: ${order.status}`);
   }
 
   // Check if dispute is open
-  if (order?.dispute?.status === 'open') {
+  if (order.dispute?.status === 'open') {
     throw new Error('Cannot mark as received while dispute is open');
   }
 
   // Update order to Completed and release escrow
   const orderTotal = order.total || 0;
-  const commission = orderTotal * PLATFORM_COMMISSION_RATE;
+  const commissionRate = await getPlatformCommissionRate();
+  const commission = orderTotal * commissionRate;
   const sellerEarning = orderTotal - commission;
 
   await orderRef.update({
@@ -234,6 +242,8 @@ export async function autoReleaseEscrow() {
     if (!orderDoc.exists) continue;
     
     const order = orderDoc.data();
+    if (!order) continue;
+    
     const commissionRate = await getPlatformCommissionRate();
     const orderTotal = order.total || 0;
     // Use commission rate from order if available (for historical accuracy), otherwise use current rate

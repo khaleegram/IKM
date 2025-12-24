@@ -1,6 +1,8 @@
 
 'use client';
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -9,6 +11,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
   Table,
   TableBody,
   TableCell,
@@ -16,33 +28,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Package, MoreHorizontal, FileWarning, Search, Filter, Calendar, User } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-import { useUser } from "@/lib/firebase/auth/use-user";
-import { useOrdersBySeller, Order } from "@/lib/firebase/firestore/orders";
-import { updateOrderStatus } from "@/lib/order-actions";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/lib/firebase/auth/use-user";
+import { Order, useOrdersBySeller } from "@/lib/firebase/firestore/orders";
+import { updateOrderStatus } from "@/lib/order-actions";
 import { format } from 'date-fns';
+import { FileWarning, MoreHorizontal, Package, Search } from "lucide-react";
 import Link from "next/link";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 
 const getStatusVariant = (status: Order['status']) => {
     switch (status) {
         case 'Processing': return 'secondary';
-        case 'Shipped': return 'accent';
-        case 'Delivered': return 'support';
+        case 'Sent': return 'accent';
+        case 'Received': return 'accent';
+        case 'Completed': return 'support';
         case 'Cancelled': return 'destructive';
+        case 'Disputed': return 'destructive';
         default: return 'default';
     }
 }
@@ -196,8 +198,8 @@ export default function OrdersPage() {
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="Processing">Processing</SelectItem>
-              <SelectItem value="Shipped">Shipped</SelectItem>
-              <SelectItem value="Delivered">Delivered</SelectItem>
+              <SelectItem value="Sent">Sent</SelectItem>
+              <SelectItem value="Completed">Completed</SelectItem>
               <SelectItem value="Cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
@@ -315,8 +317,8 @@ export default function OrdersPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Processing')}>Mark as Processing</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Shipped')}>Mark as Shipped</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Delivered')}>Mark as Delivered</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Sent')}>Mark as Sent</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Completed')}>Mark as Completed</DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive" onClick={() => handleStatusUpdate(order.id!, 'Cancelled')}>Cancel Order</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -364,8 +366,8 @@ export default function OrdersPage() {
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Processing')}>Mark as Processing</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Shipped')}>Mark as Shipped</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Delivered')}>Mark as Delivered</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Sent')}>Mark as Sent</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleStatusUpdate(order.id!, 'Completed')}>Mark as Completed</DropdownMenuItem>
                                     <DropdownMenuItem className="text-destructive" onClick={() => handleStatusUpdate(order.id!, 'Cancelled')}>Cancel Order</DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
