@@ -1,14 +1,24 @@
 
 'use client';
 
+import { OrderChat } from "@/components/order-chat";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle,
-  CardFooter,
+  CardTitle
 } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -17,28 +27,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, MoreHorizontal, Truck, Send, Upload, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { useOrder, Order } from "@/lib/firebase/firestore/orders";
+import { useToast } from "@/hooks/use-toast";
+import { Order, useOrder } from "@/lib/firebase/firestore/orders";
 import { updateOrderStatus } from "@/lib/order-actions";
 import { markOrderAsSent } from "@/lib/order-delivery-actions";
-import { OrderChat } from "@/components/order-chat";
-import { useToast } from "@/hooks/use-toast";
-import { notFound, useParams, useRouter } from "next/navigation";
 import { format } from 'date-fns';
-import { useTransition, useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { ArrowLeft, Loader2, MoreHorizontal, Send, Truck, Upload, X } from "lucide-react";
 import Image from "next/image";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+import { notFound, useParams, useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
 const getStatusVariant = (status: Order['status']) => {
     switch (status) {
@@ -264,14 +261,46 @@ export default function OrderDetailPage() {
                             <Badge variant={getStatusVariant(order.status) as any}>{order.status}</Badge>
                         </div>
                         <Separator />
-                        <div className="flex justify-between font-semibold">
-                            <span>Subtotal</span>
-                            <span>₦{(order.total - 2500).toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between font-semibold">
-                            <span>Shipping</span>
-                            <span>₦{2500 .toLocaleString()}</span>
-                        </div>
+                        {/* Calculate subtotal: total - shipping price (if shipping was charged) */}
+                        {(() => {
+                            const shippingPrice = order.shippingPrice || 0;
+                            const subtotal = order.total - shippingPrice;
+                            const shippingType = order.shippingType || 'delivery';
+                            
+                            return (
+                                <>
+                                    <div className="flex justify-between font-semibold">
+                                        <span>Subtotal</span>
+                                        <span>₦{subtotal.toLocaleString()}</span>
+                                    </div>
+                                    {/* Only show shipping if it was actually charged (not pickup/contact) */}
+                                    {shippingType === 'delivery' && shippingPrice > 0 && (
+                                        <div className="flex justify-between font-semibold">
+                                            <span>Shipping</span>
+                                            <span>₦{shippingPrice.toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                    {shippingType === 'pickup' && (
+                                        <div className="flex justify-between font-semibold text-green-600">
+                                            <span>Pickup</span>
+                                            <span>Free</span>
+                                        </div>
+                                    )}
+                                    {(shippingType === 'contact' || (shippingType as string) === 'contact') && (
+                                        <div className="flex justify-between font-semibold text-muted-foreground">
+                                            <span>Arrangement</span>
+                                            <span>Contact Seller</span>
+                                        </div>
+                                    )}
+                                    {shippingType === 'delivery' && shippingPrice === 0 && (
+                                        <div className="flex justify-between font-semibold text-green-600">
+                                            <span>Shipping</span>
+                                            <span>Free</span>
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
                         <Separator />
                         <div className="flex justify-between font-bold text-lg">
                             <span>Total</span>

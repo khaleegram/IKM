@@ -11,6 +11,7 @@ export interface PlatformSettings {
   // Additional settings
   platformFee: number; // Optional platform fee (separate from commission)
   currency: string; // e.g., "NGN"
+  payoutProcessingDays?: number; // Number of business days for payout processing (default: 3)
   
   // Metadata
   updatedAt: any;

@@ -1,25 +1,24 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, Upload, Image as ImageIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, Trash2 } from "lucide-react";
 // Removed useFirebase - all writes now go through server actions
+import { BUSINESS_CATEGORIES, getCategoryById } from "@/lib/data/business-categories";
+import { NIGERIAN_STATES, getLGAsForState } from "@/lib/data/nigerian-locations";
 import { useUser } from "@/lib/firebase/auth/use-user";
 import { useStoreByUserId } from "@/lib/firebase/firestore/stores";
-import { useUserProfile, DeliveryLocation } from "@/lib/firebase/firestore/users";
-import { updateUserProfileAction, addDeliveryLocationAction, deleteDeliveryLocationAction } from "@/lib/user-actions";
-import { useState, useEffect, useTransition } from "react";
-import React from "react";
-import { NIGERIAN_STATES, getLGAsForState } from "@/lib/data/nigerian-locations";
-import { BUSINESS_CATEGORIES, getCategoryById } from "@/lib/data/business-categories";
-import Image from "next/image";
+import { useUserProfile } from "@/lib/firebase/firestore/users";
 import { updateStoreSettings } from "@/lib/store-actions";
+import { addDeliveryLocationAction, deleteDeliveryLocationAction, updateUserProfileAction } from "@/lib/user-actions";
+import Image from "next/image";
+import React, { useEffect, useState, useTransition } from "react";
 
 export default function SellerSettingsPage() {
     const { toast } = useToast();
@@ -77,7 +76,6 @@ export default function SellerSettingsPage() {
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [website, setWebsite] = useState('');
-    const [pickupAddress, setPickupAddress] = useState('');
 
     // Store theme
     const [primaryColor, setPrimaryColor] = useState('');
@@ -162,7 +160,6 @@ export default function SellerSettingsPage() {
             setEmail(store.email || '');
             setPhone(store.phone || '');
             setWebsite(store.website || '');
-            setPickupAddress(store.pickupAddress || '');
 
             // Store theme
             setPrimaryColor(store.primaryColor || '');
@@ -321,7 +318,6 @@ export default function SellerSettingsPage() {
                 if (email) formData.append('email', email);
                 if (phone) formData.append('phone', phone);
                 if (website) formData.append('website', website);
-                if (pickupAddress) formData.append('pickupAddress', pickupAddress);
 
                 await updateStoreSettings(authUser.uid, formData);
                 toast({
@@ -972,19 +968,6 @@ export default function SellerSettingsPage() {
                             value={website} 
                             onChange={(e) => setWebsite(e.target.value)} 
                         />
-                    </div>
-                    <div>
-                        <Label htmlFor="pickupAddress">Pickup Address</Label>
-                        <Textarea 
-                            id="pickupAddress" 
-                            placeholder="Enter your store pickup address for customers who can't receive delivery" 
-                            value={pickupAddress} 
-                            onChange={(e) => setPickupAddress(e.target.value)} 
-                            rows={3}
-                        />
-                        <p className="text-sm text-muted-foreground mt-1">
-                            This address will be shown to customers when you don't ship to their state
-                        </p>
                     </div>
                 </CardContent>
                 <CardFooter className="flex justify-end">

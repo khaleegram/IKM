@@ -1,20 +1,18 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useFirebase } from '@/firebase/provider';
 import {
-  collection,
+  Firestore,
+  FirestoreError,
   addDoc,
-  query,
-  where,
+  collection,
   onSnapshot,
   orderBy,
-  DocumentData,
-  FirestoreError,
+  query,
   serverTimestamp,
-  Firestore,
-  Timestamp,
+  where
 } from 'firebase/firestore';
-import { useFirebase } from '@/firebase/provider';
+import { useEffect, useMemo, useState } from 'react';
 import type { OrderChatMessage } from './orders';
 
 // Hook to get chat messages for an order
@@ -27,7 +25,8 @@ export const useOrderChat = (orderId: string | undefined) => {
   const messagesQuery = useMemo(() => {
     if (!firestore || !orderId) return null;
     return query(
-      collection(firestore, 'orders', orderId, 'chat'),
+      collection(firestore, 'order_messages'),
+      where('orderId', '==', orderId),
       orderBy('createdAt', 'asc')
     );
   }, [firestore, orderId]);
@@ -76,14 +75,13 @@ export const sendChatMessage = async (
   if (!firestore) throw new Error('Firestore is not initialized');
   if (!message && !imageUrl) throw new Error('Message or image is required');
 
-  const chatCollection = collection(firestore, 'orders', orderId, 'chat');
+  const chatCollection = collection(firestore, 'order_messages');
   return await addDoc(chatCollection, {
     orderId,
     senderId,
-    senderType,
+    senderRole: senderType === 'customer' ? 'customer' : 'seller',
     message: message || null,
     imageUrl: imageUrl || null,
-    isSystemMessage: false,
     createdAt: serverTimestamp(),
   });
 };
@@ -97,14 +95,13 @@ export const createSystemMessage = async (
 ) => {
   if (!firestore) throw new Error('Firestore is not initialized');
 
-  const chatCollection = collection(firestore, 'orders', orderId, 'chat');
+  const chatCollection = collection(firestore, 'order_messages');
   return await addDoc(chatCollection, {
     orderId,
     senderId: 'system',
-    senderType: 'system',
+    senderRole: 'admin',
     message,
     imageUrl: imageUrl || null,
-    isSystemMessage: true,
     createdAt: serverTimestamp(),
   });
 };

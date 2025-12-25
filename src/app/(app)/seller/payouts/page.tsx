@@ -14,8 +14,9 @@ import { calculateSellerEarnings } from "@/lib/earnings-actions";
 import { useUser } from "@/lib/firebase/auth/use-user";
 import { useSellerPayouts, useSellerTransactions } from "@/lib/firebase/firestore/earnings";
 import { useUserProfile } from "@/lib/firebase/firestore/users";
+import { savePayoutDetails } from "@/lib/payout-actions";
 import { cancelPayoutRequest, requestPayout } from "@/lib/payout-request-actions";
-import { getMinimumPayoutAmount } from "@/lib/platform-settings-actions";
+import { getMinimumPayoutAmount, getPayoutProcessingDays } from "@/lib/platform-settings-actions";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { AlertCircle, ArrowDownCircle, Banknote, Check, CheckCircle, ChevronsUpDown, DollarSign, History, Loader2, Search, TrendingUp, Wallet, X } from "lucide-react";
@@ -48,6 +49,7 @@ export default function SellerPayoutsPage() {
     const [showTransactions, setShowTransactions] = useState(false);
     const [payoutToCancel, setPayoutToCancel] = useState<string | null>(null);
     const [minimumPayout, setMinimumPayout] = useState(1000); // Default fallback
+    const [payoutProcessingDays, setPayoutProcessingDays] = useState(3); // Default fallback
 
     // Load banks list on mount
     useEffect(() => {
@@ -92,9 +94,11 @@ export default function SellerPayoutsPage() {
             try {
                 const result = await calculateSellerEarnings(authUser.uid);
                 setEarnings(result);
-                // Also fetch minimum payout amount
+                // Also fetch minimum payout amount and processing days
                 const minPayout = await getMinimumPayoutAmount();
+                const processingDays = await getPayoutProcessingDays();
                 setMinimumPayout(minPayout);
+                setPayoutProcessingDays(processingDays);
             } catch (error) {
                 console.error('Error calculating earnings:', error);
             }
@@ -132,7 +136,7 @@ export default function SellerPayoutsPage() {
                 await requestPayout(authUser.uid, { amount });
                 toast({
                     title: "Payout Requested!",
-                    description: "Your payout request has been submitted and will be processed within 1-3 business days.",
+                    description: `Your payout request has been submitted and will be automatically processed within ${payoutProcessingDays} business day${payoutProcessingDays !== 1 ? 's' : ''}.`,
                 });
                 setShowPayoutDialog(false);
                 setPayoutAmount('');
@@ -225,7 +229,8 @@ export default function SellerPayoutsPage() {
 
         startSaveTransition(async () => {
             try {
-                const result = await cloudFunctions.savePayoutDetails({
+                const result = await savePayoutDetails({
+                    bankName: selectedBank.name,
                     bankCode: selectedBankCode,
                     accountNumber: resolvedAccount.account_number,
                     accountName: resolvedAccount.account_name,
@@ -235,7 +240,11 @@ export default function SellerPayoutsPage() {
                         title: "Payout Information Saved!",
                         description: "Your payout details have been successfully updated.",
                     });
-                    // The useUserProfile hook will automatically refetch the data
+                    // Clear form
+                    setAccountNumber('');
+                    setSelectedBankCode('');
+                    setResolvedAccount(null);
+                    // Note: useUserProfile should automatically refetch, but if not, the page will update on next render
                 } else {
                     throw new Error('Failed to save payout details');
                 }

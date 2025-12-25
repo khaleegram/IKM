@@ -1,28 +1,30 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Truck, Plus, MapPin, Package, Settings, Loader2, Trash2, Edit, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useUser } from "@/lib/firebase/auth/use-user";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  getShippingZones, 
-  createShippingZone, 
-  updateShippingZone, 
+import { NIGERIAN_STATES, getLGAsForState } from "@/lib/data/nigerian-locations";
+import { useUser } from "@/lib/firebase/auth/use-user";
+import { useStoreByUserId } from "@/lib/firebase/firestore/stores";
+import {
+  createShippingZone,
   deleteShippingZone,
   getShippingSettings,
+  getShippingZones,
   updateShippingSettings,
-  type ShippingZone 
+  updateShippingZone,
+  type ShippingZone
 } from "@/lib/shipping-actions";
-import { NIGERIAN_STATES } from "@/lib/data/nigerian-locations";
+import { updateStoreSettings } from "@/lib/store-actions";
+import { Edit, Loader2, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState, useTransition } from 'react';
 
 export default function ShippingPage() {
   const { user } = useUser();
@@ -43,6 +45,13 @@ export default function ShippingPage() {
   const [defaultPackagingType, setDefaultPackagingType] = useState('Standard Box');
   const [packagingCost, setPackagingCost] = useState('');
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+
+  // Pickup address settings
+  const { data: store, isLoading: isLoadingStore } = useStoreByUserId(user?.uid);
+  const [pickupState, setPickupState] = useState('');
+  const [pickupLGA, setPickupLGA] = useState('');
+  const [pickupStreet, setPickupStreet] = useState('');
+  const [isLoadingPickup, setIsLoadingPickup] = useState(true);
 
   // Load shipping zones
   useEffect(() => {
@@ -83,6 +92,38 @@ export default function ShippingPage() {
     };
     loadSettings();
   }, [user?.uid]);
+
+  // Load pickup address
+  useEffect(() => {
+    if (store) {
+      setIsLoadingPickup(true);
+      // Check if pickupAddress is an object (new format) or string (old format)
+      if (store.pickupAddress) {
+        if (typeof store.pickupAddress === 'object' && store.pickupAddress !== null && !Array.isArray(store.pickupAddress)) {
+          // New format: { state, lga, street }
+          const addr = store.pickupAddress as { state?: string; lga?: string; street?: string };
+          setPickupState(addr.state || '');
+          setPickupLGA(addr.lga || '');
+          setPickupStreet(addr.street || '');
+        } else if (typeof store.pickupAddress === 'string') {
+          // Old format: just a string - try to extract from storeLocation if available
+          if (store.storeLocation) {
+            setPickupState(store.storeLocation.state || '');
+            setPickupLGA(store.storeLocation.lga || '');
+            setPickupStreet(store.storeLocation.address || store.pickupAddress || '');
+          } else {
+            setPickupStreet(store.pickupAddress);
+          }
+        }
+      } else if (store.storeLocation) {
+        // Fallback to storeLocation
+        setPickupState(store.storeLocation.state || '');
+        setPickupLGA(store.storeLocation.lga || '');
+        setPickupStreet(store.storeLocation.address || '');
+      }
+      setIsLoadingPickup(false);
+    }
+  }, [store]);
 
   const handleAddZone = () => {
     setEditingZone(null);
@@ -200,6 +241,39 @@ export default function ShippingPage() {
     });
   };
 
+  const handleSavePickupAddress = async () => {
+    if (!user?.uid) {
+      toast({ variant: 'destructive', title: 'Error', description: 'User not authenticated' });
+      return;
+    }
+
+    if (!pickupState || !pickupLGA || !pickupStreet.trim()) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Please fill in state, LGA, and street address' });
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        // Save pickup address as JSON string (will be parsed in store-actions)
+        formData.append('pickupAddress', JSON.stringify({
+          state: pickupState,
+          lga: pickupLGA,
+          street: pickupStreet.trim(),
+        }));
+        
+        await updateStoreSettings(user.uid, formData);
+        toast({ title: 'Success', description: 'Pickup address saved successfully!' });
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: error instanceof Error ? error.message : 'Failed to save pickup address',
+        });
+      }
+    });
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -212,6 +286,7 @@ export default function ShippingPage() {
       <Tabs defaultValue="zones" className="space-y-4">
         <TabsList>
           <TabsTrigger value="zones">Shipping Zones</TabsTrigger>
+          <TabsTrigger value="pickup">Pickup Address</TabsTrigger>
           <TabsTrigger value="carriers">Carriers</TabsTrigger>
           <TabsTrigger value="packaging">Packaging</TabsTrigger>
         </TabsList>
@@ -346,6 +421,100 @@ export default function ShippingPage() {
                     ))}
                   </TableBody>
                 </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pickup" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Store Pickup Address</CardTitle>
+              <CardDescription>
+                Set your store pickup location. This address will be shown to customers as a pickup option on checkout.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isLoadingPickup ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="pickupState">State *</Label>
+                    <Select value={pickupState} onValueChange={(value) => {
+                      setPickupState(value);
+                      setPickupLGA(''); // Reset LGA when state changes
+                    }}>
+                      <SelectTrigger id="pickupState">
+                        <SelectValue placeholder="Select state" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {NIGERIAN_STATES.map((state) => (
+                          <SelectItem key={state.name} value={state.name}>
+                            {state.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {pickupState && (
+                    <div className="space-y-2">
+                      <Label htmlFor="pickupLGA">Local Government Area (LGA) *</Label>
+                      <Select value={pickupLGA} onValueChange={setPickupLGA} disabled={!pickupState}>
+                        <SelectTrigger id="pickupLGA">
+                          <SelectValue placeholder="Select LGA" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getLGAsForState(pickupState).map((lga) => (
+                            <SelectItem key={lga} value={lga}>
+                              {lga}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="pickupStreet">Street Address *</Label>
+                    <Input
+                      id="pickupStreet"
+                      placeholder="e.g., 123 Main Street, Area Name"
+                      value={pickupStreet}
+                      onChange={(e) => setPickupStreet(e.target.value)}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Enter the street address and area where customers can pick up their orders
+                    </p>
+                  </div>
+
+                  <Button 
+                    onClick={handleSavePickupAddress}
+                    disabled={isPending || !pickupState || !pickupLGA || !pickupStreet.trim()}
+                    className="w-full sm:w-auto"
+                  >
+                    {isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Pickup Address'
+                    )}
+                  </Button>
+
+                  {pickupState && pickupLGA && pickupStreet && (
+                    <div className="mt-4 p-4 bg-muted rounded-lg">
+                      <p className="text-sm font-medium mb-1">Preview:</p>
+                      <p className="text-sm text-muted-foreground">
+                        {pickupStreet}, {pickupLGA}, {pickupState} State
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

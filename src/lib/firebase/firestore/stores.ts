@@ -1,21 +1,20 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { useFirebase } from '@/firebase/provider';
 import {
-  doc,
-  onSnapshot,
-  getDoc,
-  getDocs,
   DocumentData,
   FirestoreError,
   collection,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
   query,
-  where,
-  Firestore,
+  where
 } from 'firebase/firestore';
-import { useFirebase } from '@/firebase/provider';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
+import { useEffect, useMemo, useState } from 'react';
 
 /**
  * Store Profile Interface
@@ -60,7 +59,11 @@ export interface StoreProfile extends DocumentData {
   email?: string;
   phone?: string;
   website?: string;
-  pickupAddress?: string; // Default pickup address for customers who can't receive delivery
+  pickupAddress?: string | { // Pickup address - can be string (legacy) or object (new format)
+    state: string;
+    lga: string;
+    street: string;
+  };
   // Store theme
   primaryColor?: string;
   secondaryColor?: string;

@@ -1,7 +1,7 @@
 'use server';
 
-import { getAdminFirestore } from "@/lib/firebase/admin";
 import { requireAuth, requireOwnerOrAdmin } from "@/lib/auth-utils";
+import { getAdminFirestore } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { revalidatePath } from "next/cache";
 
@@ -28,36 +28,54 @@ export interface Transaction {
 }
 
 /**
- * Calculate seller earnings from orders
+ * Calculate seller earnings from orders and transactions
+ * Uses transactions collection as primary source, falls back to orders if needed
  */
 export async function calculateSellerEarnings(sellerId: string): Promise<SellerEarnings> {
   const firestore = getAdminFirestore();
   const commissionRate = await getPlatformCommissionRate();
   
-  // Get all orders for this seller
-  const ordersSnapshot = await firestore.collection('orders')
-    .where('sellerId', '==', sellerId)
-    .get();
-  
   let totalEarnings = 0;
   let totalOrders = 0;
   let commissionPaid = 0;
   
-  ordersSnapshot.forEach(doc => {
-    const order = doc.data();
-    // Only count delivered orders
-    if (order.status === 'Delivered') {
-      const orderTotal = order.total || 0;
-      // Use commission rate from order if available (for historical accuracy), otherwise use current rate
-      const orderCommissionRate = order.commissionRate || commissionRate;
-      const commission = orderTotal * orderCommissionRate;
-      const sellerEarning = orderTotal - commission;
-      
-      totalEarnings += sellerEarning;
-      commissionPaid += commission;
+  // First, try to calculate from transactions collection (more reliable)
+  const transactionsSnapshot = await firestore.collection('transactions')
+    .where('sellerId', '==', sellerId)
+    .where('type', '==', 'sale')
+    .where('status', '==', 'completed')
+    .get();
+  
+  if (!transactionsSnapshot.empty) {
+    // Calculate from transactions (most accurate)
+    transactionsSnapshot.forEach(doc => {
+      const transaction = doc.data();
+      totalEarnings += transaction.amount || 0;
+      commissionPaid += transaction.commission || 0;
       totalOrders++;
-    }
-  });
+    });
+  } else {
+    // Fallback: Calculate from orders if transactions don't exist yet
+    const ordersSnapshot = await firestore.collection('orders')
+      .where('sellerId', '==', sellerId)
+      .get();
+    
+    ordersSnapshot.forEach(doc => {
+      const order = doc.data();
+      // Count completed orders (status is 'Completed', not 'Delivered')
+      if (order.status === 'Completed') {
+        const orderTotal = order.total || 0;
+        // Use commission rate from order if available (for historical accuracy), otherwise use current rate
+        const orderCommissionRate = order.commissionRate || commissionRate;
+        const commission = orderTotal * orderCommissionRate;
+        const sellerEarning = orderTotal - commission;
+        
+        totalEarnings += sellerEarning;
+        commissionPaid += commission;
+        totalOrders++;
+      }
+    });
+  }
   
   // Get pending payouts
   const pendingPayoutsSnapshot = await firestore.collection('payouts')
@@ -124,7 +142,7 @@ export async function getSellerTransactions(sellerId: string, limit: number = 50
     const commission = orderTotal * orderCommissionRate;
     const sellerEarning = orderTotal - commission;
     
-    if (order.status === 'Delivered') {
+    if (order.status === 'Completed') {
       transactions.push({
         id: `sale_${doc.id}`,
         type: 'sale',
@@ -189,10 +207,10 @@ export async function updateEarningsOnOrderDelivery(orderId: string) {
     throw new Error('Order not found');
   }
   
-  const order = orderDoc.data() as { sellerId: string; total: number; status: string };
+  const order = orderDoc.data() as { sellerId: string; total: number; status: string; commissionRate?: number };
   
-  if (order.status !== 'Delivered') {
-    return; // Only process delivered orders
+  if (order.status !== 'Completed') {
+    return; // Only process completed orders
   }
   
   // Calculate earnings

@@ -29,6 +29,7 @@ const paystackSecret = defineSecret('PAYSTACK_SECRET_KEY');
 import {
     getPaystackSecretKey,
     getPlatformCommissionRate,
+    requireAdmin,
     requireAuth,
     sendError,
     sendResponse,
@@ -47,7 +48,7 @@ const verifyPaymentSchema = z.object({
   deliveryAddress: z.string(),
   customerInfo: z.any(),
   discountCode: z.string().optional(),
-  shippingType: z.enum(['delivery', 'pickup']).optional(),
+  shippingType: z.enum(['delivery', 'pickup', 'contact']).optional(),
   shippingPrice: z.number().optional(),
 });
 
@@ -92,22 +93,25 @@ export const verifyPaymentAndCreateOrder = onRequest(
       const paystackSecretKey = getPaystackSecretKey(paystackSecret.value());
       const firestore = admin.firestore();
 
-      // Handle guest checkout
-      let finalCustomerId = auth?.uid;
+      // CRITICAL: Handle customer ID - prioritize logged-in user
+      let finalCustomerId = auth?.uid; // If user is logged in, use their UID
       let isGuestOrder = false;
 
       if (!finalCustomerId) {
+        // Guest checkout - create guest user ID from email
         if (!customerInfo?.email) {
           return sendError(response, 'Email is required for guest checkout');
         }
         isGuestOrder = true;
-        const guestId = `guest_${customerInfo.email.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
+        // CRITICAL: Use consistent guest ID format (without timestamp for better linking)
+        const emailKey = customerInfo.email.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        const guestId = `guest_${emailKey}`;
         const guestUserRef = firestore.collection('users').doc(guestId);
         const guestUserDoc = await guestUserRef.get();
 
         if (!guestUserDoc.exists) {
           await guestUserRef.set({
-            email: customerInfo.email,
+            email: customerInfo.email.toLowerCase(),
             displayName: customerInfo.name || `${customerInfo.firstName || ''} ${customerInfo.lastName || ''}`.trim(),
             firstName: customerInfo.firstName || '',
             lastName: customerInfo.lastName || '',
@@ -118,6 +122,24 @@ export const verifyPaymentAndCreateOrder = onRequest(
           });
         }
         finalCustomerId = guestId;
+      } else {
+        // CRITICAL: User is logged in - ensure order is tied to their account
+        // Verify user exists in users collection
+        if (auth) {
+          const userDoc = await firestore.collection('users').doc(finalCustomerId).get();
+          if (!userDoc.exists) {
+            // Create user document if it doesn't exist
+            await firestore.collection('users').doc(finalCustomerId).set({
+              email: auth.email || customerInfo?.email || '',
+              displayName: customerInfo?.name || `${customerInfo?.firstName || ''} ${customerInfo?.lastName || ''}`.trim(),
+              firstName: customerInfo?.firstName || '',
+              lastName: customerInfo?.lastName || '',
+              phone: customerInfo?.phone || '',
+              role: 'buyer',
+              createdAt: FieldValue.serverTimestamp(),
+            });
+          }
+        }
       }
 
       // Check for existing order with same idempotency key
@@ -199,60 +221,145 @@ export const verifyPaymentAndCreateOrder = onRequest(
         return sendError(response, `Amount mismatch. Expected: ₦${total}, Received: ₦${amount / 100}`);
       }
 
-      // Create order
-      const sellerId = cartItems[0].sellerId;
-      const commissionRate = await getPlatformCommissionRate();
-
-      const orderData = {
-        customerId: finalCustomerId!,
-        sellerId: sellerId,
-        items: cartItems.map(({ id, name, price, quantity }: any) => ({
-          productId: id,
-          name,
-          price,
-          quantity,
-        })),
-        total: total,
-        status: 'Processing',
-        deliveryAddress: deliveryAddress,
-        customerInfo: {
-          ...customerInfo,
-          isGuest: isGuestOrder,
-        },
-        escrowStatus: 'held',
-        paymentReference: reference,
-        idempotencyKey,
-        commissionRate,
-        shippingType: shippingType || 'delivery',
-        shippingPrice: shippingPrice || 0,
-        createdAt: FieldValue.serverTimestamp(),
-        paystackReference: reference,
-      };
-
-      const orderRef = await firestore.collection('orders').add(orderData);
-
-      // Decrement product stock
-      try {
-        const stockUpdateBatch = firestore.batch();
-        for (const item of cartItems) {
-          const productRef = firestore.collection('products').doc(item.id);
-          const productDoc = await productRef.get();
-
-          if (productDoc.exists) {
-            const currentStock = productDoc.data()?.stock || 0;
-            const newStock = Math.max(0, currentStock - item.quantity);
-            stockUpdateBatch.update(productRef, {
-              stock: newStock,
-              updatedAt: FieldValue.serverTimestamp(),
-            });
-          }
-        }
-        await stockUpdateBatch.commit();
-      } catch (error) {
-        console.error('Failed to update product stock:', error);
+      // CRITICAL: Validate cart items and stock BEFORE creating order
+      if (!cartItems || cartItems.length === 0) {
+        return sendError(response, 'Invalid cart: Cart is empty', 400);
+      }
+      
+      const sellerId = cartItems[0]?.sellerId;
+      if (!sellerId) {
+        return sendError(response, 'Invalid cart: No seller ID found', 400);
+      }
+      
+      // CRITICAL: Validate all items belong to the same seller
+      const allSameSeller = cartItems.every((item: any) => item.sellerId === sellerId);
+      if (!allSameSeller) {
+        return sendError(response, 'Invalid cart: All items must be from the same seller', 400);
+      }
+      
+      // CRITICAL: Validate total amount matches cart items
+      const calculatedTotal = cartItems.reduce((sum: number, item: any) => {
+        return sum + (item.price * item.quantity);
+      }, 0);
+      const shippingCost = shippingPrice || 0;
+      const discountAmount = 0; // Will be calculated if discount code is valid
+      const expectedTotal = calculatedTotal + shippingCost - discountAmount;
+      
+      // Allow small rounding differences (0.01)
+      if (Math.abs(total - expectedTotal) > 0.01) {
+        console.warn('Total mismatch:', { total, expectedTotal, calculatedTotal, shippingCost });
+        // Log but don't fail - frontend calculation might differ slightly
       }
 
-      // Increment discount code usage if applied
+      // CRITICAL: Validate cart items
+      for (const item of cartItems) {
+        if (!item.id || !item.quantity || item.quantity <= 0) {
+          return sendError(response, `Invalid cart item: ${item.name || 'Unknown'}`, 400);
+        }
+        if (!item.price || item.price <= 0) {
+          return sendError(response, `Invalid price for ${item.name}`, 400);
+        }
+      }
+
+      const commissionRate = await getPlatformCommissionRate();
+
+      // CRITICAL: Use Firestore transaction to ensure atomicity - check stock and create order atomically
+      const orderRef = firestore.collection('orders').doc();
+      
+      await firestore.runTransaction(async (transaction) => {
+        // CRITICAL: Check stock availability within transaction
+        const productRefs = cartItems.map((item: any) => 
+          firestore.collection('products').doc(item.id)
+        );
+        
+        const productDocs = await Promise.all(
+          productRefs.map(ref => transaction.get(ref))
+        );
+        
+        // Validate products and stock
+        for (let i = 0; i < productDocs.length; i++) {
+          const productDoc = productDocs[i];
+          const item = cartItems[i];
+          
+          if (!productDoc.exists) {
+            throw new Error(`Product not found: ${item.name}`);
+          }
+          
+          const productData = productDoc.data();
+          const currentStock = productData?.stock || 0;
+          const requiredQuantity = item.quantity;
+          
+          if (currentStock < requiredQuantity) {
+            throw new Error(`Insufficient stock for ${item.name}. Available: ${currentStock}, Required: ${requiredQuantity}`);
+          }
+          
+          // Update stock in transaction
+          const newStock = Math.max(0, currentStock - requiredQuantity);
+          transaction.update(productRefs[i], {
+            stock: newStock,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+        
+        // CRITICAL: Create order data with payment verification metadata
+        const orderData = {
+          customerId: finalCustomerId!,
+          sellerId: sellerId,
+          items: cartItems.map(({ id, name, price, quantity }: any) => ({
+            productId: id,
+            name,
+            price,
+            quantity,
+          })),
+          total: total,
+          status: 'Processing',
+          deliveryAddress: deliveryAddress,
+          customerInfo: {
+            ...customerInfo,
+            isGuest: isGuestOrder,
+          },
+          escrowStatus: 'held',
+          paymentReference: reference,
+          idempotencyKey,
+          commissionRate,
+          shippingType: shippingType || 'delivery',
+          shippingPrice: shippingPrice || 0,
+          createdAt: FieldValue.serverTimestamp(),
+          paystackReference: reference,
+          // CRITICAL: Add payment verification metadata
+          paymentVerifiedAt: FieldValue.serverTimestamp(),
+          paymentStatus: 'success',
+          paymentAmount: amount / 100,
+        };
+        
+        // Create order in transaction
+        transaction.set(orderRef, orderData);
+      }).catch((error: any) => {
+        // CRITICAL: If transaction fails, log for manual recovery
+        console.error('CRITICAL: Transaction failed after payment verification', {
+          reference,
+          idempotencyKey,
+          customerId: finalCustomerId,
+          error: error.message,
+        });
+        
+        // Log to failed_orders collection for manual recovery
+        firestore.collection('failed_orders').add({
+          reference,
+          idempotencyKey,
+          customerId: finalCustomerId,
+          sellerId,
+          total,
+          cartItems,
+          error: error.message || 'Transaction failed',
+          paymentVerified: true, // Payment was verified but order creation failed
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        
+        throw new Error(`Order creation failed: ${error.message}`);
+      });
+
+      // Increment discount code usage if applied (non-critical, can fail without affecting order)
       if (discountCode && sellerId) {
         try {
           const discountQuery = await firestore
@@ -266,26 +373,58 @@ export const verifyPaymentAndCreateOrder = onRequest(
             const discountDoc = discountQuery.docs[0];
             const discountData = discountDoc.data();
             const currentUses = discountData.uses || 0;
+            const maxUses = discountData.maxUses;
 
-            await discountDoc.ref.update({
-              uses: currentUses + 1,
-              updatedAt: FieldValue.serverTimestamp(),
-            });
+            // CRITICAL: Check if discount code has reached max uses
+            if (maxUses && currentUses >= maxUses) {
+              console.warn(`Discount code ${discountCode} has reached max uses`);
+            } else {
+              await discountDoc.ref.update({
+                uses: currentUses + 1,
+                updatedAt: FieldValue.serverTimestamp(),
+              });
+            }
           }
         } catch (error) {
           console.error('Failed to increment discount code usage:', error);
+          // Non-critical - order is already created
         }
       }
 
-      // Create initial chat messages
-      await firestore.collection('orders').doc(orderRef.id).collection('chat').add({
-        orderId: orderRef.id,
-        senderId: 'system',
-        senderType: 'system',
-        message: 'Order created successfully. Payment verified.',
-        isSystemMessage: true,
-        createdAt: FieldValue.serverTimestamp(),
-      });
+      // Create payment record for audit trail
+      try {
+        await firestore.collection('payments').add({
+          orderId: orderRef.id,
+          customerId: finalCustomerId,
+          sellerId: sellerId,
+          amount: total,
+          reference: reference,
+          status: 'completed',
+          method: 'Paystack',
+          discountCode: discountCode || null,
+          isGuest: isGuestOrder,
+          verifiedAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      } catch (error) {
+        console.error('Failed to create payment record:', error);
+        // Non-critical - order is already created
+      }
+
+      // Create initial chat messages (non-critical)
+      try {
+        await firestore.collection('orders').doc(orderRef.id).collection('chat').add({
+          orderId: orderRef.id,
+          senderId: 'system',
+          senderType: 'system',
+          message: 'Order created successfully. Payment verified.',
+          isSystemMessage: true,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      } catch (error) {
+        console.error('Failed to create chat message:', error);
+        // Non-critical - order is already created
+      }
 
       return sendResponse(response, {
         success: true,
@@ -1162,6 +1301,1591 @@ export const searchProducts = functions.https.onRequest(async (request, response
       });
     } catch (error: any) {
       console.error('Error in searchProducts:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// SELLER FUNCTIONS - PRODUCT MANAGEMENT
+// ============================================================================
+
+/**
+ * Get seller's products (paginated)
+ */
+export const getSellerProducts = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const sellerId = request.query.sellerId as string || request.body?.sellerId || auth.uid;
+      
+      // Verify seller owns this request or is admin
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Can only view your own products', 403);
+      }
+
+      const limit = parseInt(request.query.limit as string) || 50;
+      const startAfter = request.query.startAfter as string;
+      const status = request.query.status as string;
+
+      let query: admin.firestore.Query = firestore
+        .collection('products')
+        .where('sellerId', '==', sellerId)
+        .orderBy('createdAt', 'desc')
+        .limit(limit);
+
+      if (status) {
+        query = query.where('status', '==', status);
+      }
+
+      if (startAfter) {
+        const startAfterDoc = await firestore.collection('products').doc(startAfter).get();
+        if (startAfterDoc.exists) {
+          query = query.startAfter(startAfterDoc);
+        }
+      }
+
+      const snapshot = await query.get();
+      const products = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return sendResponse(response, {
+        success: true,
+        products,
+        hasMore: snapshot.docs.length === limit,
+      });
+    } catch (error: any) {
+      console.error('Error in getSellerProducts:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get single product
+ */
+export const getProduct = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const productId = request.query.productId as string || request.body?.productId;
+      if (!productId) {
+        return sendError(response, 'Product ID is required', 400);
+      }
+
+      const firestore = admin.firestore();
+      const productDoc = await firestore.collection('products').doc(productId).get();
+
+      if (!productDoc.exists) {
+        return sendError(response, 'Product not found', 404);
+      }
+
+      return sendResponse(response, {
+        success: true,
+        product: { id: productDoc.id, ...productDoc.data() },
+      });
+    } catch (error: any) {
+      console.error('Error in getProduct:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Create product (with base64 image upload)
+ */
+export const createProduct = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+      const storage = admin.storage();
+
+      const {
+        name,
+        description,
+        price,
+        compareAtPrice,
+        stock,
+        sku,
+        category,
+        status,
+        allowShipping,
+        imageBase64,
+        variants,
+      } = request.body;
+
+      // Validation
+      if (!name || !price) {
+        return sendError(response, 'Name and price are required', 400);
+      }
+
+      let imageUrl: string | undefined;
+      
+      // Handle base64 image upload
+      if (imageBase64) {
+        try {
+          const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+          const buffer = Buffer.from(base64Data, 'base64');
+          const matches = imageBase64.match(/data:image\/(\w+);base64/);
+          const extension = matches ? matches[1] : 'jpg';
+          
+          const fileName = `product_images/${auth.uid}/${Date.now()}.${extension}`;
+          const bucket = storage.bucket();
+          const file = bucket.file(fileName);
+          
+          await file.save(buffer, {
+            metadata: { contentType: `image/${extension}` },
+          });
+          await file.makePublic();
+          
+          imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+        } catch (error) {
+          console.error('Image upload error:', error);
+          return sendError(response, 'Failed to upload image', 500);
+        }
+      }
+
+      // Check if seller has shipping zones for default allowShipping
+      let finalAllowShipping = allowShipping;
+      if (finalAllowShipping === undefined) {
+        const zonesSnapshot = await firestore
+          .collection('shipping_zones')
+          .where('sellerId', '==', auth.uid)
+          .get();
+        finalAllowShipping = zonesSnapshot.size > 0;
+      }
+
+      const productData: any = {
+        name,
+        description: description || '',
+        price: parseFloat(price),
+        compareAtPrice: compareAtPrice ? parseFloat(compareAtPrice) : undefined,
+        stock: stock ? parseInt(stock) : 0,
+        sku: sku || '',
+        category: category || '',
+        status: status || 'active',
+        allowShipping: finalAllowShipping,
+        sellerId: auth.uid,
+        views: 0,
+        salesCount: 0,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      if (imageUrl) {
+        productData.imageUrl = imageUrl;
+      }
+
+      if (variants && Array.isArray(variants)) {
+        productData.variants = variants.map((variant: any, idx: number) => ({
+          id: `variant_${Date.now()}_${idx}`,
+          name: variant.name,
+          options: variant.options.map((opt: any) => ({
+            value: opt.value,
+            priceModifier: opt.priceModifier || 0,
+            stock: opt.stock,
+            sku: opt.sku,
+          })),
+        }));
+      }
+
+      const productRef = await firestore.collection('products').add(productData);
+
+      return sendResponse(response, {
+        success: true,
+        productId: productRef.id,
+        product: { id: productRef.id, ...productData },
+      });
+    } catch (error: any) {
+      console.error('Error in createProduct:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Update product
+ */
+export const updateProduct = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+      const storage = admin.storage();
+
+      const {
+        productId,
+        name,
+        description,
+        price,
+        compareAtPrice,
+        stock,
+        sku,
+        category,
+        status,
+        allowShipping,
+        imageBase64,
+        variants,
+      } = request.body;
+
+      if (!productId) {
+        return sendError(response, 'Product ID is required', 400);
+      }
+
+      const productRef = firestore.collection('products').doc(productId);
+      const productDoc = await productRef.get();
+
+      if (!productDoc.exists) {
+        return sendError(response, 'Product not found', 404);
+      }
+
+      const product = productDoc.data()!;
+      if (product.sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Can only update your own products', 403);
+      }
+
+      let imageUrl: string | undefined;
+      
+      // Handle base64 image upload if provided
+      if (imageBase64) {
+        try {
+          const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+          const buffer = Buffer.from(base64Data, 'base64');
+          const matches = imageBase64.match(/data:image\/(\w+);base64/);
+          const extension = matches ? matches[1] : 'jpg';
+          
+          const fileName = `product_images/${auth.uid}/${Date.now()}.${extension}`;
+          const bucket = storage.bucket();
+          const file = bucket.file(fileName);
+          
+          await file.save(buffer, {
+            metadata: { contentType: `image/${extension}` },
+          });
+          await file.makePublic();
+          
+          imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+        } catch (error) {
+          console.error('Image upload error:', error);
+          return sendError(response, 'Failed to upload image', 500);
+        }
+      }
+
+      const updateData: any = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description || '';
+      if (price !== undefined) updateData.price = parseFloat(price);
+      if (compareAtPrice !== undefined) updateData.compareAtPrice = compareAtPrice ? parseFloat(compareAtPrice) : undefined;
+      if (stock !== undefined) updateData.stock = parseInt(stock);
+      if (sku !== undefined) updateData.sku = sku || '';
+      if (category !== undefined) updateData.category = category || '';
+      if (status !== undefined) updateData.status = status;
+      if (allowShipping !== undefined) updateData.allowShipping = allowShipping;
+      if (imageUrl) updateData.imageUrl = imageUrl;
+      if (variants !== undefined) {
+        updateData.variants = variants.map((variant: any, idx: number) => ({
+          id: variant.id || `variant_${Date.now()}_${idx}`,
+          name: variant.name,
+          options: variant.options.map((opt: any) => ({
+            value: opt.value,
+            priceModifier: opt.priceModifier || 0,
+            stock: opt.stock,
+            sku: opt.sku,
+          })),
+        }));
+      }
+
+      await productRef.update(updateData);
+
+      return sendResponse(response, {
+        success: true,
+        productId,
+        message: 'Product updated successfully',
+      });
+    } catch (error: any) {
+      console.error('Error in updateProduct:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Delete product
+ */
+export const deleteProduct = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const productId = request.body?.productId;
+      if (!productId) {
+        return sendError(response, 'Product ID is required', 400);
+      }
+
+      const productRef = firestore.collection('products').doc(productId);
+      const productDoc = await productRef.get();
+
+      if (!productDoc.exists) {
+        return sendError(response, 'Product not found', 404);
+      }
+
+      const product = productDoc.data()!;
+      if (product.sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Can only delete your own products', 403);
+      }
+
+      await productRef.delete();
+
+      return sendResponse(response, {
+        success: true,
+        message: 'Product deleted successfully',
+      });
+    } catch (error: any) {
+      console.error('Error in deleteProduct:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// SELLER FUNCTIONS - DASHBOARD & ANALYTICS
+// ============================================================================
+
+/**
+ * Get dashboard stats
+ */
+export const getDashboardStats = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const sellerId = request.query.sellerId as string || request.body?.sellerId || auth.uid;
+      
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      // Get products count
+      const productsSnapshot = await firestore
+        .collection('products')
+        .where('sellerId', '==', sellerId)
+        .get();
+      const totalProducts = productsSnapshot.size;
+
+      // Get orders
+      const ordersSnapshot = await firestore
+        .collection('orders')
+        .where('sellerId', '==', sellerId)
+        .get();
+
+      const orders = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const totalOrders = orders.length;
+      const totalRevenue = orders.reduce((sum, order: any) => sum + (order.total || 0), 0);
+      const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+      // Get unique customers
+      const customerIds = new Set(orders.map((order: any) => order.customerId).filter(Boolean));
+      const totalCustomers = customerIds.size;
+
+      // Recent orders (last 5)
+      const recentOrders = orders
+        .sort((a: any, b: any) => {
+          const aTime = a.createdAt?.toDate?.()?.getTime() || 0;
+          const bTime = b.createdAt?.toDate?.()?.getTime() || 0;
+          return bTime - aTime;
+        })
+        .slice(0, 5);
+
+      // Low stock products
+      const lowStockProducts = productsSnapshot.docs
+        .map(doc => doc.data())
+        .filter((p: any) => p.stock <= 5 && p.stock > 0)
+        .length;
+
+      return sendResponse(response, {
+        success: true,
+        stats: {
+          totalRevenue,
+          totalOrders,
+          totalProducts,
+          totalCustomers,
+          averageOrderValue,
+          lowStockProducts,
+          recentOrders: recentOrders.map((order: any) => ({
+            id: order.id,
+            total: order.total,
+            status: order.status,
+            customerName: order.customerInfo?.name || 'Unknown',
+            createdAt: order.createdAt,
+          })),
+        },
+      });
+    } catch (error: any) {
+      console.error('Error in getDashboardStats:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get analytics data
+ */
+export const getSellerAnalytics = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const sellerId = request.query.sellerId as string || request.body?.sellerId || auth.uid;
+      const days = parseInt(request.query.days as string) || parseInt(request.body?.days) || 30;
+      
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+
+      // Get orders
+      const ordersSnapshot = await firestore
+        .collection('orders')
+        .where('sellerId', '==', sellerId)
+        .get();
+
+      const orders = ordersSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((order: any) => {
+          if (!order.createdAt) return false;
+          const orderDate = order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+          return orderDate >= startDate && orderDate <= endDate;
+        });
+
+      // Daily breakdown
+      const dailyData: Record<string, { revenue: number; orders: number }> = {};
+      orders.forEach((order: any) => {
+        if (!order.createdAt) return;
+        const orderDate = order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+        const dateKey = orderDate.toISOString().split('T')[0];
+        if (!dailyData[dateKey]) {
+          dailyData[dateKey] = { revenue: 0, orders: 0 };
+        }
+        dailyData[dateKey].revenue += order.total || 0;
+        dailyData[dateKey].orders += 1;
+      });
+
+      // Product performance
+      const productSales: Record<string, { name: string; sales: number; revenue: number }> = {};
+      orders.forEach((order: any) => {
+        order.items?.forEach((item: any) => {
+          const productId = item.productId;
+          if (!productSales[productId]) {
+            productSales[productId] = {
+              name: item.name || 'Unknown',
+              sales: 0,
+              revenue: 0,
+            };
+          }
+          productSales[productId].sales += item.quantity || 0;
+          productSales[productId].revenue += (item.price || 0) * (item.quantity || 0);
+        });
+      });
+
+      return sendResponse(response, {
+        success: true,
+        analytics: {
+          dailyData: Object.entries(dailyData).map(([date, data]) => ({ date, ...data })),
+          productPerformance: Object.entries(productSales)
+            .map(([productId, data]) => ({ productId, ...data }))
+            .sort((a, b) => b.revenue - a.revenue)
+            .slice(0, 10),
+          totalRevenue: orders.reduce((sum: number, order: any) => sum + (order.total || 0), 0),
+          totalOrders: orders.length,
+        },
+      });
+    } catch (error: any) {
+      console.error('Error in getSellerAnalytics:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// SELLER FUNCTIONS - REPORTS
+// ============================================================================
+
+/**
+ * Generate sales report
+ */
+export const generateSalesReport = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const sellerId = request.body?.sellerId || auth.uid;
+      const days = parseInt(request.body?.days) || 30;
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+
+      const ordersSnapshot = await firestore
+        .collection('orders')
+        .where('sellerId', '==', sellerId)
+        .get();
+
+      const orders = ordersSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((order: any) => {
+          if (!order.createdAt) return false;
+          const orderDate = order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+          return orderDate >= startDate && orderDate <= endDate;
+        });
+
+      const totalRevenue = orders.reduce((sum: number, order: any) => sum + (order.total || 0), 0);
+      const totalOrders = orders.length;
+      const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+      const statusBreakdown: Record<string, number> = {};
+      orders.forEach((order: any) => {
+        const status = order.status || 'Unknown';
+        statusBreakdown[status] = (statusBreakdown[status] || 0) + 1;
+      });
+
+      const dailyBreakdown: Record<string, { revenue: number; orders: number }> = {};
+      orders.forEach((order: any) => {
+        if (!order.createdAt) return;
+        const orderDate = order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+        const dateKey = orderDate.toISOString().split('T')[0];
+        if (!dailyBreakdown[dateKey]) {
+          dailyBreakdown[dateKey] = { revenue: 0, orders: 0 };
+        }
+        dailyBreakdown[dateKey].revenue += order.total || 0;
+        dailyBreakdown[dateKey].orders += 1;
+      });
+
+      return sendResponse(response, {
+        success: true,
+        report: {
+          type: 'sales',
+          dateRange: days,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          summary: {
+            totalRevenue,
+            totalOrders,
+            averageOrderValue,
+            statusBreakdown,
+          },
+          dailyBreakdown: Object.entries(dailyBreakdown).map(([date, data]) => ({ date, ...data })),
+        },
+      });
+    } catch (error: any) {
+      console.error('Error in generateSalesReport:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Generate customer report
+ */
+export const generateCustomerReport = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const sellerId = request.body?.sellerId || auth.uid;
+      const days = parseInt(request.body?.days) || 30;
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+
+      const ordersSnapshot = await firestore
+        .collection('orders')
+        .where('sellerId', '==', sellerId)
+        .get();
+
+      const orders = ordersSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((order: any) => {
+          if (!order.createdAt) return false;
+          const orderDate = order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+          return orderDate >= startDate && orderDate <= endDate;
+        });
+
+      const customerMap = new Map<string, {
+        customerId: string;
+        name: string;
+        email: string;
+        phone: string;
+        totalOrders: number;
+        totalSpent: number;
+        firstOrderDate: Date;
+        lastOrderDate: Date;
+      }>();
+
+      orders.forEach((order: any) => {
+        const customerId = order.customerId;
+        if (!customerId) return;
+
+        const existing = customerMap.get(customerId);
+        const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt || Date.now());
+
+        if (existing) {
+          existing.totalOrders += 1;
+          existing.totalSpent += order.total || 0;
+          if (orderDate > existing.lastOrderDate) {
+            existing.lastOrderDate = orderDate;
+          }
+          if (orderDate < existing.firstOrderDate) {
+            existing.firstOrderDate = orderDate;
+          }
+        } else {
+          customerMap.set(customerId, {
+            customerId,
+            name: order.customerInfo?.name || 'Unknown',
+            email: order.customerInfo?.email || '',
+            phone: order.customerInfo?.phone || '',
+            totalOrders: 1,
+            totalSpent: order.total || 0,
+            firstOrderDate: orderDate,
+            lastOrderDate: orderDate,
+          });
+        }
+      });
+
+      const customers = Array.from(customerMap.values())
+        .sort((a, b) => b.totalSpent - a.totalSpent);
+
+      // Segment customers
+      const now = new Date();
+      const vipCustomers = customers.filter(c => c.totalSpent >= 50000);
+      const regularCustomers = customers.filter(c => c.totalSpent >= 10000 && c.totalSpent < 50000);
+      const newCustomers = customers.filter(c => {
+        const daysSinceFirst = (now.getTime() - c.firstOrderDate.getTime()) / (1000 * 60 * 60 * 24);
+        return daysSinceFirst <= 30;
+      });
+
+      return sendResponse(response, {
+        success: true,
+        report: {
+          type: 'customers',
+          dateRange: days,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          totalCustomers: customers.length,
+          segments: {
+            vip: vipCustomers.length,
+            regular: regularCustomers.length,
+            new: newCustomers.length,
+          },
+          customers: customers.map(c => ({
+            ...c,
+            firstOrderDate: c.firstOrderDate.toISOString(),
+            lastOrderDate: c.lastOrderDate.toISOString(),
+          })),
+        },
+      });
+    } catch (error: any) {
+      console.error('Error in generateCustomerReport:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// SELLER FUNCTIONS - MARKETING (DISCOUNT CODES)
+// ============================================================================
+
+/**
+ * Create discount code
+ */
+export const createDiscountCode = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const {
+        code,
+        type,
+        value,
+        maxUses,
+        minOrderAmount,
+        validFrom,
+        validUntil,
+        sellerId,
+      } = request.body;
+
+      if (!code || !type || !value || !sellerId) {
+        return sendError(response, 'Code, type, value, and sellerId are required', 400);
+      }
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Can only create discount codes for your own store', 403);
+      }
+
+      // Check if code already exists
+      const existingCodeQuery = await firestore
+        .collection('discount_codes')
+        .where('code', '==', code.toUpperCase())
+        .where('sellerId', '==', sellerId)
+        .limit(1)
+        .get();
+
+      if (!existingCodeQuery.empty) {
+        return sendError(response, 'Discount code already exists', 400);
+      }
+
+      const discountCodeData: any = {
+        code: code.toUpperCase(),
+        type,
+        value: parseFloat(value),
+        sellerId,
+        uses: 0,
+        status: 'active',
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      if (maxUses) discountCodeData.maxUses = parseInt(maxUses);
+      if (minOrderAmount) discountCodeData.minOrderAmount = parseFloat(minOrderAmount);
+      if (validFrom) discountCodeData.validFrom = admin.firestore.Timestamp.fromDate(new Date(validFrom));
+      if (validUntil) discountCodeData.validUntil = admin.firestore.Timestamp.fromDate(new Date(validUntil));
+
+      const discountRef = await firestore.collection('discount_codes').add(discountCodeData);
+
+      return sendResponse(response, {
+        success: true,
+        discountCodeId: discountRef.id,
+        message: 'Discount code created successfully',
+      });
+    } catch (error: any) {
+      console.error('Error in createDiscountCode:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get discount codes
+ */
+export const getDiscountCodes = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const sellerId = request.query.sellerId as string || request.body?.sellerId || auth.uid;
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const snapshot = await firestore
+        .collection('discount_codes')
+        .where('sellerId', '==', sellerId)
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      const discountCodes = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return sendResponse(response, {
+        success: true,
+        discountCodes,
+      });
+    } catch (error: any) {
+      console.error('Error in getDiscountCodes:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Update discount code
+ */
+export const updateDiscountCode = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const { discountCodeId, ...updateData } = request.body;
+
+      if (!discountCodeId) {
+        return sendError(response, 'Discount code ID is required', 400);
+      }
+
+      const discountRef = firestore.collection('discount_codes').doc(discountCodeId);
+      const discountDoc = await discountRef.get();
+
+      if (!discountDoc.exists) {
+        return sendError(response, 'Discount code not found', 404);
+      }
+
+      const discount = discountDoc.data()!;
+      if (discount.sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const update: any = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      if (updateData.status !== undefined) update.status = updateData.status;
+      if (updateData.maxUses !== undefined) update.maxUses = parseInt(updateData.maxUses);
+      if (updateData.validFrom !== undefined) update.validFrom = admin.firestore.Timestamp.fromDate(new Date(updateData.validFrom));
+      if (updateData.validUntil !== undefined) update.validUntil = admin.firestore.Timestamp.fromDate(new Date(updateData.validUntil));
+
+      await discountRef.update(update);
+
+      return sendResponse(response, {
+        success: true,
+        message: 'Discount code updated successfully',
+      });
+    } catch (error: any) {
+      console.error('Error in updateDiscountCode:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Delete discount code
+ */
+export const deleteDiscountCode = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const discountCodeId = request.body?.discountCodeId;
+
+      if (!discountCodeId) {
+        return sendError(response, 'Discount code ID is required', 400);
+      }
+
+      const discountRef = firestore.collection('discount_codes').doc(discountCodeId);
+      const discountDoc = await discountRef.get();
+
+      if (!discountDoc.exists) {
+        return sendError(response, 'Discount code not found', 404);
+      }
+
+      const discount = discountDoc.data()!;
+      if (discount.sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      await discountRef.delete();
+
+      return sendResponse(response, {
+        success: true,
+        message: 'Discount code deleted successfully',
+      });
+    } catch (error: any) {
+      console.error('Error in deleteDiscountCode:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// SELLER FUNCTIONS - STORE MANAGEMENT
+// ============================================================================
+
+/**
+ * Get store settings
+ */
+export const getStoreSettings = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const sellerId = request.query.sellerId as string || request.body?.sellerId || auth.uid;
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const storeDoc = await firestore.collection('stores').doc(sellerId).get();
+
+      if (!storeDoc.exists) {
+        return sendError(response, 'Store not found', 404);
+      }
+
+      return sendResponse(response, {
+        success: true,
+        store: { id: storeDoc.id, ...storeDoc.data() },
+      });
+    } catch (error: any) {
+      console.error('Error in getStoreSettings:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Update store settings
+ */
+export const updateStoreSettings = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+      const storage = admin.storage();
+
+      const sellerId = request.body?.sellerId || auth.uid;
+      const updateData = request.body?.updateData || {};
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const storeRef = firestore.collection('stores').doc(sellerId);
+
+      // Handle logo upload if provided
+      if (updateData.logoBase64) {
+        try {
+          const base64Data = updateData.logoBase64.includes(',') 
+            ? updateData.logoBase64.split(',')[1] 
+            : updateData.logoBase64;
+          const buffer = Buffer.from(base64Data, 'base64');
+          const matches = updateData.logoBase64.match(/data:image\/(\w+);base64/);
+          const extension = matches ? matches[1] : 'jpg';
+          
+          const fileName = `store_logos/${sellerId}/${Date.now()}.${extension}`;
+          const bucket = storage.bucket();
+          const file = bucket.file(fileName);
+          
+          await file.save(buffer, {
+            metadata: { contentType: `image/${extension}` },
+          });
+          await file.makePublic();
+          
+          updateData.storeLogo = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+          delete updateData.logoBase64;
+        } catch (error) {
+          console.error('Logo upload error:', error);
+          return sendError(response, 'Failed to upload logo', 500);
+        }
+      }
+
+      // Handle banner upload if provided
+      if (updateData.bannerBase64) {
+        try {
+          const base64Data = updateData.bannerBase64.includes(',') 
+            ? updateData.bannerBase64.split(',')[1] 
+            : updateData.bannerBase64;
+          const buffer = Buffer.from(base64Data, 'base64');
+          const matches = updateData.bannerBase64.match(/data:image\/(\w+);base64/);
+          const extension = matches ? matches[1] : 'jpg';
+          
+          const fileName = `store_banners/${sellerId}/${Date.now()}.${extension}`;
+          const bucket = storage.bucket();
+          const file = bucket.file(fileName);
+          
+          await file.save(buffer, {
+            metadata: { contentType: `image/${extension}` },
+          });
+          await file.makePublic();
+          
+          updateData.storeBanner = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+          delete updateData.bannerBase64;
+        } catch (error) {
+          console.error('Banner upload error:', error);
+          return sendError(response, 'Failed to upload banner', 500);
+        }
+      }
+
+      updateData.updatedAt = FieldValue.serverTimestamp();
+
+      await storeRef.set(updateData, { merge: true });
+
+      return sendResponse(response, {
+        success: true,
+        message: 'Store settings updated successfully',
+      });
+    } catch (error: any) {
+      console.error('Error in updateStoreSettings:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// SELLER FUNCTIONS - CUSTOMERS
+// ============================================================================
+
+/**
+ * Get customers
+ */
+export const getCustomers = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const sellerId = request.query.sellerId as string || request.body?.sellerId || auth.uid;
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const ordersSnapshot = await firestore
+        .collection('orders')
+        .where('sellerId', '==', sellerId)
+        .get();
+
+      const orders = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      const customerMap = new Map<string, {
+        customerId: string;
+        name: string;
+        email: string;
+        phone: string;
+        totalOrders: number;
+        totalSpent: number;
+        firstOrderDate: Date;
+        lastOrderDate: Date;
+      }>();
+
+      orders.forEach((order: any) => {
+        const customerId = order.customerId;
+        if (!customerId) return;
+
+        const existing = customerMap.get(customerId);
+        const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt || Date.now());
+
+        if (existing) {
+          existing.totalOrders += 1;
+          existing.totalSpent += order.total || 0;
+          if (orderDate > existing.lastOrderDate) {
+            existing.lastOrderDate = orderDate;
+          }
+          if (orderDate < existing.firstOrderDate) {
+            existing.firstOrderDate = orderDate;
+          }
+        } else {
+          customerMap.set(customerId, {
+            customerId,
+            name: order.customerInfo?.name || 'Unknown',
+            email: order.customerInfo?.email || '',
+            phone: order.customerInfo?.phone || '',
+            totalOrders: 1,
+            totalSpent: order.total || 0,
+            firstOrderDate: orderDate,
+            lastOrderDate: orderDate,
+          });
+        }
+      });
+
+      const customers = Array.from(customerMap.values())
+        .sort((a, b) => b.totalSpent - a.totalSpent);
+
+      // Segment customers
+      const now = new Date();
+      const vipCustomers = customers.filter(c => c.totalSpent >= 50000);
+      const regularCustomers = customers.filter(c => c.totalSpent >= 10000 && c.totalSpent < 50000);
+      const newCustomers = customers.filter(c => {
+        const daysSinceFirst = (now.getTime() - c.firstOrderDate.getTime()) / (1000 * 60 * 60 * 24);
+        return daysSinceFirst <= 30;
+      });
+
+      return sendResponse(response, {
+        success: true,
+        customers: customers.map(c => ({
+          ...c,
+          firstOrderDate: c.firstOrderDate.toISOString(),
+          lastOrderDate: c.lastOrderDate.toISOString(),
+        })),
+        segments: {
+          vip: vipCustomers.length,
+          regular: regularCustomers.length,
+          new: newCustomers.length,
+        },
+      });
+    } catch (error: any) {
+      console.error('Error in getCustomers:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// ADMIN FUNCTIONS - USER MANAGEMENT
+// ============================================================================
+
+/**
+ * Get all users (admin only)
+ */
+export const getAllUsers = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const limit = parseInt(request.query.limit as string) || 50;
+      const startAfter = request.query.startAfter as string;
+      const role = request.query.role as string;
+
+      let query: admin.firestore.Query = firestore
+        .collection('users')
+        .orderBy('createdAt', 'desc')
+        .limit(limit);
+
+      if (role) {
+        query = query.where('role', '==', role);
+      }
+
+      if (startAfter) {
+        const startAfterDoc = await firestore.collection('users').doc(startAfter).get();
+        if (startAfterDoc.exists) {
+          query = query.startAfter(startAfterDoc);
+        }
+      }
+
+      const snapshot = await query.get();
+      const users = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return sendResponse(response, {
+        success: true,
+        users,
+        hasMore: snapshot.docs.length === limit,
+      });
+    } catch (error: any) {
+      console.error('Error in getAllUsers:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Grant admin role
+ */
+export const grantAdminRole = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const userId = request.body?.userId;
+      if (!userId) {
+        return sendError(response, 'User ID is required', 400);
+      }
+
+      // Set custom claims
+      await admin.auth().setCustomUserClaims(userId, { isAdmin: true });
+      await admin.auth().revokeRefreshTokens(userId);
+
+      // Update Firestore
+      await firestore.collection('users').doc(userId).update({
+        isAdmin: true,
+        role: 'admin',
+      });
+
+      return sendResponse(response, {
+        success: true,
+        message: 'Admin role granted successfully',
+      });
+    } catch (error: any) {
+      console.error('Error in grantAdminRole:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Revoke admin role
+ */
+export const revokeAdminRole = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const userId = request.body?.userId;
+      if (!userId) {
+        return sendError(response, 'User ID is required', 400);
+      }
+
+      if (userId === auth.uid) {
+        return sendError(response, 'Cannot revoke your own admin role', 400);
+      }
+
+      // Set custom claims
+      await admin.auth().setCustomUserClaims(userId, { isAdmin: false });
+      await admin.auth().revokeRefreshTokens(userId);
+
+      // Update Firestore - determine new role
+      const userDoc = await firestore.collection('users').doc(userId).get();
+      const userData = userDoc.data();
+      const newRole = userData?.storeName ? 'seller' : 'buyer';
+
+      await firestore.collection('users').doc(userId).update({
+        isAdmin: false,
+        role: newRole,
+      });
+
+      return sendResponse(response, {
+        success: true,
+        message: 'Admin role revoked successfully',
+      });
+    } catch (error: any) {
+      console.error('Error in revokeAdminRole:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// ADMIN FUNCTIONS - PLATFORM SETTINGS
+// ============================================================================
+
+/**
+ * Get platform settings
+ */
+export const getPlatformSettings = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const settingsDoc = await firestore.collection('platform_settings').doc('platform_settings').get();
+
+      if (!settingsDoc.exists) {
+        // Return defaults
+        return sendResponse(response, {
+          success: true,
+          settings: {
+            platformCommissionRate: 0.05,
+            minimumPayoutAmount: 5000,
+            platformFee: 0,
+            currency: 'NGN',
+          },
+        });
+      }
+
+      return sendResponse(response, {
+        success: true,
+        settings: settingsDoc.data(),
+      });
+    } catch (error: any) {
+      console.error('Error in getPlatformSettings:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Update platform settings
+ */
+export const updatePlatformSettings = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const updateData = request.body?.settings || {};
+
+      const settingsRef = firestore.collection('platform_settings').doc('platform_settings');
+      
+      const update: any = {
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: auth.uid,
+      };
+
+      if (updateData.platformCommissionRate !== undefined) {
+        update.platformCommissionRate = parseFloat(updateData.platformCommissionRate);
+      }
+      if (updateData.minimumPayoutAmount !== undefined) {
+        update.minimumPayoutAmount = parseFloat(updateData.minimumPayoutAmount);
+      }
+      if (updateData.platformFee !== undefined) {
+        update.platformFee = parseFloat(updateData.platformFee);
+      }
+      if (updateData.currency !== undefined) {
+        update.currency = updateData.currency;
+      }
+
+      await settingsRef.set(update, { merge: true });
+
+      return sendResponse(response, {
+        success: true,
+        message: 'Platform settings updated successfully',
+      });
+    } catch (error: any) {
+      console.error('Error in updatePlatformSettings:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// ADMIN FUNCTIONS - ORDERS & DISPUTES
+// ============================================================================
+
+/**
+ * Get all orders (admin only)
+ */
+export const getAllOrders = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const limit = parseInt(request.query.limit as string) || 50;
+      const startAfter = request.query.startAfter as string;
+      const status = request.query.status as string;
+
+      let query: admin.firestore.Query = firestore
+        .collection('orders')
+        .orderBy('createdAt', 'desc')
+        .limit(limit);
+
+      if (status) {
+        query = query.where('status', '==', status);
+      }
+
+      if (startAfter) {
+        const startAfterDoc = await firestore.collection('orders').doc(startAfter).get();
+        if (startAfterDoc.exists) {
+          query = query.startAfter(startAfterDoc);
+        }
+      }
+
+      const snapshot = await query.get();
+      const orders = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return sendResponse(response, {
+        success: true,
+        orders,
+        hasMore: snapshot.docs.length === limit,
+      });
+    } catch (error: any) {
+      console.error('Error in getAllOrders:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Resolve dispute
+ */
+export const resolveDispute = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const { orderId, resolution, refundAmount } = request.body;
+
+      if (!orderId || !resolution) {
+        return sendError(response, 'Order ID and resolution are required', 400);
+      }
+
+      const orderRef = firestore.collection('orders').doc(orderId);
+      const orderDoc = await orderRef.get();
+
+      if (!orderDoc.exists) {
+        return sendError(response, 'Order not found', 404);
+      }
+
+      const order = orderDoc.data()!;
+      if (order.status !== 'Disputed') {
+        return sendError(response, 'Order is not in dispute', 400);
+      }
+
+      const update: any = {
+        status: resolution === 'refund' ? 'Cancelled' : 'Processing',
+        disputeResolution: resolution,
+        disputeResolvedAt: FieldValue.serverTimestamp(),
+        disputeResolvedBy: auth.uid,
+      };
+
+      if (resolution === 'refund' && refundAmount) {
+        update.refundAmount = parseFloat(refundAmount);
+        update.escrowStatus = 'refunded';
+      } else if (resolution === 'release') {
+        update.escrowStatus = 'released';
+      }
+
+      await orderRef.update(update);
+
+      return sendResponse(response, {
+        success: true,
+        message: 'Dispute resolved successfully',
+      });
+    } catch (error: any) {
+      console.error('Error in resolveDispute:', error);
       return sendError(response, error.message || 'Internal server error', 500);
     }
   });

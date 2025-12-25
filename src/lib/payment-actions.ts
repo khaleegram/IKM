@@ -18,7 +18,7 @@ const verifyPaymentSchema = z.object({
   deliveryAddress: z.string(),
   customerInfo: z.any(),
   discountCode: z.string().optional(),
-  shippingType: z.enum(['delivery', 'pickup']).optional(),
+  shippingType: z.enum(['delivery', 'pickup', 'contact']).optional(),
   shippingPrice: z.number().optional(),
 });
 

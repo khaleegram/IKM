@@ -12,7 +12,13 @@ export function calculateFinalShippingPrice(
   orderSubtotal: number,
   zones: ShippingZone[]
 ): number {
-  if (!selectedOption || selectedOption.type === 'pickup') {
+  // If no option selected, pickup selected, or contact selected, shipping is always 0
+  if (!selectedOption || selectedOption.type === 'pickup' || selectedOption.type === 'contact') {
+    return 0;
+  }
+
+  // Only calculate for delivery options
+  if (selectedOption.type !== 'delivery') {
     return 0;
   }
 
@@ -25,10 +31,12 @@ export function calculateFinalShippingPrice(
     return false;
   });
   
+  // Check if free shipping threshold is met
   if (zone && zone.freeThreshold && orderSubtotal >= zone.freeThreshold) {
     return 0; // Free shipping
   }
 
-  return selectedOption.price;
+  // Return the option's price (should be the zone rate)
+  return selectedOption.price || 0;
 }
 

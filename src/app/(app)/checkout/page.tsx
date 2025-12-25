@@ -2,6 +2,7 @@
 'use client';
 
 import { CoPilotWidget } from '@/components/copilot-widget';
+import { StateSelector } from '@/components/state-selector';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,8 +26,9 @@ import { useUserAddresses } from '@/lib/firebase/firestore/addresses';
 import { clearGuestDeliveryInfo, loadGuestDeliveryInfo, saveGuestDeliveryInfo } from '@/lib/guest-session';
 import { usePaymentState } from '@/lib/payment-state';
 import { getPublicShippingZones, type ShippingZone } from '@/lib/shipping-actions';
+import { normalizeStateName } from '@/lib/utils/state-selector';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { AlertCircle, Loader2, LogIn, MapPin, MessageCircle, Phone, Tag, Truck, UserPlus, X } from "lucide-react";
+import { AlertCircle, Loader2, LogIn, MapPin, MessageCircle, Phone, Tag, Truck, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
@@ -132,6 +134,7 @@ export default function CheckoutPage() {
     });
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+    const [isProcessingOrder, setIsProcessingOrder] = useState(false);
     const { 
         currentPayment, 
         createPaymentAttempt, 
@@ -206,10 +209,11 @@ export default function CheckoutPage() {
         }
     }, [defaultAddress, user]);
 
-    // Calculate shipping when state changes
+    // Calculate shipping when state changes or on initial load
+    // This allows pickup to show immediately even without a state selected
     useEffect(() => {
         const calculateShipping = async () => {
-            if (!sellerId || !customerState || !cartItems.length) {
+            if (!sellerId || !cartItems.length) {
                 setShippingOptions([]);
                 setSelectedShippingOption(null);
                 return;
@@ -219,13 +223,20 @@ export default function CheckoutPage() {
             try {
                 // Get product IDs from cart items to check allowShipping
                 const productIds = cartItems.map(item => item.id).filter((id): id is string => !!id);
-                const calculation = await calculateShippingOptions(sellerId, customerState, productIds);
+                // Pass customerState (can be empty string - function handles it)
+                const calculation = await calculateShippingOptions(sellerId, customerState || '', productIds);
                 setShippingCalculation(calculation);
                 setShippingOptions(calculation.options);
                 
-                // Auto-select first available option
+                // Auto-select pickup if available (preferred), otherwise select first option
+                // Users can always change their selection via radio buttons
                 if (calculation.options.length > 0) {
-                    setSelectedShippingOption(calculation.options[0]);
+                    const pickupOption = calculation.options.find(opt => opt.type === 'pickup' && opt.available);
+                    // Prefer pickup, but allow users to choose delivery if they want
+                    setSelectedShippingOption(pickupOption || calculation.options[0]);
+                } else {
+                    // No options available - clear selection
+                    setSelectedShippingOption(null);
                 }
             } catch (error) {
                 console.error('Failed to calculate shipping:', error);
@@ -276,7 +287,10 @@ export default function CheckoutPage() {
         const { id, value } = e.target;
         setFormState(prev => ({ ...prev, [id]: value }));
         if (id === 'state') {
-            setCustomerState(value);
+            // Normalize state name when user types manually
+            const normalized = normalizeStateName(value);
+            setFormState(prev => ({ ...prev, state: normalized }));
+            setCustomerState(normalized);
         }
         
         // Save guest delivery info to localStorage (only if not logged in)
@@ -287,7 +301,7 @@ export default function CheckoutPage() {
                 email: id === 'email' ? value : formState.email,
                 phone: id === 'phone' ? value : formState.phone,
                 address: id === 'address' ? value : formState.address,
-                state: id === 'state' ? value : formState.state,
+                state: id === 'state' ? normalizeStateName(value) : formState.state,
             };
             saveGuestDeliveryInfo(guestInfo);
         }
@@ -437,7 +451,9 @@ export default function CheckoutPage() {
     };
 
     // Calculate shipping price (check free shipping threshold)
-    const shippingPrice = selectedShippingOption 
+    // If no option selected, pickup selected, or contact selected, shipping is 0
+    // Calculate shipping price - only for delivery, not pickup or contact
+    const shippingPrice = selectedShippingOption && selectedShippingOption.type === 'delivery'
         ? calculateFinalShippingPrice(selectedShippingOption, totalPrice, zones)
         : 0;
 
@@ -445,7 +461,18 @@ export default function CheckoutPage() {
     const discountAmount = appliedDiscount?.amount || 0;
     const total = Math.max(0, subtotal + shippingPrice - discountAmount);
     
-    const isFormValid = formState.firstName && formState.lastName && formState.address && formState.email && formState.phone && formState.state && selectedShippingOption;
+    // Allow checkout if form is valid AND either shipping option is selected OR pickup is available
+    const hasPickupOption = shippingOptions.some(opt => opt.type === 'pickup' && opt.available);
+    // Form validation: For pickup/contact, only need name, email, phone. For delivery, need full address
+    const isFormValid = 
+        formState.firstName && 
+        formState.lastName && 
+        formState.email && 
+        formState.phone && 
+        selectedShippingOption &&
+        (selectedShippingOption.type === 'pickup' || selectedShippingOption.type === 'contact' 
+            ? true // Pickup/contact don't need address
+            : (formState.address && formState.state)); // Delivery needs full address
 
     // Generate unique reference with timestamp
     const generateReference = () => {
@@ -479,37 +506,77 @@ export default function CheckoutPage() {
                     // #endregion
                     
                     if (found?.reference) {
-                        // Payment was completed! Process it
-                        const result = await cloudFunctions.verifyPaymentAndCreateOrder({
-                            reference: found.reference,
-                            idempotencyKey: currentPayment.id,
-                            cartItems,
-                            total,
-                            deliveryAddress: selectedShippingOption?.type === 'pickup' 
-                                ? `PICKUP: ${selectedShippingOption.pickupAddress || shippingCalculation?.sellerPickupAddress || 'Store location'}`
-                                : formState.address,
-                            customerInfo: {
-                                name: `${formState.firstName} ${formState.lastName}`,
-                                email: formState.email,
-                                phone: formState.phone,
-                                state: formState.state,
-                            },
-                            discountCode: appliedDiscount?.code,
-                            shippingType: selectedShippingOption?.type,
-                            shippingPrice: shippingPrice,
-                        });
-                        
-                        if (result.success) {
-                            updatePaymentStatus(currentPayment.id, 'completed', undefined, result.orderId);
-                            toast({
-                                title: 'Order Placed!',
-                                description: "Thank you for your purchase.",
-                            });
-                            clearCart();
-                            clearPaymentState();
-                            if (!user) clearGuestDeliveryInfo();
-                            router.push(user ? '/profile' : '/?orderSuccess=true');
+                        // CRITICAL: Check if order creation is already in progress
+                        if (orderCreationLockRef.current.isProcessing) {
+                            console.warn('Order creation already in progress, skipping duplicate attempt');
                             return;
+                        }
+                        
+                        // Payment was completed! Process it
+                        orderCreationLockRef.current = { isProcessing: true, paymentId: currentPayment.id };
+                        setIsProcessingOrder(true);
+                        try {
+                            const result = await cloudFunctions.verifyPaymentAndCreateOrder({
+                                reference: found.reference,
+                                idempotencyKey: currentPayment.id, // CRITICAL: Use consistent idempotency key
+                                cartItems,
+                                total,
+                                deliveryAddress: selectedShippingOption?.type === 'pickup' 
+                                    ? `PICKUP: ${selectedShippingOption.pickupAddress || shippingCalculation?.sellerPickupAddress || 'Store location'}`
+                                    : selectedShippingOption?.type === 'contact'
+                                    ? `CONTACT_SELLER: Buyer will arrange delivery/pickup via chat`
+                                    : formState.address,
+                                customerInfo: {
+                                    name: `${formState.firstName} ${formState.lastName}`,
+                                    email: formState.email,
+                                    phone: formState.phone,
+                                    state: formState.state,
+                                    firstName: formState.firstName,
+                                    lastName: formState.lastName,
+                                },
+                                discountCode: appliedDiscount?.code,
+                                shippingType: selectedShippingOption?.type,
+                                shippingPrice: shippingPrice,
+                            });
+                            
+                            if (result.success) {
+                                updatePaymentStatus(currentPayment.id, 'completed', undefined, result.orderId);
+                                toast({
+                                    title: result.alreadyExists ? 'Order Confirmed!' : 'Order Placed!',
+                                    description: "Thank you for your purchase. Redirecting...",
+                                });
+                                clearCart();
+                                clearPaymentState();
+                                if (!user) clearGuestDeliveryInfo();
+                                
+                                // Small delay to show success message
+                                await new Promise(resolve => setTimeout(resolve, 1500));
+                                router.push(user ? '/profile' : '/?orderSuccess=true');
+                                return;
+                            }
+                        } catch (error) {
+                            console.error('Error processing order:', error);
+                            const errorMessage = error instanceof Error ? error.message : 'Failed to process order';
+                            
+                            // CRITICAL: If payment was successful but order creation failed
+                            if (!errorMessage.includes('Payment not successful')) {
+                                toast({
+                                    variant: 'destructive',
+                                    title: 'Payment Received - Order Processing Issue',
+                                    description: 'Your payment was successful, but there was an issue creating your order. Our team has been notified. Please contact support with your payment reference.',
+                                });
+                            } else {
+                                toast({
+                                    variant: 'destructive',
+                                    title: 'Error',
+                                    description: errorMessage,
+                                });
+                            }
+                        } finally {
+                            setIsProcessingOrder(false);
+                            if (orderCreationLockRef.current.paymentId === currentPayment.id) {
+                                orderCreationLockRef.current = { isProcessing: false };
+                            }
                         }
                     }
                 } catch (error) {
@@ -575,10 +642,26 @@ export default function CheckoutPage() {
 
     // Track polling state to stop it if callback fires
     const pollingStateRef = useRef<{ active: boolean }>({ active: false });
+    // CRITICAL: Prevent race conditions - only allow one order creation attempt at a time
+    const orderCreationLockRef = useRef<{ isProcessing: boolean; paymentId?: string }>({ isProcessing: false });
     
     // Simplified payment success handler
     const onPaymentSuccess = useCallback(async (reference: any) => {
         pollingStateRef.current.active = false; // Stop polling if callback fires
+        
+        // CRITICAL: Prevent duplicate order creation attempts
+        if (orderCreationLockRef.current.isProcessing) {
+            console.warn('Order creation already in progress, ignoring duplicate callback');
+            return;
+        }
+        
+        if (!currentPayment?.id) {
+            console.error('No current payment found');
+            return;
+        }
+        
+        // Lock order creation for this payment
+        orderCreationLockRef.current = { isProcessing: true, paymentId: currentPayment.id };
         const logData = {location:'checkout/page.tsx:561',message:'onPaymentSuccess CALLED',data:{reference,referenceType:typeof reference,isObject:typeof reference === 'object',hasReference:reference?.reference,hasTrxref:reference?.trxref},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A'};
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/216e8403-ed09-402a-a608-99b1722965bb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
@@ -605,6 +688,7 @@ export default function CheckoutPage() {
         
         updatePaymentStatus(currentPayment?.id || 'temp', 'verifying');
         
+        setIsProcessingOrder(true);
         startTransition(async () => {
             try {
                 // If our reference doesn't work, try to find the actual Paystack reference
@@ -618,6 +702,8 @@ export default function CheckoutPage() {
                         total,
                         deliveryAddress: selectedShippingOption?.type === 'pickup' 
                             ? `PICKUP: ${selectedShippingOption.pickupAddress || shippingCalculation?.sellerPickupAddress || 'Store location'}`
+                            : selectedShippingOption?.type === 'contact'
+                            ? `CONTACT_SELLER: Buyer will arrange delivery/pickup via chat`
                             : formState.address,
                         customerInfo: {
                             name: `${formState.firstName} ${formState.lastName}`,
@@ -631,16 +717,32 @@ export default function CheckoutPage() {
                     });
                     
                     if (result.success) {
-                        if (currentPayment) {
-                            updatePaymentStatus(currentPayment.id, 'completed', undefined, result.orderId);
+                        // CRITICAL: Check if order already exists (idempotency)
+                        if (result.alreadyExists) {
+                            console.log('Order already exists, using existing order:', result.orderId);
+                            if (currentPayment) {
+                                updatePaymentStatus(currentPayment.id, 'completed', undefined, result.orderId);
+                            }
+                            toast({
+                                title: 'Order Confirmed!',
+                                description: "Your order has been confirmed. Redirecting...",
+                            });
+                        } else {
+                            if (currentPayment) {
+                                updatePaymentStatus(currentPayment.id, 'completed', undefined, result.orderId);
+                            }
+                            toast({
+                                title: 'Order Placed!',
+                                description: "Thank you for your purchase. Redirecting...",
+                            });
                         }
-                        toast({
-                            title: 'Order Placed!',
-                            description: "Thank you for your purchase.",
-                        });
+                        
                         clearCart();
                         clearPaymentState();
                         if (!user) clearGuestDeliveryInfo();
+                        
+                        // Small delay to show success message
+                        await new Promise(resolve => setTimeout(resolve, 1500));
                         router.push(user ? '/profile' : '/?orderSuccess=true');
                         return;
                     }
@@ -662,6 +764,8 @@ export default function CheckoutPage() {
                                 total,
                                 deliveryAddress: selectedShippingOption?.type === 'pickup' 
                                     ? `PICKUP: ${selectedShippingOption.pickupAddress || shippingCalculation?.sellerPickupAddress || 'Store location'}`
+                                    : selectedShippingOption?.type === 'contact'
+                                    ? `CONTACT_SELLER: Buyer will arrange delivery/pickup via chat`
                                     : formState.address,
                                 customerInfo: {
                                     name: `${formState.firstName} ${formState.lastName}`,
@@ -680,11 +784,14 @@ export default function CheckoutPage() {
                                 }
                                 toast({
                                     title: 'Order Placed!',
-                                    description: "Thank you for your purchase.",
+                                    description: "Thank you for your purchase. Redirecting...",
                                 });
                                 clearCart();
                                 clearPaymentState();
                                 if (!user) clearGuestDeliveryInfo();
+                                
+                                // Small delay to show success message
+                                await new Promise(resolve => setTimeout(resolve, 1500));
                                 router.push(user ? '/profile' : '/?orderSuccess=true');
                                 return;
                             }
@@ -694,15 +801,39 @@ export default function CheckoutPage() {
                     throw error;
                 }
             } catch (error) {
-                const errorMessage = (error as Error).message;
-                if (currentPayment) {
-                    updatePaymentStatus(currentPayment.id, 'failed', errorMessage);
+                console.error('Payment processing error:', error);
+                const errorMessage = error instanceof Error ? error.message : 'Failed to process order';
+                
+                // CRITICAL: If payment was successful but order creation failed, log for manual recovery
+                if (errorMessage.includes('Payment not successful') === false) {
+                    // Payment was verified but order creation failed - this is critical
+                    console.error('CRITICAL: Payment verified but order creation failed', {
+                        reference: paymentRef,
+                        paymentId: currentPayment?.id,
+                        error: errorMessage
+                    });
+                    
+                    toast({
+                        variant: 'destructive',
+                        title: 'Payment Received - Order Processing Issue',
+                        description: 'Your payment was successful, but there was an issue creating your order. Our team has been notified and will resolve this within 24 hours. Please contact support with your payment reference.',
+                    });
+                    
+                    // Don't clear payment state - allow retry
+                    return;
                 }
-                toast({ 
-                    variant: 'destructive', 
-                    title: 'Payment Verification Failed', 
-                    description: errorMessage
+                
+                toast({
+                    variant: 'destructive',
+                    title: 'Error',
+                    description: errorMessage,
                 });
+            } finally {
+                setIsProcessingOrder(false);
+                // CRITICAL: Release lock after processing completes
+                if (orderCreationLockRef.current.paymentId === currentPayment?.id) {
+                    orderCreationLockRef.current = { isProcessing: false };
+                }
             }
         });
     }, [currentPayment, total, cartItems, formState, selectedShippingOption, shippingCalculation, shippingPrice, appliedDiscount, updatePaymentStatus, clearCart, clearPaymentState, user, router, toast]);
@@ -746,25 +877,69 @@ export default function CheckoutPage() {
     const handlePlaceOrder = (e: React.FormEvent) => {
         e.preventDefault();
         
-        console.log('Place order clicked', {
-            isFormValid,
-            cartItemsLength: cartItems.length,
-            selectedShippingOption,
-            formState,
-            paystackKey: !!process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY
-        });
-        
-        if (!isFormValid) {
-            console.log('Form validation failed:', {
-                firstName: !!formState.firstName,
-                lastName: !!formState.lastName,
-                address: !!formState.address,
-                email: !!formState.email,
-                phone: !!formState.phone,
-                state: !!formState.state,
-                shippingOption: !!selectedShippingOption
+        // CRITICAL: Prevent duplicate submissions
+        if (isPending || isProcessingOrder) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'Processing', 
+                description: 'Your order is already being processed. Please wait...' 
             });
-            toast({ variant: 'destructive', title: 'Incomplete Information', description: 'Please fill out all delivery details and select a shipping option.' });
+            return;
+        }
+        
+        // CRITICAL: Check if order creation is already in progress
+        if (orderCreationLockRef.current.isProcessing) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'Order Processing', 
+                description: 'An order is already being processed. Please wait...' 
+            });
+            return;
+        }
+        
+        // CRITICAL: Validate form
+        if (!isFormValid) {
+            const missingFields = [];
+            if (!formState.firstName) missingFields.push('First Name');
+            if (!formState.lastName) missingFields.push('Last Name');
+            if (!formState.email) missingFields.push('Email');
+            if (!formState.phone) missingFields.push('Phone');
+            if (selectedShippingOption?.type === 'delivery' && !formState.address) missingFields.push('Delivery Address');
+            if (selectedShippingOption?.type === 'delivery' && !formState.state) missingFields.push('State');
+            if (!selectedShippingOption) missingFields.push('Shipping Option');
+            
+            toast({ 
+                variant: 'destructive', 
+                title: 'Incomplete Information', 
+                description: `Please fill in: ${missingFields.join(', ')}` 
+            });
+            return;
+        }
+        
+        // CRITICAL: Validate cart
+        if (cartItems.length === 0) {
+            toast({ variant: 'destructive', title: 'Empty Cart', description: 'Your cart is empty.' });
+            return;
+        }
+        
+        // CRITICAL: Validate all items are from same seller
+        const sellerIds = new Set(cartItems.map(item => item.sellerId).filter(Boolean));
+        if (sellerIds.size > 1) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'Invalid Cart', 
+                description: 'All items must be from the same seller. Please check your cart.' 
+            });
+            return;
+        }
+        
+        // CRITICAL: Validate total amount
+        if (total <= 0 || total < 1) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'Invalid Amount', 
+                description: 'Order total must be at least ₦1.' 
+            });
             return;
         }
 
@@ -790,15 +965,32 @@ export default function CheckoutPage() {
             return;
         }
 
-        // Validate email format
-        if (!formState.email || !formState.email.includes('@')) {
+        // CRITICAL: Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!formState.email || !emailRegex.test(formState.email)) {
             toast({ variant: 'destructive', title: 'Invalid Email', description: 'Please enter a valid email address.' });
             return;
         }
 
-        // Validate total amount
-        if (total <= 0) {
-            toast({ variant: 'destructive', title: 'Invalid Amount', description: 'Order total must be greater than zero.' });
+        // CRITICAL: Validate total amount (minimum 100 kobo = ₦1)
+        if (total <= 0 || total < 1) {
+            toast({ variant: 'destructive', title: 'Invalid Amount', description: 'Order total must be at least ₦1.' });
+            return;
+        }
+        
+        // CRITICAL: Validate phone number (basic validation)
+        if (!formState.phone || formState.phone.trim().length < 10) {
+            toast({ variant: 'destructive', title: 'Invalid Phone', description: 'Please enter a valid phone number.' });
+            return;
+        }
+        
+        // CRITICAL: Check if order creation is already in progress
+        if (orderCreationLockRef.current.isProcessing) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'Order Processing', 
+                description: 'An order is already being processed. Please wait...' 
+            });
             return;
         }
         
@@ -812,26 +1004,6 @@ export default function CheckoutPage() {
                 address: formState.address,
                 state: formState.state,
             });
-        }
-        
-        // Simple validation
-        if (!process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY) {
-            toast({ 
-                variant: 'destructive', 
-                title: 'Payment Error', 
-                description: 'Paystack is not configured. Please contact support.' 
-            });
-            return;
-        }
-
-        if (!formState.email || !formState.email.includes('@')) {
-            toast({ variant: 'destructive', title: 'Invalid Email', description: 'Please enter a valid email address.' });
-            return;
-        }
-
-        if (total <= 0) {
-            toast({ variant: 'destructive', title: 'Invalid Amount', description: 'Order total must be greater than zero.' });
-            return;
         }
 
         if (typeof initializePayment !== 'function') {
@@ -857,6 +1029,8 @@ export default function CheckoutPage() {
                 },
                 selectedShippingOption?.type === 'pickup' 
                     ? `PICKUP: ${selectedShippingOption.pickupAddress || shippingCalculation?.sellerPickupAddress || 'Store location'}`
+                    : selectedShippingOption?.type === 'contact'
+                    ? `CONTACT_SELLER: Buyer will arrange delivery/pickup via chat`
                     : formState.address
             );
         }
@@ -887,39 +1061,84 @@ export default function CheckoutPage() {
                     fetch('http://127.0.0.1:7242/ingest/216e8403-ed09-402a-a608-99b1722965bb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'checkout/page.tsx:883',message:'Payment found via polling',data:{reference:found.reference,status:found.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'C'})}).catch(()=>{});
                     // #endregion
                     
-                    // Payment found! Process it
-                    const result = await cloudFunctions.verifyPaymentAndCreateOrder({
-                        reference: found.reference,
-                        idempotencyKey: currentPayment?.id || `payment_${Date.now()}`,
-                        cartItems,
-                        total,
-                        deliveryAddress: selectedShippingOption?.type === 'pickup' 
-                            ? `PICKUP: ${selectedShippingOption.pickupAddress || shippingCalculation?.sellerPickupAddress || 'Store location'}`
-                            : formState.address,
-                        customerInfo: {
-                            name: `${formState.firstName} ${formState.lastName}`,
-                            email: formState.email,
-                            phone: formState.phone,
-                            state: formState.state,
-                        },
-                        discountCode: appliedDiscount?.code,
-                        shippingType: selectedShippingOption?.type,
-                        shippingPrice: shippingPrice,
-                    });
+                    // CRITICAL: Check if order creation is already in progress
+                    if (orderCreationLockRef.current.isProcessing) {
+                        console.warn('Order creation already in progress, stopping polling');
+                        return;
+                    }
                     
-                    if (result.success) {
-                        if (currentPayment) {
-                            updatePaymentStatus(currentPayment.id, 'completed', undefined, result.orderId);
-                        }
-                        toast({
-                            title: 'Order Placed!',
-                            description: "Thank you for your purchase.",
+                    if (!currentPayment?.id) {
+                        console.error('No current payment found during polling');
+                        return;
+                    }
+                    
+                    // Payment found! Process it
+                    orderCreationLockRef.current = { isProcessing: true, paymentId: currentPayment.id };
+                    setIsProcessingOrder(true);
+                    try {
+                        const result = await cloudFunctions.verifyPaymentAndCreateOrder({
+                            reference: found.reference,
+                            idempotencyKey: currentPayment.id, // CRITICAL: Use consistent idempotency key
+                            cartItems,
+                            total,
+                            deliveryAddress: selectedShippingOption?.type === 'pickup' 
+                                ? `PICKUP: ${selectedShippingOption.pickupAddress || shippingCalculation?.sellerPickupAddress || 'Store location'}`
+                                : selectedShippingOption?.type === 'contact'
+                                ? `CONTACT_SELLER: Buyer will arrange delivery/pickup via chat`
+                                : formState.address,
+                            customerInfo: {
+                                name: `${formState.firstName} ${formState.lastName}`,
+                                email: formState.email,
+                                phone: formState.phone,
+                                state: formState.state,
+                                firstName: formState.firstName,
+                                lastName: formState.lastName,
+                            },
+                            discountCode: appliedDiscount?.code,
+                            shippingType: selectedShippingOption?.type,
+                            shippingPrice: shippingPrice,
                         });
-                        clearCart();
-                        clearPaymentState();
-                        if (!user) clearGuestDeliveryInfo();
-                        router.push(user ? '/profile' : '/?orderSuccess=true');
-                        return; // Stop polling
+                        
+                        if (result.success) {
+                            if (currentPayment) {
+                                updatePaymentStatus(currentPayment.id, 'completed', undefined, result.orderId);
+                            }
+                            toast({
+                                title: result.alreadyExists ? 'Order Confirmed!' : 'Order Placed!',
+                                description: "Thank you for your purchase. Redirecting...",
+                            });
+                            clearCart();
+                            clearPaymentState();
+                            if (!user) clearGuestDeliveryInfo();
+                            
+                            // Small delay to show success message
+                            await new Promise(resolve => setTimeout(resolve, 1500));
+                            router.push(user ? '/profile' : '/?orderSuccess=true');
+                            return; // Stop polling
+                        }
+                    } catch (error) {
+                        console.error('Error processing order:', error);
+                        const errorMessage = error instanceof Error ? error.message : 'Failed to process order';
+                        
+                        // CRITICAL: If payment was successful but order creation failed
+                        if (!errorMessage.includes('Payment not successful')) {
+                            toast({
+                                variant: 'destructive',
+                                title: 'Payment Received - Order Processing Issue',
+                                description: 'Your payment was successful, but there was an issue creating your order. Our team has been notified. Please contact support with your payment reference.',
+                            });
+                        } else {
+                            toast({
+                                variant: 'destructive',
+                                title: 'Error',
+                                description: errorMessage,
+                            });
+                        }
+                    } finally {
+                        setIsProcessingOrder(false);
+                        if (orderCreationLockRef.current.paymentId === currentPayment.id) {
+                            orderCreationLockRef.current = { isProcessing: false };
+                        }
                     }
                 } else if (pollCount < maxPolls) {
                     // Continue polling
@@ -1007,15 +1226,29 @@ export default function CheckoutPage() {
     };
 
     return (
-        <div className="max-w-7xl mx-auto p-3 sm:p-4 md:p-6">
-            <h1 className="text-2xl sm:text-3xl font-bold font-headline mb-4 sm:mb-6">Checkout</h1>
-            <form onSubmit={handlePlaceOrder}>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-                    <div className="lg:col-span-2 space-y-4 sm:space-y-6 lg:space-y-8">
-                        <Card>
-                            <CardHeader>
+        <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+                <div className="mb-6 sm:mb-8">
+                    <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Checkout</h1>
+                    <p className="text-muted-foreground mt-2">Complete your order details below</p>
+                </div>
+                
+                <form onSubmit={handlePlaceOrder}>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+                        <div className="lg:col-span-2 space-y-6">
+                        {/* Shipping Options - SHOW FIRST */}
+                        <Card className="border-2 shadow-sm">
+                            <CardHeader className="pb-4">
                                 <div className="flex items-center justify-between">
-                                    <CardTitle className="text-lg sm:text-xl">Delivery Information</CardTitle>
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-primary/10 rounded-lg">
+                                            <Truck className="w-5 h-5 text-primary" />
+                                        </div>
+                                        <div>
+                                            <CardTitle className="text-xl font-semibold">Choose Delivery Method</CardTitle>
+                                            <p className="text-sm text-muted-foreground mt-0.5">Select how you'd like to receive your order</p>
+                                        </div>
+                                    </div>
                                     {!user && (
                                         <div className="flex gap-2">
                                             <Button
@@ -1023,41 +1256,145 @@ export default function CheckoutPage() {
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={() => setShowLoginDialog(true)}
+                                                className="text-xs"
                                             >
-                                                <LogIn className="w-4 h-4 mr-2" />
+                                                <LogIn className="w-3.5 h-3.5 mr-1.5" />
                                                 Log In
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setCreateAccountData(prev => ({
-                                                        ...prev,
-                                                        email: formState.email,
-                                                    }));
-                                                    setShowCreateAccountDialog(true);
-                                                }}
-                                            >
-                                                <UserPlus className="w-4 h-4 mr-2" />
-                                                Create Account
                                             </Button>
                                         </div>
                                     )}
                                 </div>
-                                {!user && (
-                                    <p className="text-sm text-muted-foreground mt-2">
-                                        Log in to auto-fill your delivery information and track orders easily.
-                                    </p>
-                                )}
                             </CardHeader>
-                            <CardContent className="space-y-4 p-4 sm:p-6">
+                            <CardContent className="space-y-4 pt-2">
+                                {isLoadingShipping ? (
+                                    <div className="flex items-center justify-center py-8">
+                                        <Loader2 className="w-6 h-6 animate-spin" />
+                                    </div>
+                                ) : shippingOptions.length === 0 ? (
+                                    <Alert>
+                                        <AlertCircle className="h-4 w-4" />
+                                        <AlertTitle>Loading Options</AlertTitle>
+                                        <AlertDescription>
+                                            Please wait while we load shipping options...
+                                            {shippingCalculation?.sellerPickupAddress && (
+                                                <p className="text-sm text-muted-foreground mt-2">
+                                                    Pickup is available at: {shippingCalculation.sellerPickupAddress}
+                                                </p>
+                                            )}
+                                        </AlertDescription>
+                                    </Alert>
+                                ) : (
+                                    <>
+                                        {shippingCalculation?.message && (
+                                            <Alert>
+                                                <AlertCircle className="h-4 w-4" />
+                                                <AlertTitle>Notice</AlertTitle>
+                                                <AlertDescription>
+                                                    {shippingCalculation.message}
+                                                </AlertDescription>
+                                            </Alert>
+                                        )}
+                                        <RadioGroup
+                                            value={selectedShippingOption?.name || ''}
+                                            onValueChange={(value) => {
+                                                const option = shippingOptions.find(o => o.name === value);
+                                                setSelectedShippingOption(option || null);
+                                            }}
+                                            className="space-y-3"
+                                        >
+                                            {shippingOptions.map((option) => (
+                                                <div 
+                                                    key={option.name} 
+                                                    className={`relative flex items-start gap-4 p-5 border-2 rounded-xl transition-all cursor-pointer ${
+                                                        selectedShippingOption?.name === option.name 
+                                                            ? 'border-primary bg-primary/5 shadow-md' 
+                                                            : 'border-border hover:border-primary/50 hover:bg-muted/30'
+                                                    }`}
+                                                    onClick={() => {
+                                                        const selectedOption = shippingOptions.find(o => o.name === option.name);
+                                                        setSelectedShippingOption(selectedOption || null);
+                                                    }}
+                                                >
+                                                    <RadioGroupItem 
+                                                        value={option.name} 
+                                                        id={option.name} 
+                                                        className="mt-0.5" 
+                                                    />
+                                                    <Label htmlFor={option.name} className="flex-1 cursor-pointer">
+                                                        <div className="flex items-start justify-between gap-4">
+                                                            <div className="flex-1 space-y-2">
+                                                                <div className="flex items-center gap-2.5">
+                                                                    {option.type === 'pickup' ? (
+                                                                        <MapPin className="w-5 h-5 text-primary" />
+                                                                    ) : option.type === 'contact' ? (
+                                                                        <MessageCircle className="w-5 h-5 text-primary" />
+                                                                    ) : (
+                                                                        <Truck className="w-5 h-5 text-primary" />
+                                                                    )}
+                                                                    <span className="font-semibold text-base">{option.name}</span>
+                                                                </div>
+                                                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                                                    {option.description}
+                                                                </p>
+                                                                {option.pickupAddress && (
+                                                                    <div className="flex items-start gap-2 mt-2 p-2 bg-muted/50 rounded-md">
+                                                                        <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-muted-foreground" />
+                                                                        <span className="text-sm text-muted-foreground">{option.pickupAddress}</span>
+                                                                    </div>
+                                                                )}
+                                                                {option.estimatedDays && option.type === 'delivery' && (
+                                                                    <div className="text-xs text-muted-foreground mt-1.5">
+                                                                        📦 Estimated delivery: {option.estimatedDays} days
+                                                                    </div>
+                                                                )}
+                                                                {option.type === 'contact' && (
+                                                                    <div className="text-xs text-blue-600 mt-1.5 font-medium">
+                                                                        💬 You'll be able to chat with the seller after placing your order
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-right">
+                                                                {option.price === 0 ? (
+                                                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                                                        Free
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-xl font-bold text-foreground">
+                                                                        ₦{option.price.toLocaleString()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </Label>
+                                                </div>
+                                            ))}
+                                        </RadioGroup>
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Delivery Information - Only show if delivery is selected */}
+                        {selectedShippingOption && selectedShippingOption.type === 'delivery' && (
+                        <Card className="border-2 shadow-sm">
+                            <CardHeader className="pb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-primary/10 rounded-lg">
+                                        <MapPin className="w-5 h-5 text-primary" />
+                                    </div>
+                                    <div>
+                                        <CardTitle className="text-xl font-semibold">Delivery Information</CardTitle>
+                                        <p className="text-sm text-muted-foreground mt-0.5">Where should we deliver your order?</p>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-5 pt-2">
                                 {user && addresses && addresses.length > 0 && (
-                                    <div className="space-y-2">
-                                        <Label>Select Saved Address</Label>
+                                    <div className="space-y-2 pb-2 border-b">
+                                        <Label className="text-sm font-medium">Saved Addresses</Label>
                                         <Select value={formState.selectedAddressId} onValueChange={handleAddressSelect}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select an address" />
+                                            <SelectTrigger className="h-11">
+                                                <SelectValue placeholder="Select a saved address" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {addresses.map((addr) => (
@@ -1071,239 +1408,298 @@ export default function CheckoutPage() {
                                 )}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="firstName">First Name</Label>
-                                        <Input id="firstName" placeholder="Mary" value={formState.firstName} onChange={handleInputChange} required />
+                                        <Label htmlFor="firstName" className="text-sm font-medium">First Name</Label>
+                                        <Input 
+                                            id="firstName" 
+                                            placeholder="Enter first name" 
+                                            value={formState.firstName} 
+                                            onChange={handleInputChange} 
+                                            className="h-11"
+                                            required 
+                                        />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="lastName">Last Name</Label>
-                                        <Input id="lastName" placeholder="Jane" value={formState.lastName} onChange={handleInputChange} required/>
+                                        <Label htmlFor="lastName" className="text-sm font-medium">Last Name</Label>
+                                        <Input 
+                                            id="lastName" 
+                                            placeholder="Enter last name" 
+                                            value={formState.lastName} 
+                                            onChange={handleInputChange} 
+                                            className="h-11"
+                                            required
+                                        />
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="address">Delivery Address</Label>
-                                    <Textarea id="address" placeholder="Enter your full delivery address or bus stop" value={formState.address} onChange={handleInputChange} required />
+                                    <Label htmlFor="address" className="text-sm font-medium">Delivery Address</Label>
+                                    <Textarea 
+                                        id="address" 
+                                        placeholder="Enter your full delivery address or bus stop" 
+                                        value={formState.address} 
+                                        onChange={handleInputChange} 
+                                        className="min-h-[100px] resize-none"
+                                        required 
+                                    />
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <StateSelector
+                                        value={formState.state}
+                                        onChange={(value) => {
+                                            setFormState(prev => ({ ...prev, state: value }));
+                                            setCustomerState(value);
+                                            if (!user) {
+                                                saveGuestDeliveryInfo({
+                                                    ...formState,
+                                                    state: value,
+                                                });
+                                            }
+                                        }}
+                                        required
+                                        placeholder="Select state..."
+                                    />
                                     <div className="space-y-2">
-                                        <Label htmlFor="state">State</Label>
-                                        <Input id="state" placeholder="Lagos" value={formState.state} onChange={handleInputChange} required />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="email">Email Address</Label>
-                                        <Input id="email" type="email" placeholder="mary@example.com" value={formState.email} onChange={handleInputChange} required />
+                                        <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
+                                        <Input 
+                                            id="email" 
+                                            type="email" 
+                                            placeholder="your@email.com" 
+                                            value={formState.email} 
+                                            onChange={handleInputChange} 
+                                            className="h-11"
+                                            required 
+                                        />
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="phone">Phone Number</Label>
-                                    <Input id="phone" type="tel" placeholder="+234..." value={formState.phone} onChange={handleInputChange} required/>
+                                    <Label htmlFor="phone" className="text-sm font-medium">Phone Number</Label>
+                                    <Input 
+                                        id="phone" 
+                                        type="tel" 
+                                        placeholder="+234 800 000 0000" 
+                                        value={formState.phone} 
+                                        onChange={handleInputChange} 
+                                        className="h-11"
+                                        required
+                                    />
                                 </div>
                             </CardContent>
                         </Card>
+                        )}
 
-                        {/* Shipping Options */}
-                        {customerState && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
-                                        <Truck className="w-5 h-5" />
-                                        Shipping Options
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4 p-4 sm:p-6">
-                                    {isLoadingShipping ? (
-                                        <div className="flex items-center justify-center py-8">
-                                            <Loader2 className="w-6 h-6 animate-spin" />
-                                        </div>
-                                    ) : shippingOptions.length === 0 ? (
-                                        <Alert variant="destructive">
-                                            <AlertCircle className="h-4 w-4" />
-                                            <AlertTitle>Shipping Not Available</AlertTitle>
-                                            <AlertDescription>
-                                                {shippingCalculation?.message || `We don't currently ship to ${customerState}.`}
-                                                {shippingCalculation?.sellerPickupAddress && (
-                                                    <div className="mt-2">
-                                                        <p className="font-medium">Pickup Available:</p>
-                                                        <p className="text-sm">{shippingCalculation.sellerPickupAddress}</p>
-                                                    </div>
-                                                )}
-                                                {shippingCalculation?.sellerPhone && (
-                                                    <div className="mt-2 flex gap-2">
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => window.open(`tel:${shippingCalculation.sellerPhone}`, '_blank')}
-                                                        >
-                                                            <Phone className="w-4 h-4 mr-2" />
-                                                            Call Seller
-                                                        </Button>
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => setShowContactSeller(true)}
-                                                        >
-                                                            <MessageCircle className="w-4 h-4 mr-2" />
-                                                            Chat with Seller
-                                                        </Button>
-                                                    </div>
-                                                )}
-                                            </AlertDescription>
-                                        </Alert>
-                                    ) : (
-                                        <>
-                                            {shippingCalculation?.message && (
-                                                <Alert>
-                                                    <AlertCircle className="h-4 w-4" />
-                                                    <AlertTitle>Notice</AlertTitle>
-                                                    <AlertDescription>
-                                                        {shippingCalculation.message}
-                                                    </AlertDescription>
-                                                </Alert>
-                                            )}
-                                            <RadioGroup
-                                                value={selectedShippingOption?.name || ''}
-                                                onValueChange={(value) => {
-                                                    const option = shippingOptions.find(o => o.name === value);
-                                                    setSelectedShippingOption(option || null);
-                                                }}
-                                            >
-                                                {shippingOptions.map((option) => (
-                                                    <div key={option.name} className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-muted/50">
-                                                        <RadioGroupItem value={option.name} id={option.name} className="mt-1" />
-                                                        <Label htmlFor={option.name} className="flex-1 cursor-pointer">
-                                                            <div className="flex items-center justify-between">
-                                                                <div>
-                                                                    <div className="font-medium">{option.name}</div>
-                                                                    <div className="text-sm text-muted-foreground">{option.description}</div>
-                                                                    {option.pickupAddress && (
-                                                                        <div className="text-sm text-muted-foreground mt-1">
-                                                                            <MapPin className="w-3 h-3 inline mr-1" />
-                                                                            {option.pickupAddress}
-                                                                        </div>
-                                                                    )}
-                                                                    {option.estimatedDays && (
-                                                                        <div className="text-sm text-muted-foreground">
-                                                                            Estimated delivery: {option.estimatedDays} days
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                                <div className="font-bold text-lg">
-                                                                    {option.price === 0 ? 'Free' : `₦${option.price.toLocaleString()}`}
-                                                                </div>
-                                                            </div>
-                                                        </Label>
-                                                    </div>
-                                                ))}
-                                            </RadioGroup>
-                                        </>
-                                    )}
-                                </CardContent>
-                            </Card>
+                        {/* Contact Information - Show for pickup/contact (minimal info needed) */}
+                        {selectedShippingOption && (selectedShippingOption.type === 'pickup' || selectedShippingOption.type === 'contact') && (
+                        <Card className="border-2 shadow-sm">
+                            <CardHeader className="pb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-primary/10 rounded-lg">
+                                        <MapPin className="w-5 h-5 text-primary" />
+                                    </div>
+                                    <div>
+                                        <CardTitle className="text-xl font-semibold">Contact Information</CardTitle>
+                                        <p className="text-sm text-muted-foreground mt-0.5">We need your contact details to process your order</p>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-5 pt-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="firstName" className="text-sm font-medium">First Name</Label>
+                                        <Input 
+                                            id="firstName" 
+                                            placeholder="Enter first name" 
+                                            value={formState.firstName} 
+                                            onChange={handleInputChange} 
+                                            className="h-11"
+                                            required 
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="lastName" className="text-sm font-medium">Last Name</Label>
+                                        <Input 
+                                            id="lastName" 
+                                            placeholder="Enter last name" 
+                                            value={formState.lastName} 
+                                            onChange={handleInputChange} 
+                                            className="h-11"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
+                                        <Input 
+                                            id="email" 
+                                            type="email" 
+                                            placeholder="your@email.com" 
+                                            value={formState.email} 
+                                            onChange={handleInputChange} 
+                                            className="h-11"
+                                            required 
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="phone" className="text-sm font-medium">Phone Number</Label>
+                                        <Input 
+                                            id="phone" 
+                                            type="tel" 
+                                            placeholder="+234 800 000 0000" 
+                                            value={formState.phone} 
+                                            onChange={handleInputChange} 
+                                            className="h-11"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
                         )}
                     </div>
 
-                    <div>
-                        <Card className="sticky top-4">
-                            <CardHeader>
-                                <CardTitle className="text-lg sm:text-xl">Order Summary</CardTitle>
+                    <div className="lg:sticky lg:top-6 h-fit">
+                        <Card className="border-2 shadow-lg bg-card">
+                            <CardHeader className="pb-4 border-b">
+                                <CardTitle className="text-xl font-semibold">Order Summary</CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-4 p-4 sm:p-6">
+                            <CardContent className="space-y-5 pt-6">
                                 {cartItems.length > 0 ? (
                                     <>
-                                        <ul className="space-y-3">
+                                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
                                             {cartItems.map(item => (
-                                                <li key={item.id} className="flex justify-between items-start">
-                                                    <div>
-                                                        <p className="font-semibold">{item.name}</p>
-                                                        <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
+                                                <div key={item.id} className="flex justify-between items-start gap-4 pb-3 border-b last:border-0">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-sm truncate">{item.name}</p>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">Quantity: {item.quantity}</p>
                                                     </div>
-                                                    <p className="font-medium">₦{(item.price * item.quantity).toLocaleString()}</p>
-                                                </li>
+                                                    <p className="font-semibold text-sm whitespace-nowrap">₦{(item.price * item.quantity).toLocaleString()}</p>
+                                                </div>
                                             ))}
-                                        </ul>
+                                        </div>
                                         <Separator />
-                                        <div className="flex justify-between">
-                                            <p className="text-muted-foreground">Subtotal</p>
-                                            <p className="font-semibold">₦{totalPrice.toLocaleString()}</p>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <p className="text-muted-foreground">
-                                                {selectedShippingOption?.type === 'pickup' ? 'Pickup' : 'Shipping'}
-                                            </p>
-                                            <p className="font-semibold">
-                                                {shippingPrice === 0 ? 'Free' : `₦${shippingPrice.toLocaleString()}`}
-                                            </p>
-                                        </div>
-                                        {appliedDiscount && (
-                                            <div className="flex justify-between text-green-600">
-                                                <div className="flex items-center gap-2">
-                                                    <Tag className="w-4 h-4" />
-                                                    <p>Discount ({appliedDiscount.code})</p>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <p className="font-semibold">-₦{appliedDiscount.amount.toLocaleString()}</p>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-6 w-6 p-0"
-                                                        onClick={() => {
-                                                            setAppliedDiscount(null);
-                                                            setDiscountCode('');
-                                                            setDiscountError('');
-                                                        }}
-                                                    >
-                                                        <X className="w-4 h-4" />
-                                                    </Button>
-                                                </div>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-muted-foreground">Subtotal</span>
+                                                <span className="font-semibold">₦{totalPrice.toLocaleString()}</span>
                                             </div>
-                                        )}
-                                        {!appliedDiscount && (
-                                            <div className="space-y-2">
-                                                <div className="flex gap-2">
-                                                    <Input
-                                                        placeholder="Discount code"
-                                                        value={discountCode}
-                                                        onChange={(e) => {
-                                                            setDiscountCode(e.target.value.toUpperCase());
-                                                            setDiscountError('');
-                                                        }}
-                                                        className="flex-1"
-                                                    />
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        onClick={handleApplyDiscount}
-                                                        disabled={isApplyingDiscount || !discountCode.trim()}
-                                                    >
-                                                        {isApplyingDiscount ? (
-                                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                                        ) : (
-                                                            'Apply'
-                                                        )}
-                                                    </Button>
+                                            {selectedShippingOption ? (
+                                                // Only show shipping line if it's delivery and has a cost, or if it's free delivery
+                                                (selectedShippingOption.type === 'delivery' && shippingPrice > 0) || 
+                                                (selectedShippingOption.type === 'delivery' && shippingPrice === 0) ? (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-sm text-muted-foreground">Shipping</span>
+                                                        <span className="font-semibold">
+                                                            {shippingPrice === 0 ? (
+                                                                <span className="text-green-600">Free</span>
+                                                            ) : (
+                                                                `₦${shippingPrice.toLocaleString()}`
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                ) : selectedShippingOption.type === 'pickup' ? (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-sm text-muted-foreground">Pickup</span>
+                                                        <span className="font-semibold text-green-600">Free</span>
+                                                    </div>
+                                                ) : null // Don't show anything for contact
+                                            ) : (
+                                                <div className="flex justify-between items-center text-sm text-muted-foreground">
+                                                    <span>Shipping</span>
+                                                    <span>Select option</span>
                                                 </div>
-                                                {discountError && (
-                                                    <p className="text-sm text-red-600">{discountError}</p>
-                                                )}
-                                            </div>
-                                        )}
+                                            )}
+                                            {appliedDiscount && (
+                                                <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                                    <div className="flex items-center gap-2">
+                                                        <Tag className="w-4 h-4 text-green-600" />
+                                                        <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                                                            Discount ({appliedDiscount.code})
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-green-700 dark:text-green-400">
+                                                            -₦{appliedDiscount.amount.toLocaleString()}
+                                                        </span>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-6 w-6 p-0 hover:bg-green-100 dark:hover:bg-green-900/40"
+                                                            onClick={() => {
+                                                                setAppliedDiscount(null);
+                                                                setDiscountCode('');
+                                                                setDiscountError('');
+                                                            }}
+                                                        >
+                                                            <X className="w-3.5 h-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {!appliedDiscount && (
+                                                <div className="space-y-2 pt-2">
+                                                    <div className="flex gap-2">
+                                                        <Input
+                                                            placeholder="Enter discount code"
+                                                            value={discountCode}
+                                                            onChange={(e) => {
+                                                                setDiscountCode(e.target.value.toUpperCase());
+                                                                setDiscountError('');
+                                                            }}
+                                                            className="flex-1 h-10 text-sm"
+                                                        />
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            onClick={handleApplyDiscount}
+                                                            disabled={isApplyingDiscount || !discountCode.trim()}
+                                                            className="h-10 px-4"
+                                                        >
+                                                            {isApplyingDiscount ? (
+                                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                            ) : (
+                                                                'Apply'
+                                                            )}
+                                                        </Button>
+                                                    </div>
+                                                    {discountError && (
+                                                        <p className="text-xs text-destructive">{discountError}</p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                         <Separator />
-                                        <div className="flex justify-between font-bold text-lg">
-                                            <p>Total</p>
-                                            <p>₦{total.toLocaleString()}</p>
+                                        <div className="flex justify-between items-center pt-2">
+                                            <span className="text-lg font-semibold">Total</span>
+                                            <span className="text-2xl font-bold">₦{total.toLocaleString()}</span>
                                         </div>
+                                        {!selectedShippingOption && shippingOptions.length > 0 && (
+                                            <Alert className="mt-4">
+                                                <AlertCircle className="h-4 w-4" />
+                                                <AlertTitle className="text-sm">Action Required</AlertTitle>
+                                                <AlertDescription className="text-xs">
+                                                    Please select a shipping option above to continue.
+                                                </AlertDescription>
+                                            </Alert>
+                                        )}
+                                        {!selectedShippingOption && shippingOptions.length === 0 && customerState && (
+                                            <Alert variant="destructive" className="mt-4">
+                                                <AlertCircle className="h-4 w-4" />
+                                                <AlertTitle className="text-sm">Shipping Unavailable</AlertTitle>
+                                                <AlertDescription className="text-xs">
+                                                    {shippingCalculation?.message || `Shipping is not available to ${customerState}. Please contact the seller for pickup options.`}
+                                                </AlertDescription>
+                                            </Alert>
+                                        )}
                                         <Button 
                                             type="submit" 
                                             size="lg" 
-                                            className="w-full mt-4 text-base sm:text-lg"
-                                            disabled={!isFormValid || isPending}
+                                            className="w-full mt-6 h-12 text-base font-semibold shadow-md hover:shadow-lg transition-shadow"
+                                            disabled={!isFormValid || isPending || isProcessingOrder || !selectedShippingOption}
                                         >
-                                            {isPending ? (
+                                            {isPending || isProcessingOrder ? (
                                                 <>
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    Processing...
+                                                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                                    {isProcessingOrder ? 'Processing Order...' : 'Processing...'}
                                                 </>
                                             ) : (
                                                 'Place Order'
@@ -1322,9 +1718,9 @@ export default function CheckoutPage() {
                                 )}
                             </CardContent>
                         </Card>
+                        </div>
                     </div>
-                </div>
-            </form>
+                </form>
 
             {/* Contact Seller Dialog */}
             <Dialog open={showContactSeller} onOpenChange={setShowContactSeller}>
@@ -1504,6 +1900,7 @@ export default function CheckoutPage() {
             </Dialog>
 
             <CoPilotWidget />
+            </div>
         </div>
     );
 }

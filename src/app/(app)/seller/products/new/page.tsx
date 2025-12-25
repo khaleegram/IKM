@@ -1,11 +1,12 @@
 
 'use client';
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -13,22 +14,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, DollarSign, Sparkles, Plus, X, Package, Eye, EyeOff, Save } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { useFirebase } from "@/firebase/provider";
+import { useToast } from "@/hooks/use-toast";
+import { getProductDescription } from "@/lib/actions";
+import { PRODUCT_CATEGORIES } from "@/lib/constants/categories";
+import { addProduct as addProductAction } from "@/lib/product-actions";
+import { getPublicShippingZones } from "@/lib/shipping-actions";
+import { DollarSign, Eye, EyeOff, Package, Plus, Save, Sparkles, Upload, X } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useToast } from "@/hooks/use-toast";
-import { useState, useTransition, useRef, useEffect } from "react";
-import { getProductDescription } from "@/lib/actions";
-import { addProduct as addProductAction } from "@/lib/product-actions";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { useFirebase } from "@/firebase/provider";
-import Image from "next/image";
-import { PRODUCT_CATEGORIES } from "@/lib/constants/categories";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import { getPublicShippingZones } from "@/lib/shipping-actions";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 
 export default function NewProductPage() {
@@ -179,6 +179,14 @@ export default function NewProductPage() {
         // Add variants to form data if any
         if (variants.length > 0) {
             data.append('variants', JSON.stringify(variants));
+        }
+        
+        // Ensure image file is included in FormData if selected
+        const imageFile = fileInputRef.current?.files?.[0];
+        if (imageFile) {
+            // Remove any existing image entry and add the actual file
+            data.delete('image');
+            data.append('image', imageFile);
         }
         
         startTransition(async () => {

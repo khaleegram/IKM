@@ -1,21 +1,21 @@
 
 'use client';
 
-import Link from 'next/link';
-import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { Trash2, Plus, Minus, ShoppingCart } from 'lucide-react';
 import { useCart } from '@/lib/cart-context';
+import { Minus, Plus, ShoppingCart, Trash2 } from 'lucide-react';
+import Image from 'next/image';
+import Link from 'next/link';
 
 export default function CartPage() {
     const { cartItems, updateQuantity, removeFromCart, totalPrice } = useCart();
     
-    // In a real app, shipping would be calculated based on address, etc.
-    const shipping = cartItems.length > 0 ? 2500 : 0; 
-    const total = totalPrice + shipping;
+    // Shipping will be calculated on checkout page based on selected address and shipping option
+    // Don't show shipping here - it will be calculated on checkout
+    const total = totalPrice;
 
     const hasItems = cartItems.length > 0;
 
@@ -74,15 +74,18 @@ export default function CartPage() {
                                     <p className="text-muted-foreground">Subtotal</p>
                                     <p className="font-semibold">₦{totalPrice.toLocaleString()}</p>
                                 </div>
-                                <div className="flex justify-between">
-                                    <p className="text-muted-foreground">Shipping</p>
-                                    <p className="font-semibold">₦{shipping.toLocaleString()}</p>
+                                <div className="flex justify-between text-sm text-muted-foreground">
+                                    <p>Shipping</p>
+                                    <p>Calculated at checkout</p>
                                 </div>
                                 <Separator />
                                 <div className="flex justify-between font-bold text-lg">
-                                    <p>Total</p>
+                                    <p>Subtotal</p>
                                     <p>₦{total.toLocaleString()}</p>
                                 </div>
+                                <p className="text-xs text-muted-foreground text-center">
+                                    Shipping and total will be calculated on checkout
+                                </p>
                                 <Link href="/checkout" className="w-full">
                                     <Button size="lg" className="w-full mt-4 text-base sm:text-lg">
                                         Proceed to Checkout

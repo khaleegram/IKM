@@ -1,6 +1,10 @@
 
 'use client';
 
+import { OpenDisputeDialog } from "@/components/open-dispute-dialog";
+import { OrderTracking } from "@/components/order-tracking";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -8,6 +12,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -16,25 +23,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Package, FileWarning, Loader2, Eye, X, Search, Filter, CheckCircle, Upload, AlertTriangle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/lib/firebase/auth/use-user";
+import { Order, useOrdersByCustomer } from "@/lib/firebase/firestore/orders";
 import { updateOrderStatus } from "@/lib/order-actions";
 import { markOrderAsReceived } from "@/lib/order-delivery-actions";
-import { OpenDisputeDialog } from "@/components/open-dispute-dialog";
-import { Button } from "@/components/ui/button";
-import { useUser } from "@/lib/firebase/auth/use-user";
-import { useOrdersByCustomer, Order } from "@/lib/firebase/firestore/orders";
 import { format } from 'date-fns';
-import Link from "next/link";
-import { OrderTracking } from "@/components/order-tracking";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertTriangle, CheckCircle, Eye, FileWarning, Loader2, Package, Search, Upload, X } from "lucide-react";
 import Image from "next/image";
-import { useState, useTransition, useMemo } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
+import Link from "next/link";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 const getStatusVariant = (status: Order['status']) => {
     switch (status) {
@@ -52,6 +50,27 @@ export default function ProfilePage() {
   const { user } = useUser();
   const { data: orders, isLoading, error } = useOrdersByCustomer(user?.uid);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const { toast } = useToast();
+  
+  // CRITICAL: Auto-link guest orders when user is logged in and profile loads
+  useEffect(() => {
+    if (user?.uid) {
+      // Link guest orders in background (don't block UI)
+      import('@/lib/guest-order-actions').then(({ linkGuestOrdersToAccount }) => {
+        linkGuestOrdersToAccount().then((result) => {
+          if (result.linkedCount > 0) {
+            toast({
+              title: 'Orders Linked!',
+              description: `We found ${result.linkedCount} previous order(s) and linked them to your account.`,
+            });
+          }
+        }).catch((error) => {
+          console.error('Error linking guest orders:', error);
+          // Silent fail - don't show error to user
+        });
+      });
+    }
+  }, [user?.uid, toast]);
   const [isCancelling, startCancelTransition] = useTransition();
   const [isMarkingReceived, startMarkReceivedTransition] = useTransition();
   const [showMarkReceivedDialog, setShowMarkReceivedDialog] = useState(false);
@@ -59,7 +78,6 @@ export default function ProfilePage() {
   const [orderToMarkReceived, setOrderToMarkReceived] = useState<Order | null>(null);
   const [showDisputeDialog, setShowDisputeDialog] = useState(false);
   const [orderToDispute, setOrderToDispute] = useState<Order | null>(null);
-  const { toast } = useToast();
   
   // Filter and search state
   const [searchTerm, setSearchTerm] = useState('');

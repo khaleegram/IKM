@@ -1,12 +1,12 @@
 'use server';
 
-import { z } from "zod";
-import { getAdminFirestore, getAdminStorage } from "@/lib/firebase/admin";
 import { FIREBASE_STORAGE_BUCKET } from "@/config/env";
-import { revalidatePath } from "next/cache";
-import { serializeFirestoreData } from "@/lib/firestore-serializer";
 import { requireOwnerOrAdmin } from "@/lib/auth-utils";
+import { getAdminFirestore, getAdminStorage } from "@/lib/firebase/admin";
+import { serializeFirestoreData } from "@/lib/firestore-serializer";
 import { FieldValue } from 'firebase-admin/firestore';
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { generateAvailableSubdomain } from './subdomain-actions';
 
 /**
@@ -168,7 +168,14 @@ const storeUpdateSchema = z.object({
     email: z.string().email().optional().or(z.literal('')),
     phone: z.string().optional(),
     website: z.string().url().optional().or(z.literal('')),
-    pickupAddress: z.string().optional(), // Default pickup address for customers who can't receive delivery
+    pickupAddress: z.union([
+      z.string().optional(), // Legacy format: string
+      z.object({
+        state: z.string(),
+        lga: z.string(),
+        street: z.string(),
+      }).optional(), // New format: object with state, lga, street
+    ]).optional(),
     // Store theme
     primaryColor: z.string().optional(),
     secondaryColor: z.string().optional(),
@@ -215,12 +222,6 @@ export async function completeStoreSetup(userId: string, data: FormData) {
         privacyPolicy
     } = validation.data;
 
-    // Generate or update subdomain if store name changed or subdomain doesn't exist
-    let subdomain = existingData.subdomain;
-    if (!subdomain || (existingData.storeName !== storeName && storeName.trim().length > 0)) {
-      subdomain = await generateAvailableSubdomain(storeName, userId);
-    }
-
     const firestore = getAdminFirestore();
     
     // Use userId as document ID for direct access
@@ -237,6 +238,12 @@ export async function completeStoreSetup(userId: string, data: FormData) {
     } else {
         // Create new store document
         console.log('✨ Creating new store:', userId);
+    }
+
+    // Generate or update subdomain if store name changed or subdomain doesn't exist
+    let subdomain = existingData.subdomain;
+    if (!subdomain || (existingData.storeName !== storeName && storeName.trim().length > 0)) {
+      subdomain = await generateAvailableSubdomain(storeName, userId);
     }
 
     // Upload images if provided
@@ -484,7 +491,18 @@ export async function updateStoreSettings(userId: string, data: FormData) {
         updateData.website = validation.data.website || null;
     }
     if (validation.data.pickupAddress !== undefined) {
-        updateData.pickupAddress = validation.data.pickupAddress || null;
+        // Handle pickupAddress - can be a string (JSON) or object
+        let pickupAddressValue = validation.data.pickupAddress;
+        if (typeof pickupAddressValue === 'string' && pickupAddressValue.trim().startsWith('{')) {
+            // Try to parse JSON string
+            try {
+                pickupAddressValue = JSON.parse(pickupAddressValue);
+            } catch (e) {
+                // If parsing fails, keep as string
+                console.warn('Failed to parse pickupAddress JSON:', e);
+            }
+        }
+        updateData.pickupAddress = pickupAddressValue || null;
     }
 
     // Update store theme

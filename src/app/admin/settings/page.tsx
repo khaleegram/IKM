@@ -1,15 +1,14 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, DollarSign, Percent, Coins, Settings as SettingsIcon } from 'lucide-react';
 import { getPlatformSettings, updatePlatformSettings } from '@/lib/platform-settings-actions';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Info } from 'lucide-react';
+import { Coins, DollarSign, Info, Loader2, Percent, Save, Settings as SettingsIcon } from 'lucide-react';
+import { useEffect, useState, useTransition } from 'react';
 
 export default function AdminSettingsPage() {
   const { toast } = useToast();
@@ -21,6 +20,7 @@ export default function AdminSettingsPage() {
     minimumPayoutAmount: 1000,
     platformFee: 0,
     currency: 'NGN',
+    payoutProcessingDays: 3,
   });
   
   const [originalSettings, setOriginalSettings] = useState(settings);
@@ -34,12 +34,14 @@ export default function AdminSettingsPage() {
           minimumPayoutAmount: data.minimumPayoutAmount || 1000,
           platformFee: data.platformFee || 0,
           currency: data.currency || 'NGN',
+          payoutProcessingDays: data.payoutProcessingDays || 3,
         });
         setOriginalSettings({
           platformCommissionRate: data.platformCommissionRate || 0.05,
           minimumPayoutAmount: data.minimumPayoutAmount || 1000,
           platformFee: data.platformFee || 0,
           currency: data.currency || 'NGN',
+          payoutProcessingDays: data.payoutProcessingDays || 3,
         });
       } catch (error) {
         toast({
@@ -260,6 +262,40 @@ export default function AdminSettingsPage() {
                 />
                 <p className="text-sm text-muted-foreground">
                   ISO 4217 currency code (e.g., NGN for Nigerian Naira)
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Payout Processing Days */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <SettingsIcon className="h-5 w-5" />
+                Payout Processing Time
+              </CardTitle>
+              <CardDescription>
+                Number of business days for automatic payout processing
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="payoutProcessingDays">Processing Days</Label>
+                <Input
+                  id="payoutProcessingDays"
+                  type="number"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value={settings.payoutProcessingDays}
+                  onChange={(e) => setSettings({
+                    ...settings,
+                    payoutProcessingDays: parseInt(e.target.value) || 3,
+                  })}
+                  required
+                />
+                <p className="text-sm text-muted-foreground">
+                  Payouts will be automatically processed within {settings.payoutProcessingDays} business day{settings.payoutProcessingDays !== 1 ? 's' : ''} after request
                 </p>
               </div>
             </CardContent>

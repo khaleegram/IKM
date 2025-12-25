@@ -27,23 +27,28 @@ export async function linkGuestOrdersToAccount() {
     throw new Error('User email is required to link guest orders');
   }
   
-  // Find all guest orders with matching email
+  // CRITICAL: Find all guest orders with matching email
+  // Method 1: Search by customerId pattern (guest_email)
+  const emailKey = userEmail.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+  const guestIdPattern = `guest_${emailKey}`;
+  
   const guestOrdersQuery = await firestore
     .collection('orders')
-    .where('customerId', '>=', `guest_${userEmail.replace(/[^a-zA-Z0-9]/g, '_')}`)
-    .where('customerId', '<=', `guest_${userEmail.replace(/[^a-zA-Z0-9]/g, '_')}\uf8ff`)
+    .where('customerId', '==', guestIdPattern)
     .get();
-  
-  // Also search by customerInfo.email for more accurate matching
+
+  // Method 2: Also search by customerInfo.email for more accurate matching
+  // This catches any guest orders that might have been created with different ID format
   const ordersByEmail: any[] = [];
   const allOrders = await firestore
     .collection('orders')
     .where('customerInfo.email', '==', userEmail.toLowerCase())
     .get();
-  
+
   allOrders.forEach(doc => {
     const data = doc.data();
-    if (data.customerId && data.customerId.startsWith('guest_')) {
+    // Only include orders that are still guest orders (not already linked)
+    if (data.customerId && data.customerId.startsWith('guest_') && data.customerId !== auth.uid) {
       ordersByEmail.push({ id: doc.id, ...data });
     }
   });

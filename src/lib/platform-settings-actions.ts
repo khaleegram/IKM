@@ -1,10 +1,10 @@
 'use server';
 
-import { z } from 'zod';
-import { getAdminFirestore } from './firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
-import { requireAuth } from './auth-utils';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+import { requireAuth } from './auth-utils';
+import { getAdminFirestore } from './firebase/admin';
 import type { PlatformSettings } from './firebase/firestore/platform-settings';
 
 const SETTINGS_DOC_ID = 'platform_settings';
@@ -14,6 +14,7 @@ const updateSettingsSchema = z.object({
   minimumPayoutAmount: z.number().min(0).optional(),
   platformFee: z.number().min(0).optional(),
   currency: z.string().optional(),
+  payoutProcessingDays: z.number().min(1).max(30).optional(), // 1 to 30 business days
 });
 
 /**
@@ -40,6 +41,7 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
     totalTransactions: 0,
     platformFee: 0,
     currency: 'NGN',
+    payoutProcessingDays: 3, // Default: 3 business days
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: 'system',
     createdAt: FieldValue.serverTimestamp(),
@@ -86,6 +88,9 @@ export async function updatePlatformSettings(data: unknown) {
   }
   if (validation.data.currency !== undefined) {
     updateData.currency = validation.data.currency;
+  }
+  if (validation.data.payoutProcessingDays !== undefined) {
+    updateData.payoutProcessingDays = validation.data.payoutProcessingDays;
   }
   
   // If document doesn't exist, create it with defaults
@@ -141,6 +146,25 @@ export async function getMinimumPayoutAmount(): Promise<number> {
   cachePayoutTimestamp = Date.now();
   
   return cachedMinimumPayout;
+}
+
+/**
+ * Get payout processing days (with caching)
+ */
+let cachedPayoutProcessingDays: number | null = null;
+let cachePayoutProcessingDaysTimestamp: number = 0;
+
+export async function getPayoutProcessingDays(): Promise<number> {
+  // Return cached value if still valid
+  if (cachedPayoutProcessingDays !== null && Date.now() - cachePayoutProcessingDaysTimestamp < CACHE_DURATION) {
+    return cachedPayoutProcessingDays;
+  }
+  
+  const settings = await getPlatformSettings();
+  cachedPayoutProcessingDays = settings.payoutProcessingDays || 3; // Default: 3 days
+  cachePayoutProcessingDaysTimestamp = Date.now();
+  
+  return cachedPayoutProcessingDays;
 }
 
 /**

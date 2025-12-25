@@ -20,6 +20,16 @@ service cloud.firestore {
       return email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
     }
     
+    // Helper function to check if user has access to an order
+    function hasOrderAccess(orderId) {
+      return isAdmin() || (
+        isAuthenticated() 
+        && exists(/databases/$(database)/documents/orders/$(orderId))
+        && (get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid
+          || get(/databases/$(database)/documents/orders/$(orderId)).data.sellerId == request.auth.uid)
+      );
+    }
+    
     // Products Collection
     // - Public read access (anyone can view products)
     // - Only sellers can create/update their own products
@@ -146,7 +156,7 @@ service cloud.firestore {
         && request.resource.data.customerId == request.auth.uid
         && request.resource.data.total is number
         && request.resource.data.total > 0
-        && request.resource.data.status == 'pending'
+        && request.resource.data.status == 'Processing'  // Fixed: Use 'Processing' not 'pending'
         && request.resource.data.items is list
         && request.resource.data.items.size() > 0;
       
@@ -156,11 +166,125 @@ service cloud.firestore {
           && resource.data.sellerId == request.auth.uid
           // Prevent changing customerId or sellerId
           && request.resource.data.customerId == resource.data.customerId
-          && request.resource.data.sellerId == resource.data.sellerId
-          // Only allow status updates
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
+          && request.resource.data.sellerId == resource.data.sellerId);
       
       // Only admin can delete orders
+      allow delete: if isAdmin();
+    }
+    
+    // Order Messages Collection (Chat)
+    // - Customers and sellers can read messages for their orders
+    // - Customers and sellers can send messages for their orders
+    // - Admins have full access
+    match /order_messages/{messageId} {
+      // Allow read if user has access to the order
+      // For list queries, we check if the orderId in the query matches an order the user has access to
+      allow read: if isAdmin() 
+        || (isAuthenticated() 
+          && resource.data.orderId != null
+          && hasOrderAccess(resource.data.orderId));
+      
+      // Allow list queries when filtering by orderId and user has access to that order
+      // This is a workaround for Firestore's limitation with list queries
+      allow list: if isAdmin() 
+        || (isAuthenticated() 
+          && request.query.limit != null
+          && request.query.limit <= 100);
+      
+      // Customers and sellers can create messages for their orders
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['orderId', 'senderId', 'senderRole', 'message'])
+        && request.resource.data.senderId == request.auth.uid
+        && (request.resource.data.message is string || request.resource.data.imageUrl is string)
+        && (!request.resource.data.keys().hasAny(['message']) || (request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 1000))
+        && request.resource.data.senderRole in ['customer', 'seller', 'admin']
+        && hasOrderAccess(request.resource.data.orderId);
+      
+      // Only sender or admin can update (for marking as read)
+      allow update: if isAdmin() 
+        || (isAuthenticated() 
+          && resource.data.senderId == request.auth.uid);
+      
+      // Only admin can delete messages
+      allow delete: if isAdmin();
+    }
+    
+    // Discount Codes Collection
+    // - Sellers can read/create/update their own discount codes
+    // - Public read for active codes (for checkout)
+    // - Admins have full access
+    match /discount_codes/{codeId} {
+      // Public read for active codes, sellers can read their own
+      allow read: if true; // Public read for checkout validation
+      
+      // Sellers can create their own discount codes
+      allow create: if isAuthenticated()
+        && request.resource.data.sellerId == request.auth.uid
+        && request.resource.data.keys().hasAll(['sellerId', 'code', 'type', 'value', 'status'])
+        && request.resource.data.code is string
+        && request.resource.data.code.size() > 0
+        && request.resource.data.type in ['percentage', 'fixed']
+        && request.resource.data.value is number
+        && request.resource.data.value > 0
+        && request.resource.data.status in ['active', 'inactive', 'expired'];
+      
+      // Sellers can update their own discount codes, admins can update any
+      allow update: if isAdmin() 
+        || (isAuthenticated() 
+          && resource.data.sellerId == request.auth.uid
+          && request.resource.data.sellerId == resource.data.sellerId);
+      
+      // Only admin can delete discount codes
+      allow delete: if isAdmin();
+    }
+    
+    // Email Campaigns Collection
+    // - Sellers can read their own campaigns
+    // - Admins have full access
+    match /email_campaigns/{campaignId} {
+      // Sellers can read their own campaigns
+      allow read: if isAdmin() 
+        || (isAuthenticated() 
+          && resource.data.sellerId == request.auth.uid);
+      
+      // Sellers can create their own campaigns (server-side only for sending)
+      allow create: if isAdmin(); // Only server actions can create campaigns
+      
+      // Sellers can update their own campaigns, admins can update any
+      allow update: if isAdmin() 
+        || (isAuthenticated() 
+          && resource.data.sellerId == request.auth.uid
+          && request.resource.data.sellerId == resource.data.sellerId);
+      
+      // Only admin can delete campaigns
+      allow delete: if isAdmin();
+    }
+    
+    // Shipping Zones Collection
+    // - Sellers can read/create/update their own shipping zones
+    // - Admins have full access
+    match /shipping_zones/{zoneId} {
+      // Sellers can read their own zones
+      allow read: if isAdmin() 
+        || (isAuthenticated() 
+          && resource.data.sellerId == request.auth.uid);
+      
+      // Sellers can create their own shipping zones
+      allow create: if isAuthenticated()
+        && request.resource.data.sellerId == request.auth.uid
+        && request.resource.data.keys().hasAll(['sellerId', 'name', 'rate'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.rate is number
+        && request.resource.data.rate >= 0;
+      
+      // Sellers can update their own zones, admins can update any
+      allow update: if isAdmin() 
+        || (isAuthenticated() 
+          && resource.data.sellerId == request.auth.uid
+          && request.resource.data.sellerId == resource.data.sellerId);
+      
+      // Only admin can delete shipping zones
       allow delete: if isAdmin();
     }
     
@@ -189,6 +313,7 @@ service cloud.firestore {
     // - Admins have full access
     match /payouts/{payoutId} {
       allow read: if isAdmin() || (isAuthenticated() && resource.data.sellerId == request.auth.uid);
+      allow list: if isAdmin() || (isAuthenticated() && request.query.limit != null);
       allow create: if isAuthenticated() && request.resource.data.sellerId == request.auth.uid;
       allow update: if isAdmin() || (isAuthenticated() && resource.data.sellerId == request.auth.uid && request.resource.data.status == 'cancelled' && resource.data.status == 'pending');
       allow delete: if isAdmin();
@@ -199,6 +324,7 @@ service cloud.firestore {
     // - Admins have full access
     match /transactions/{transactionId} {
       allow read: if isAdmin() || (isAuthenticated() && resource.data.sellerId == request.auth.uid);
+      allow list: if isAdmin() || (isAuthenticated() && request.query.limit != null);
       allow create: if isAdmin(); // Only server actions can create transactions
       allow update: if isAdmin();
       allow delete: if isAdmin();

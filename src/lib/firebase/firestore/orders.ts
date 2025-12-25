@@ -1,25 +1,23 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  query,
-  where,
-  onSnapshot,
-  DocumentData,
-  FirestoreError,
-  serverTimestamp,
-  doc,
-  getDoc,
-  orderBy,
-  Firestore,
-  getDocs,
-} from 'firebase/firestore';
 import { useFirebase } from '@/firebase/provider';
 import { CartItem } from '@/lib/cart-context';
+import {
+  DocumentData,
+  Firestore,
+  FirestoreError,
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where
+} from 'firebase/firestore';
+import { useEffect, useMemo, useState } from 'react';
 
 export interface OrderNote {
   id: string;
@@ -96,7 +94,7 @@ export interface Order extends DocumentData {
   // Dispute
   dispute?: OrderDispute;
   // Shipping
-  shippingType?: 'delivery' | 'pickup';
+  shippingType?: 'delivery' | 'pickup' | 'contact';
   shippingPrice?: number;
   idempotencyKey?: string; // For preventing duplicate orders
   createdAt: any; // Firestore Timestamp
@@ -208,6 +206,7 @@ export const useOrdersBySeller = (sellerId: string | undefined) => {
 };
 
 // Hook to get orders for a specific customer
+// CRITICAL: This includes both orders created while logged in AND guest orders that were linked
 export const useOrdersByCustomer = (customerId: string | undefined) => {
   const { firestore } = useFirebase();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -216,6 +215,10 @@ export const useOrdersByCustomer = (customerId: string | undefined) => {
 
   const customerOrdersQuery = useMemo(() => {
     if (!firestore || !customerId) return null;
+    // CRITICAL: Query orders where customerId matches the user's UID
+    // This includes:
+    // 1. Orders created while logged in (customerId = auth.uid)
+    // 2. Guest orders that were linked (customerId updated from guest_xxx to auth.uid)
     return query(collection(firestore, 'orders'), where('customerId', '==', customerId), orderBy('createdAt', 'desc'));
   }, [firestore, customerId]);
 
@@ -231,6 +234,12 @@ export const useOrdersByCustomer = (customerId: string | undefined) => {
       customerOrdersQuery,
       (snapshot) => {
         const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+        // CRITICAL: Sort by date (newest first) in case orderBy doesn't work
+        ordersData.sort((a, b) => {
+          const aDate = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
+          const bDate = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
+          return bDate - aDate;
+        });
         setOrders(ordersData);
         setIsLoading(false);
       },
