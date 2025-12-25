@@ -194,6 +194,28 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
     paystackReference: reference,
   });
 
+  // Decrement product stock for each item in the order
+  try {
+    const stockUpdateBatch = firestore.batch();
+    for (const item of cartItems) {
+      const productRef = firestore.collection('products').doc(item.id);
+      const productDoc = await productRef.get();
+      
+      if (productDoc.exists) {
+        const currentStock = productDoc.data()?.stock || 0;
+        const newStock = Math.max(0, currentStock - item.quantity);
+        stockUpdateBatch.update(productRef, {
+          stock: newStock,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    }
+    await stockUpdateBatch.commit();
+  } catch (error) {
+    console.error('Failed to update product stock:', error);
+    // Don't fail the order if stock update fails, but log it for manual reconciliation
+  }
+
   // Increment discount code usage if applied
   if (discountCode && sellerId) {
     try {

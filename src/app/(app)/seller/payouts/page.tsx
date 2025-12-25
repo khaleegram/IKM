@@ -5,10 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { DollarSign, Loader2, CheckCircle, AlertCircle, Banknote, TrendingUp, Wallet, ArrowDownCircle, History, X } from "lucide-react";
+import { DollarSign, Loader2, CheckCircle, AlertCircle, Banknote, TrendingUp, Wallet, ArrowDownCircle, History, X, Search, Check, ChevronsUpDown } from "lucide-react";
 import { useState, useTransition, useEffect } from "react";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { getBanksForAccountNumber, savePayoutDetails } from "@/lib/payout-actions";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { getBanksList, resolveAccountNumber, savePayoutDetails } from "@/lib/payout-actions";
 import { useUser } from "@/lib/firebase/auth/use-user";
 import { useUserProfile } from "@/lib/firebase/firestore/users";
 import { requestPayout, cancelPayoutRequest } from "@/lib/payout-request-actions";
@@ -20,12 +21,6 @@ import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-interface ResolvedBank {
-    bank_id: number;
-    bank_name: string;
-    account_name: string;
-    account_number: string;
-}
 
 export default function SellerPayoutsPage() {
     const { toast } = useToast();
@@ -41,8 +36,12 @@ export default function SellerPayoutsPage() {
     const [isCancelling, startCancelTransition] = useTransition();
 
     const [accountNumber, setAccountNumber] = useState('');
-    const [resolvedBanks, setResolvedBanks] = useState<ResolvedBank[]>([]);
-    const [selectedBank, setSelectedBank] = useState<ResolvedBank | null>(null);
+    const [banksList, setBanksList] = useState<Array<{ code: string; name: string; id: number }>>([]);
+    const [selectedBankCode, setSelectedBankCode] = useState<string>('');
+    const [resolvedAccount, setResolvedAccount] = useState<{ account_name: string; account_number: string; bank_id: number } | null>(null);
+    const [isLoadingBanks, setIsLoadingBanks] = useState(false);
+    const [bankSearchQuery, setBankSearchQuery] = useState('');
+    const [bankPopoverOpen, setBankPopoverOpen] = useState(false);
     const [earnings, setEarnings] = useState<any>(null);
     const [payoutAmount, setPayoutAmount] = useState('');
     const [showPayoutDialog, setShowPayoutDialog] = useState(false);
@@ -50,11 +49,34 @@ export default function SellerPayoutsPage() {
     const [payoutToCancel, setPayoutToCancel] = useState<string | null>(null);
     const [minimumPayout, setMinimumPayout] = useState(1000); // Default fallback
 
-    // Reset state when account number changes
+    // Load banks list on mount
     useEffect(() => {
-        setResolvedBanks([]);
-        setSelectedBank(null);
-    }, [accountNumber]);
+        const loadBanks = async () => {
+            setIsLoadingBanks(true);
+            try {
+                const banks = await getBanksList();
+                setBanksList(banks);
+                // Pre-select user's bank if they already have payout details
+                if (userProfile?.payoutDetails?.bankCode) {
+                    setSelectedBankCode(userProfile.payoutDetails.bankCode);
+                }
+            } catch (error) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Error Loading Banks',
+                    description: (error as Error).message,
+                });
+            } finally {
+                setIsLoadingBanks(false);
+            }
+        };
+        loadBanks();
+    }, [userProfile?.payoutDetails?.bankCode, toast]);
+
+    // Reset resolved account when account number or bank changes
+    useEffect(() => {
+        setResolvedAccount(null);
+    }, [accountNumber, selectedBankCode]);
 
     // Calculate earnings and fetch minimum payout
     useEffect(() => {
@@ -129,7 +151,12 @@ export default function SellerPayoutsPage() {
 
     const pendingPayout = payouts?.find(p => p.status === 'pending');
 
-    const handleFindBanks = () => {
+    const handleVerifyAccount = () => {
+        if (!selectedBankCode) {
+            toast({ variant: 'destructive', title: 'Bank Required', description: 'Please select a bank first.' });
+            return;
+        }
+
         if (accountNumber.length !== 10) {
             toast({ variant: 'destructive', title: 'Invalid Account Number', description: 'Please enter a valid 10-digit NUBAN account number.' });
             return;
@@ -143,58 +170,49 @@ export default function SellerPayoutsPage() {
 
         startFindTransition(async () => {
             try {
-                const result = await getBanksForAccountNumber(accountNumber);
-                if (result.length === 0) {
-                    toast({ 
-                        variant: 'destructive', 
-                        title: 'No Banks Found', 
-                        description: 'We could not find any bank associated with this account number. Please verify:\n• The account number is correct (10 digits)\n• The account exists in a supported Nigerian bank\n• Your internet connection is stable' 
-                    });
-                    setResolvedBanks([]);
-                    setSelectedBank(null);
-                } else {
-                    setResolvedBanks(result);
-                    // Auto-select if only one bank found
-                    if (result.length === 1) {
-                        setSelectedBank(result[0]);
-                        toast({
-                            title: "Bank Found",
-                            description: `Account verified: ${result[0].account_name}`,
-                        });
-                    } else {
-                        toast({
-                            title: "Multiple Banks Found",
-                            description: `Found ${result.length} bank(s). Please select the correct one.`,
-                        });
-                    }
-                }
+                const result = await resolveAccountNumber(accountNumber, selectedBankCode);
+                setResolvedAccount({
+                    account_name: result.account_name,
+                    account_number: result.account_number,
+                    bank_id: result.bank_id,
+                });
+                toast({
+                    title: "Account Verified",
+                    description: `Account name: ${result.account_name}`,
+                });
             } catch (error) {
                 const errorMessage = (error as Error).message;
                 toast({ 
                     variant: 'destructive', 
-                    title: 'Error', 
+                    title: 'Verification Failed', 
                     description: errorMessage.includes('Paystack secret key') 
                         ? 'Payment service is not configured. Please contact support.'
                         : errorMessage
                 });
-                setResolvedBanks([]);
-                setSelectedBank(null);
+                setResolvedAccount(null);
             }
         });
     }
 
     const handleSaveDetails = () => {
-        if (!selectedBank) {
-             toast({ variant: 'destructive', title: 'Cannot Save', description: 'Please select a bank account first.' });
+        if (!resolvedAccount || !selectedBankCode) {
+             toast({ variant: 'destructive', title: 'Cannot Save', description: 'Please verify your account first.' });
             return;
         }
+
+        const selectedBank = banksList.find(b => b.code === selectedBankCode);
+        if (!selectedBank) {
+            toast({ variant: 'destructive', title: 'Invalid Bank', description: 'Selected bank not found.' });
+            return;
+        }
+
         startSaveTransition(async () => {
             try {
                 await savePayoutDetails({
-                     bankCode: selectedBank.bank_id.toString(),
-                     accountNumber: selectedBank.account_number,
-                     accountName: selectedBank.account_name,
-                     bankName: selectedBank.bank_name
+                    bankCode: selectedBankCode,
+                    accountNumber: resolvedAccount.account_number,
+                    accountName: resolvedAccount.account_name,
+                    bankName: selectedBank.name,
                 });
                 toast({
                     title: "Payout Information Saved!",
@@ -235,6 +253,70 @@ export default function SellerPayoutsPage() {
             </CardHeader>
             <CardContent className="space-y-6">
                 <div>
+                    <Label htmlFor="bankSelect">Select Bank</Label>
+                    <Popover open={bankPopoverOpen} onOpenChange={setBankPopoverOpen}>
+                        <PopoverTrigger asChild>
+                            <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={bankPopoverOpen}
+                                className="w-full justify-between"
+                                disabled={isLoadingBanks || isFinding}
+                                id="bankSelect"
+                            >
+                                {selectedBankCode
+                                    ? banksList.find(bank => bank.code === selectedBankCode)?.name || "Select bank..."
+                                    : isLoadingBanks ? "Loading banks..." : "Select your bank"}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[400px] p-0" align="start">
+                            <div className="flex items-center border-b px-3">
+                                <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                <Input
+                                    placeholder="Search banks..."
+                                    value={bankSearchQuery}
+                                    onChange={(e) => setBankSearchQuery(e.target.value)}
+                                    className="border-0 focus-visible:ring-0"
+                                />
+                            </div>
+                            <div className="max-h-[300px] overflow-auto p-1">
+                                {banksList
+                                    .filter(bank => 
+                                        bank.name.toLowerCase().includes(bankSearchQuery.toLowerCase())
+                                    )
+                                    .map((bank) => (
+                                        <button
+                                            key={`${bank.code}-${bank.id}`}
+                                            onClick={() => {
+                                                setSelectedBankCode(bank.code);
+                                                setBankPopoverOpen(false);
+                                                setBankSearchQuery('');
+                                            }}
+                                            className={cn(
+                                                "w-full flex items-center justify-between rounded-sm px-2 py-1.5 text-sm cursor-pointer hover:bg-accent",
+                                                selectedBankCode === bank.code && "bg-accent"
+                                            )}
+                                        >
+                                            {bank.name}
+                                            {selectedBankCode === bank.code && (
+                                                <Check className="h-4 w-4 text-primary" />
+                                            )}
+                                        </button>
+                                    ))}
+                                {banksList.filter(bank => 
+                                    bank.name.toLowerCase().includes(bankSearchQuery.toLowerCase())
+                                ).length === 0 && (
+                                    <div className="py-6 text-center text-sm text-muted-foreground">
+                                        No banks found.
+                                    </div>
+                                )}
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+                </div>
+
+                <div>
                     <Label htmlFor="accountNumber">Account Number</Label>
                     <div className="flex gap-2">
                         <Input 
@@ -245,44 +327,32 @@ export default function SellerPayoutsPage() {
                             value={accountNumber} 
                             onChange={(e) => setAccountNumber(e.target.value)} 
                             maxLength={10} 
-                            disabled={isFinding || resolvedBanks.length > 0}
+                            disabled={isFinding || !selectedBankCode || !!resolvedAccount}
+                            placeholder="Enter 10-digit account number"
                         />
-                         <Button onClick={handleFindBanks} disabled={isFinding || accountNumber.length !== 10}>
-                            {isFinding ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Finding...</> : 'Find Banks'}
+                        <Button 
+                            onClick={handleVerifyAccount} 
+                            disabled={isFinding || accountNumber.length !== 10 || !selectedBankCode}
+                        >
+                            {isFinding ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</> : 'Verify Account'}
                         </Button>
                     </div>
                 </div>
-
-                {resolvedBanks.length > 0 && (
-                    <div>
-                        <Label>Select Your Bank</Label>
-                        <RadioGroup 
-                            onValueChange={(value) => setSelectedBank(JSON.parse(value))}
-                            className="mt-2 space-y-2"
-                        >
-                            {resolvedBanks.map(bank => (
-                                <Label key={bank.bank_id} className="flex items-center gap-4 p-4 border rounded-lg has-[:checked]:bg-primary/10 has-[:checked]:border-primary cursor-pointer">
-                                    <RadioGroupItem value={JSON.stringify(bank)} id={bank.bank_id.toString()} />
-                                    <div>
-                                        <p className="font-semibold">{bank.bank_name}</p>
-                                        <p className="text-sm text-muted-foreground">{bank.account_name}</p>
-                                    </div>
-                                </Label>
-                            ))}
-                        </RadioGroup>
-                    </div>
-                )}
                 
-                 {selectedBank && (
+                {resolvedAccount && (
                     <div className="p-4 bg-support/10 border border-support/20 rounded-lg">
                         <Label>Verified Account</Label>
-                        <p className="font-semibold text-lg flex items-center gap-2"> <CheckCircle className="text-support"/> {selectedBank.account_name}</p>
-                         <p className="text-sm text-muted-foreground">{selectedBank.account_number} - {selectedBank.bank_name}</p>
+                        <p className="font-semibold text-lg flex items-center gap-2">
+                            <CheckCircle className="text-support"/> {resolvedAccount.account_name}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            {resolvedAccount.account_number} - {banksList.find(b => b.code === selectedBankCode)?.name}
+                        </p>
                     </div>
-                 )}
+                )}
             </CardContent>
             <CardFooter className="flex justify-end">
-                <Button onClick={handleSaveDetails} disabled={isSaving || !selectedBank}>
+                <Button onClick={handleSaveDetails} disabled={isSaving || !resolvedAccount}>
                     {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Save Details'}
                 </Button>
             </CardFooter>
