@@ -18,11 +18,11 @@ import { useCart } from '@/lib/cart-context';
 import { createAccountFromCheckout } from '@/lib/checkout-account-actions';
 import { calculateShippingOptions, type ShippingOption } from '@/lib/checkout-shipping-actions';
 import { calculateFinalShippingPrice } from '@/lib/checkout-shipping-utils';
+import { cloudFunctions } from '@/lib/cloud-functions';
 import { applyDiscountCode } from '@/lib/discount-actions';
 import { useUser } from '@/lib/firebase/auth/use-user';
 import { useUserAddresses } from '@/lib/firebase/firestore/addresses';
 import { clearGuestDeliveryInfo, loadGuestDeliveryInfo, saveGuestDeliveryInfo } from '@/lib/guest-session';
-import { verifyPaymentAndCreateOrder } from '@/lib/payment-actions';
 import { usePaymentState } from '@/lib/payment-state';
 import { getPublicShippingZones, type ShippingZone } from '@/lib/shipping-actions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -469,8 +469,10 @@ export default function CheckoutPage() {
                     // #endregion
                     
                     // Try to find the transaction by email/amount
-                    const { findRecentTransactionByEmail } = await import('@/lib/payment-actions');
-                    const found = await findRecentTransactionByEmail(formState.email, total);
+                    const found = await cloudFunctions.findRecentTransactionByEmail({
+                        email: formState.email,
+                        amount: total,
+                    });
                     
                     // #region agent log
                     fetch('http://127.0.0.1:7242/ingest/216e8403-ed09-402a-a608-99b1722965bb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'checkout/page.tsx:466',message:'Email/amount lookup result',data:{found:!!found,foundReference:found?.reference,foundStatus:found?.status,foundAmount:found?.amount},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
@@ -478,7 +480,7 @@ export default function CheckoutPage() {
                     
                     if (found?.reference) {
                         // Payment was completed! Process it
-                        const result = await verifyPaymentAndCreateOrder({
+                        const result = await cloudFunctions.verifyPaymentAndCreateOrder({
                             reference: found.reference,
                             idempotencyKey: currentPayment.id,
                             cartItems,
@@ -534,7 +536,7 @@ export default function CheckoutPage() {
         
         startTransition(async () => {
             try {
-                const result = await verifyPaymentAndCreateOrder({
+                const result = await cloudFunctions.verifyPaymentAndCreateOrder({
                     reference: payment.reference,
                     idempotencyKey: payment.id,
                     cartItems: payment.cartItems,
@@ -569,7 +571,7 @@ export default function CheckoutPage() {
                 });
             }
         });
-    }, [updatePaymentStatus, startTransition, verifyPaymentAndCreateOrder, clearCart, clearPaymentState, user, router, toast]);
+    }, [updatePaymentStatus, startTransition, clearCart, clearPaymentState, user, router, toast]);
 
     // Track polling state to stop it if callback fires
     const pollingStateRef = useRef<{ active: boolean }>({ active: false });
@@ -609,7 +611,7 @@ export default function CheckoutPage() {
                 let referenceToUse = paymentRef;
                 
                 try {
-                    const result = await verifyPaymentAndCreateOrder({
+                    const result = await cloudFunctions.verifyPaymentAndCreateOrder({
                         reference: referenceToUse,
                         idempotencyKey: currentPayment?.id || `payment_${Date.now()}`,
                         cartItems,
@@ -645,13 +647,15 @@ export default function CheckoutPage() {
                 } catch (error: any) {
                     // If reference not found, try to find by email/amount
                     if (error.message?.includes('reference not found')) {
-                        const { findRecentTransactionByEmail } = await import('@/lib/payment-actions');
-                        const found = await findRecentTransactionByEmail(formState.email, total);
+                        const found = await cloudFunctions.findRecentTransactionByEmail({
+                            email: formState.email,
+                            amount: total,
+                        });
                         
                         if (found?.reference) {
                             referenceToUse = found.reference;
                             // Retry with found reference
-                            const result = await verifyPaymentAndCreateOrder({
+                            const result = await cloudFunctions.verifyPaymentAndCreateOrder({
                                 reference: referenceToUse,
                                 idempotencyKey: currentPayment?.id || `payment_${Date.now()}`,
                                 cartItems,
@@ -872,8 +876,10 @@ export default function CheckoutPage() {
             // #endregion
             
             try {
-                const { findRecentTransactionByEmail } = await import('@/lib/payment-actions');
-                const found = await findRecentTransactionByEmail(formState.email, total);
+                const found = await cloudFunctions.findRecentTransactionByEmail({
+                    email: formState.email,
+                    amount: total,
+                });
                 
                 if (found?.reference && found.status === 'success') {
                     pollingStateRef.current.active = false; // Stop polling
@@ -882,7 +888,7 @@ export default function CheckoutPage() {
                     // #endregion
                     
                     // Payment found! Process it
-                    const result = await verifyPaymentAndCreateOrder({
+                    const result = await cloudFunctions.verifyPaymentAndCreateOrder({
                         reference: found.reference,
                         idempotencyKey: currentPayment?.id || `payment_${Date.now()}`,
                         cartItems,

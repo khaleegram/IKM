@@ -1,25 +1,25 @@
 'use client';
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
-import { DollarSign, Loader2, CheckCircle, AlertCircle, Banknote, TrendingUp, Wallet, ArrowDownCircle, History, X, Search, Check, ChevronsUpDown } from "lucide-react";
-import { useState, useTransition, useEffect } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { getBanksList, resolveAccountNumber, savePayoutDetails } from "@/lib/payout-actions";
-import { useUser } from "@/lib/firebase/auth/use-user";
-import { useUserProfile } from "@/lib/firebase/firestore/users";
-import { requestPayout, cancelPayoutRequest } from "@/lib/payout-request-actions";
-import { calculateSellerEarnings } from "@/lib/earnings-actions";
-import { getMinimumPayoutAmount } from "@/lib/platform-settings-actions";
-import { useSellerPayouts, useSellerTransactions } from "@/lib/firebase/firestore/earnings";
-import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
+import { cloudFunctions } from "@/lib/cloud-functions";
+import { calculateSellerEarnings } from "@/lib/earnings-actions";
+import { useUser } from "@/lib/firebase/auth/use-user";
+import { useSellerPayouts, useSellerTransactions } from "@/lib/firebase/firestore/earnings";
+import { useUserProfile } from "@/lib/firebase/firestore/users";
+import { cancelPayoutRequest, requestPayout } from "@/lib/payout-request-actions";
+import { getMinimumPayoutAmount } from "@/lib/platform-settings-actions";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { AlertCircle, ArrowDownCircle, Banknote, Check, CheckCircle, ChevronsUpDown, DollarSign, History, Loader2, Search, TrendingUp, Wallet, X } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
 
 
 export default function SellerPayoutsPage() {
@@ -54,11 +54,17 @@ export default function SellerPayoutsPage() {
         const loadBanks = async () => {
             setIsLoadingBanks(true);
             try {
-                const banks = await getBanksList();
-                setBanksList(banks);
-                // Pre-select user's bank if they already have payout details
-                if (userProfile?.payoutDetails?.bankCode) {
-                    setSelectedBankCode(userProfile.payoutDetails.bankCode);
+                const result = await cloudFunctions.getBanksList();
+                if (result.success && result.banks) {
+                    // Sort by name for easier selection
+                    const sortedBanks = result.banks.sort((a, b) => a.name.localeCompare(b.name));
+                    setBanksList(sortedBanks);
+                    // Pre-select user's bank if they already have payout details
+                    if (userProfile?.payoutDetails?.bankCode) {
+                        setSelectedBankCode(userProfile.payoutDetails.bankCode);
+                    }
+                } else {
+                    throw new Error('Failed to load banks');
                 }
             } catch (error) {
                 toast({
@@ -118,6 +124,10 @@ export default function SellerPayoutsPage() {
         }
 
         startRequestTransition(async () => {
+            if (!authUser?.uid) {
+                toast({ variant: 'destructive', title: 'Error', description: 'Please log in to request a payout.' });
+                return;
+            }
             try {
                 await requestPayout(authUser.uid, { amount });
                 toast({
@@ -170,16 +180,23 @@ export default function SellerPayoutsPage() {
 
         startFindTransition(async () => {
             try {
-                const result = await resolveAccountNumber(accountNumber, selectedBankCode);
-                setResolvedAccount({
-                    account_name: result.account_name,
-                    account_number: result.account_number,
-                    bank_id: result.bank_id,
+                const result = await cloudFunctions.resolveAccountNumber({
+                    accountNumber,
+                    bankCode: selectedBankCode,
                 });
-                toast({
-                    title: "Account Verified",
-                    description: `Account name: ${result.account_name}`,
-                });
+                if (result.success) {
+                    setResolvedAccount({
+                        account_name: result.account_name,
+                        account_number: result.account_number,
+                        bank_id: result.bank_id,
+                    });
+                    toast({
+                        title: "Account Verified",
+                        description: `Account name: ${result.account_name}`,
+                    });
+                } else {
+                    throw new Error('Account verification failed');
+                }
             } catch (error) {
                 const errorMessage = (error as Error).message;
                 toast({ 
@@ -208,17 +225,20 @@ export default function SellerPayoutsPage() {
 
         startSaveTransition(async () => {
             try {
-                await savePayoutDetails({
+                const result = await cloudFunctions.savePayoutDetails({
                     bankCode: selectedBankCode,
                     accountNumber: resolvedAccount.account_number,
                     accountName: resolvedAccount.account_name,
-                    bankName: selectedBank.name,
                 });
-                toast({
-                    title: "Payout Information Saved!",
-                    description: "Your payout details have been successfully updated.",
-                });
-                // The useUserProfile hook will automatically refetch the data
+                if (result.success) {
+                    toast({
+                        title: "Payout Information Saved!",
+                        description: "Your payout details have been successfully updated.",
+                    });
+                    // The useUserProfile hook will automatically refetch the data
+                } else {
+                    throw new Error('Failed to save payout details');
+                }
             } catch (error) {
                 toast({ variant: 'destructive', title: 'Save Failed', description: (error as Error).message });
             }

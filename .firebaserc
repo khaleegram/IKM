@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "ikm-marketplace",
+    "ikm": "ikm-marketplace"
+  },
+  "targets": {},
+  "etags": {}
+}
