@@ -67,16 +67,35 @@ export function useSellerPayouts(sellerId: string | undefined) {
       (snapshot) => {
         const payoutsData: Payout[] = [];
         snapshot.forEach((doc) => {
+          const data = doc.data();
+          
+          // Serialize Firestore Timestamps to plain objects
+          const serializeTimestamp = (ts: any): any => {
+            if (!ts) return null;
+            if (typeof ts.toMillis === 'function') {
+              // It's a Firestore Timestamp - convert to plain object
+              return {
+                _seconds: Math.floor(ts.toMillis() / 1000),
+                _nanoseconds: (ts.toMillis() % 1000) * 1000000,
+              };
+            }
+            return ts;
+          };
+          
           payoutsData.push({
             id: doc.id,
-            ...doc.data(),
+            ...data,
+            requestedAt: serializeTimestamp(data.requestedAt),
+            processedAt: serializeTimestamp(data.processedAt),
+            createdAt: serializeTimestamp(data.createdAt),
+            expectedProcessingDate: serializeTimestamp(data.expectedProcessingDate),
           } as Payout);
         });
         
         // Sort by date (most recent first)
         payoutsData.sort((a, b) => {
-          const aTime = a.createdAt?.toMillis?.() || 0;
-          const bTime = b.createdAt?.toMillis?.() || 0;
+          const aTime = a.createdAt?._seconds ? a.createdAt._seconds * 1000 : 0;
+          const bTime = b.createdAt?._seconds ? b.createdAt._seconds * 1000 : 0;
           return bTime - aTime;
         });
         

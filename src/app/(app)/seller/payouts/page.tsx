@@ -471,7 +471,18 @@ export default function SellerPayoutsPage() {
                                 <div>
                                     <p className="font-semibold text-lg">₦{pendingPayout.amount.toLocaleString()}</p>
                                     <p className="text-sm text-muted-foreground">
-                                        Requested on {pendingPayout.requestedAt ? format(pendingPayout.requestedAt.toDate(), 'PPP') : 'N/A'}
+                                        Requested on {pendingPayout.requestedAt ? (() => {
+                                            // Handle both Firestore Timestamp and serialized timestamp
+                                            let date: Date;
+                                            if (typeof pendingPayout.requestedAt.toDate === 'function') {
+                                                date = pendingPayout.requestedAt.toDate();
+                                            } else if (pendingPayout.requestedAt._seconds) {
+                                                date = new Date(pendingPayout.requestedAt._seconds * 1000);
+                                            } else {
+                                                return 'N/A';
+                                            }
+                                            return format(date, 'PPP');
+                                        })() : 'N/A'}
                                     </p>
                                 </div>
                                 <div className="flex gap-2">

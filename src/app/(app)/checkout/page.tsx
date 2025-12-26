@@ -23,7 +23,9 @@ import { cloudFunctions } from '@/lib/cloud-functions';
 import { applyDiscountCode } from '@/lib/discount-actions';
 import { useUser } from '@/lib/firebase/auth/use-user';
 import { useUserAddresses } from '@/lib/firebase/firestore/addresses';
+import { useUserProfile } from '@/lib/firebase/firestore/users';
 import { clearGuestDeliveryInfo, loadGuestDeliveryInfo, saveGuestDeliveryInfo } from '@/lib/guest-session';
+import { saveCustomerCheckoutInfo, getCustomerCheckoutInfo } from '@/lib/customer-info-actions';
 import { usePaymentState } from '@/lib/payment-state';
 import { getPublicShippingZones, type ShippingZone } from '@/lib/shipping-actions';
 import { normalizeStateName } from '@/lib/utils/state-selector';
@@ -120,6 +122,7 @@ export default function CheckoutPage() {
     const { user } = useUser();
     const { auth } = useFirebase();
     const { data: addresses } = useUserAddresses(user?.uid);
+    const { data: userProfile } = useUserProfile(user?.uid);
     const [isPending, startTransition] = useTransition();
     
     // Guest checkout and login state
@@ -161,53 +164,106 @@ export default function CheckoutPage() {
 
     const defaultAddress = addresses?.find(a => a.isDefault) || addresses?.[0];
     
-    // Load guest delivery info from localStorage on mount
-    useEffect(() => {
-        const guestInfo = loadGuestDeliveryInfo();
-        if (guestInfo && !user) {
-            // Only use guest info if user is not logged in
-            setFormState(prev => ({
-                ...prev,
-                firstName: prev.firstName || guestInfo.firstName,
-                lastName: prev.lastName || guestInfo.lastName,
-                email: prev.email || guestInfo.email,
-                phone: prev.phone || guestInfo.phone,
-                address: prev.address || guestInfo.address,
-                state: prev.state || guestInfo.state,
-            }));
-            if (guestInfo.state) {
-                setCustomerState(guestInfo.state);
-            }
-        }
-    }, []);
-
+    // Initialize form state - will be updated by useEffect hooks
     const [formState, setFormState] = useState({
-        firstName: defaultAddress?.firstName || '',
-        lastName: defaultAddress?.lastName || '',
-        address: defaultAddress?.address || '',
-        state: defaultAddress?.state || '',
+        firstName: '',
+        lastName: '',
+        address: '',
+        state: '',
         email: user?.email || '',
-        phone: defaultAddress?.phone || '',
-        selectedAddressId: defaultAddress?.id || '',
+        phone: '',
+        selectedAddressId: '',
     });
 
-    // Update form when default address changes or user logs in
+    // Enhanced auto-fill: Priority order: saved checkout info > default address > user profile
     useEffect(() => {
-        if (user && defaultAddress && !formState.selectedAddressId) {
-            setFormState({
-                firstName: defaultAddress.firstName || '',
-                lastName: defaultAddress.lastName || '',
-                address: defaultAddress.address || '',
-                state: defaultAddress.state || '',
-                email: user?.email || '',
-                phone: defaultAddress.phone || '',
-                selectedAddressId: defaultAddress.id || '',
-            });
-            setCustomerState(defaultAddress.state || '');
-        } else if (user && user.email && !formState.email) {
-            setFormState(prev => ({ ...prev, email: user.email || prev.email }));
-        }
-    }, [defaultAddress, user]);
+        const loadAndFill = async () => {
+            if (user) {
+                // Logged-in user: Load saved checkout info, default address, or user profile
+                try {
+                    // 1. Try to load saved checkout info first (highest priority)
+                    const savedInfo = await getCustomerCheckoutInfo();
+                    
+                    if (savedInfo) {
+                        // Use saved checkout info
+                        setFormState(prev => ({
+                            ...prev,
+                            firstName: savedInfo.firstName || prev.firstName || '',
+                            lastName: savedInfo.lastName || prev.lastName || '',
+                            email: savedInfo.email || user?.email || prev.email || '',
+                            phone: savedInfo.phone || prev.phone || '',
+                            address: savedInfo.address || prev.address || '',
+                            state: savedInfo.state || prev.state || '',
+                        }));
+                        if (savedInfo.state) {
+                            setCustomerState(savedInfo.state);
+                        }
+                        return; // Saved info takes priority
+                    }
+                    
+                    // 2. If no saved info, try default address
+                    if (defaultAddress) {
+                        setFormState(prev => {
+                            // Only update if we don't already have address info
+                            if (prev.selectedAddressId && prev.selectedAddressId === defaultAddress.id) {
+                                return prev; // Already using this address
+                            }
+                            return {
+                                ...prev,
+                                firstName: prev.firstName || defaultAddress.firstName || '',
+                                lastName: prev.lastName || defaultAddress.lastName || '',
+                                address: prev.address || defaultAddress.address || '',
+                                state: prev.state || defaultAddress.state || '',
+                                email: user?.email || prev.email || '',
+                                phone: prev.phone || defaultAddress.phone || '',
+                                selectedAddressId: prev.selectedAddressId || defaultAddress.id || '',
+                            };
+                        });
+                        if (defaultAddress.state) {
+                            setCustomerState(prev => prev || defaultAddress.state || '');
+                        }
+                        return;
+                    }
+                    
+                    // 3. Fallback to user profile
+                    if (user?.email) {
+                        const displayNameParts = userProfile?.displayName?.split(' ') || [];
+                        const firstName = displayNameParts[0] || '';
+                        const lastName = displayNameParts.slice(1).join(' ') || '';
+                        
+                        setFormState(prev => ({
+                            ...prev,
+                            email: user.email || prev.email || '',
+                            firstName: prev.firstName || firstName,
+                            lastName: prev.lastName || lastName,
+                            phone: prev.phone || userProfile?.whatsappNumber || prev.phone,
+                        }));
+                    }
+                } catch (error) {
+                    console.error('Error loading saved customer info:', error);
+                }
+            } else {
+                // Guest user: Load from localStorage
+                const guestInfo = loadGuestDeliveryInfo();
+                if (guestInfo) {
+                    setFormState(prev => ({
+                        ...prev,
+                        firstName: prev.firstName || guestInfo.firstName || '',
+                        lastName: prev.lastName || guestInfo.lastName || '',
+                        email: prev.email || guestInfo.email || '',
+                        phone: prev.phone || guestInfo.phone || '',
+                        address: prev.address || guestInfo.address || '',
+                        state: prev.state || guestInfo.state || '',
+                    }));
+                    if (guestInfo.state) {
+                        setCustomerState(guestInfo.state);
+                    }
+                }
+            }
+        };
+        
+        loadAndFill();
+    }, [user, userProfile, defaultAddress?.id]);
 
     // Calculate shipping when state changes or on initial load
     // This allows pickup to show immediately even without a state selected
@@ -741,6 +797,33 @@ export default function CheckoutPage() {
                         clearPaymentState();
                         if (!user) clearGuestDeliveryInfo();
                         
+                        // Save customer info for future checkouts (if logged in)
+                        if (user) {
+                            try {
+                                await saveCustomerCheckoutInfo({
+                                    firstName: formState.firstName,
+                                    lastName: formState.lastName,
+                                    email: formState.email,
+                                    phone: formState.phone,
+                                    address: formState.address,
+                                    state: formState.state,
+                                });
+                            } catch (error) {
+                                console.error('Error saving customer info:', error);
+                                // Don't block redirect if save fails
+                            }
+                        } else {
+                            // Save guest info to localStorage
+                            saveGuestDeliveryInfo({
+                                firstName: formState.firstName,
+                                lastName: formState.lastName,
+                                email: formState.email,
+                                phone: formState.phone,
+                                address: formState.address,
+                                state: formState.state,
+                            });
+                        }
+                        
                         // Small delay to show success message
                         await new Promise(resolve => setTimeout(resolve, 1500));
                         router.push(user ? '/profile' : '/?orderSuccess=true');
@@ -782,6 +865,36 @@ export default function CheckoutPage() {
                                 if (currentPayment) {
                                     updatePaymentStatus(currentPayment.id, 'completed', undefined, result.orderId);
                                 }
+                                
+                                clearCart();
+                                clearPaymentState();
+                                if (!user) clearGuestDeliveryInfo();
+                                
+                                // Save customer info for future checkouts (if logged in)
+                                if (user) {
+                                    try {
+                                        await saveCustomerCheckoutInfo({
+                                            firstName: formState.firstName,
+                                            lastName: formState.lastName,
+                                            email: formState.email,
+                                            phone: formState.phone,
+                                            address: formState.address,
+                                            state: formState.state,
+                                        });
+                                    } catch (error) {
+                                        console.error('Error saving customer info:', error);
+                                    }
+                                } else {
+                                    saveGuestDeliveryInfo({
+                                        firstName: formState.firstName,
+                                        lastName: formState.lastName,
+                                        email: formState.email,
+                                        phone: formState.phone,
+                                        address: formState.address,
+                                        state: formState.state,
+                                    });
+                                }
+                                
                                 toast({
                                     title: 'Order Placed!',
                                     description: "Thank you for your purchase. Redirecting...",

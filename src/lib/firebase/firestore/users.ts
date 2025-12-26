@@ -239,7 +239,71 @@ export const useAllUserProfiles = () => {
           } as unknown as UserProfile;
         });
         
-        usersData.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+        // Deduplicate users by email (especially guest users)
+        // Strategy: Group all users (including guests) by email, keep one per email
+        const userMap = new Map<string, UserProfile>();
+        const usersByEmail = new Map<string, UserProfile[]>();
+        
+        usersData.forEach(user => {
+          const email = user.email?.toLowerCase()?.trim() || '';
+          const userId = user.id || '';
+          const isGuest = userId.startsWith('guest_') || false;
+          
+          // Skip users without email
+          if (!email) {
+            // If no email but has ID, keep it (might be a system user)
+            if (userId && !userMap.has(userId)) {
+              userMap.set(userId, user);
+            }
+            return;
+          }
+          
+          // Group all users by email (both regular and guest)
+          if (!usersByEmail.has(email)) {
+            usersByEmail.set(email, []);
+          }
+          usersByEmail.get(email)!.push(user);
+        });
+        
+        // For each email, keep only one user (prefer registered users over guests)
+        usersByEmail.forEach((users, email) => {
+          if (users.length === 1) {
+            // Single user with this email
+            const user = users[0];
+            userMap.set(user.id || email, user);
+          } else {
+            // Multiple users with same email - deduplicate
+            // Separate registered users from guests
+            const registeredUsers = users.filter(u => !u.id?.startsWith('guest_'));
+            const guestUsers = users.filter(u => u.id?.startsWith('guest_'));
+            
+            if (registeredUsers.length > 0) {
+              // Prefer registered users - keep the most recent one
+              registeredUsers.sort((a, b) => {
+                const aTime = a.createdAt?.toMillis?.() || 0;
+                const bTime = b.createdAt?.toMillis?.() || 0;
+                return bTime - aTime;
+              });
+              const mostRecent = registeredUsers[0];
+              userMap.set(mostRecent.id || email, mostRecent);
+            } else if (guestUsers.length > 0) {
+              // Only guest users - keep the most recent one
+              guestUsers.sort((a, b) => {
+                const aTime = a.createdAt?.toMillis?.() || 0;
+                const bTime = b.createdAt?.toMillis?.() || 0;
+                return bTime - aTime;
+              });
+              const mostRecent = guestUsers[0];
+              // Update display name to show it's a guest with multiple orders
+              mostRecent.displayName = `${mostRecent.displayName || email.split('@')[0]} (${users.length} orders)`;
+              userMap.set(mostRecent.id || email, mostRecent);
+            }
+          }
+        });
+        
+        // Convert map back to array and sort
+        const deduplicatedUsers = Array.from(userMap.values());
+        deduplicatedUsers.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
         
         // Debug: Log stores data
         const storesWithName = usersData.filter(u => u.storeName && u.storeName.trim().length > 0);
@@ -261,7 +325,7 @@ export const useAllUserProfiles = () => {
           })),
         });
         
-        setUsers(usersData);
+        setUsers(deduplicatedUsers);
         setError(null);
         setIsLoading(false);
       },

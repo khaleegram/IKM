@@ -30,10 +30,14 @@ export default function AdminPayoutsPage() {
         
         try {
             const result = await getAllPayouts(status as any);
-            setPayouts(result);
-            setFilteredPayouts(result);
+            console.log('📊 Loaded payouts:', result.length, result);
+            setPayouts(result || []);
+            setFilteredPayouts(result || []);
         } catch (error) {
+            console.error('❌ Error loading payouts:', error);
             toast({ variant: 'destructive', title: 'Error', description: (error as Error).message });
+            setPayouts([]);
+            setFilteredPayouts([]);
         }
     };
 
@@ -190,7 +194,18 @@ export default function AdminPayoutsPage() {
                                         {filteredPayouts.map((payout) => (
                                             <TableRow key={payout.id}>
                                                 <TableCell className="text-sm">
-                                                    {payout.createdAt ? format(payout.createdAt.toDate(), 'MMM dd, yyyy') : 'N/A'}
+                                                    {payout.createdAt ? (() => {
+                                                        // Handle both Firestore Timestamp and serialized timestamp
+                                                        let date: Date;
+                                                        if (typeof payout.createdAt.toDate === 'function') {
+                                                            date = payout.createdAt.toDate();
+                                                        } else if (payout.createdAt._seconds) {
+                                                            date = new Date(payout.createdAt._seconds * 1000);
+                                                        } else {
+                                                            return 'N/A';
+                                                        }
+                                                        return format(date, 'MMM dd, yyyy');
+                                                    })() : 'N/A'}
                                                 </TableCell>
                                                 <TableCell className="font-mono text-xs">{payout.sellerId?.slice(0, 8)}...</TableCell>
                                                 <TableCell>

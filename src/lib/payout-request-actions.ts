@@ -509,9 +509,38 @@ export async function getAllPayouts(status?: 'pending' | 'completed' | 'failed' 
   
   const snapshot = await query.get();
   
-  return snapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  // Serialize Firestore Timestamps to plain objects for client-side
+  const serializeTimestamp = (ts: any): any => {
+    if (!ts) return null;
+    if (ts.toDate && typeof ts.toDate === 'function') {
+      // It's a Firestore Timestamp - convert to plain object (NO FUNCTIONS)
+      const seconds = ts.seconds || Math.floor(ts.toMillis() / 1000);
+      const nanoseconds = ts.nanoseconds || 0;
+      return {
+        _seconds: seconds,
+        _nanoseconds: nanoseconds,
+      };
+    }
+    if (ts._seconds !== undefined) {
+      // Already serialized - ensure no functions
+      return {
+        _seconds: ts._seconds,
+        _nanoseconds: ts._nanoseconds || 0,
+      };
+    }
+    return null;
+  };
+  
+  return snapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      createdAt: serializeTimestamp(data.createdAt),
+      requestedAt: serializeTimestamp(data.requestedAt),
+      processedAt: serializeTimestamp(data.processedAt),
+      expectedProcessingDate: serializeTimestamp(data.expectedProcessingDate),
+    };
+  });
 }
 
