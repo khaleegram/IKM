@@ -20,6 +20,7 @@ const verifyPaymentSchema = z.object({
   discountCode: z.string().optional(),
   shippingType: z.enum(['delivery', 'pickup', 'contact']).optional(),
   shippingPrice: z.number().optional(),
+  deliveryFeePaidBy: z.enum(['seller', 'buyer']).optional(),
 });
 
 /**
@@ -32,13 +33,8 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
     throw new Error('Invalid payment verification data.');
   }
 
-  const { reference, idempotencyKey, cartItems, total, deliveryAddress, customerInfo, discountCode, shippingType, shippingPrice } = validation.data;
+  const { reference, idempotencyKey, cartItems, total, deliveryAddress, customerInfo, discountCode, shippingType, shippingPrice, deliveryFeePaidBy } = validation.data;
   
-  const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
-  if (!paystackSecretKey) {
-    throw new Error("Paystack secret key is not configured on the server.");
-  }
-
   const firestore = getAdminFirestore();
   const customerId = (await headers()).get('X-User-UID');
   
@@ -91,6 +87,124 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
       alreadyExists: true,
       message: 'Order already created for this payment',
     };
+  }
+
+  // Handle free orders (₦0 total) - skip payment verification
+  if (total <= 0) {
+    const sellerId = cartItems[0].sellerId;
+    const commissionRate = await getPlatformCommissionRate();
+    
+    const orderData: Omit<Order, 'id' | 'createdAt'> = {
+      customerId: finalCustomerId,
+      sellerId: sellerId,
+      items: cartItems.map(({ id, name, price, quantity }: CartItem) => ({ productId: id, name, price, quantity })),
+      total: 0,
+      status: 'Processing',
+      deliveryAddress: deliveryAddress,
+      customerInfo: {
+        ...customerInfo,
+        isGuest: isGuestOrder,
+      },
+      escrowStatus: 'completed', // No escrow needed for free orders
+      paymentReference: reference,
+      idempotencyKey,
+      commissionRate: commissionRate,
+      shippingType: shippingType || 'delivery',
+      shippingPrice: shippingPrice || 0,
+      paymentMethod: 'Free', // Mark as free order
+    };
+
+    // Add deliveryFeePaidBy if provided
+    if (deliveryFeePaidBy) {
+      (orderData as any).deliveryFeePaidBy = deliveryFeePaidBy;
+    }
+
+    const ordersCollectionRef = firestore.collection('orders');
+    const orderRef = await ordersCollectionRef.add({
+      ...orderData,
+      createdAt: FieldValue.serverTimestamp(),
+      paystackReference: reference,
+    });
+
+    // Decrement product stock for each item in the order
+    try {
+      const stockUpdateBatch = firestore.batch();
+      for (const item of cartItems) {
+        const productRef = firestore.collection('products').doc(item.id);
+        const productDoc = await productRef.get();
+        
+        if (productDoc.exists) {
+          const currentStock = productDoc.data()?.stock || 0;
+          const newStock = Math.max(0, currentStock - item.quantity);
+          stockUpdateBatch.update(productRef, {
+            stock: newStock,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+      }
+      await stockUpdateBatch.commit();
+    } catch (error) {
+      console.error('Failed to update product stock:', error);
+      // Don't fail the order if stock update fails
+    }
+
+    // Increment discount code usage if applied
+    if (discountCode && sellerId) {
+      try {
+        await incrementDiscountCodeUsage(discountCode, sellerId);
+      } catch (error) {
+        console.error('Failed to increment discount code usage:', error);
+        // Don't fail the order if discount code update fails
+      }
+    }
+
+    // Create payment record marking it as free
+    await firestore.collection('payments').add({
+      orderId: orderRef.id,
+      customerId: finalCustomerId,
+      sellerId: sellerId,
+      amount: 0,
+      reference: reference,
+      idempotencyKey,
+      status: 'completed',
+      method: 'Free', // Mark payment method as "Free"
+      discountCode: discountCode || null,
+      isGuest: isGuestOrder,
+      verifiedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    // Create initial system messages in chat
+    const chatCollection = orderRef.collection('chat');
+    
+    await chatCollection.add({
+      orderId: orderRef.id,
+      senderId: 'system',
+      senderType: 'system',
+      message: 'Order placed',
+      isSystemMessage: true,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    await chatCollection.add({
+      orderId: orderRef.id,
+      senderId: 'system',
+      senderType: 'system',
+      message: 'Free order - payment not required',
+      isSystemMessage: true,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    revalidatePath('/profile');
+    revalidatePath('/seller/orders');
+
+    return { success: true, orderId: orderRef.id };
+  }
+
+  // Continue with normal payment verification for paid orders
+  const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
+  if (!paystackSecretKey) {
+    throw new Error("Paystack secret key is not configured on the server.");
   }
 
   // Verify with Paystack with retry logic
@@ -186,6 +300,11 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
     shippingType: shippingType || 'delivery', // Store shipping type (delivery or pickup)
     shippingPrice: shippingPrice || 0, // Store shipping price
   };
+
+  // Add deliveryFeePaidBy if provided
+  if (deliveryFeePaidBy) {
+    (orderData as any).deliveryFeePaidBy = deliveryFeePaidBy;
+  }
 
   const ordersCollectionRef = firestore.collection('orders');
   const orderRef = await ordersCollectionRef.add({

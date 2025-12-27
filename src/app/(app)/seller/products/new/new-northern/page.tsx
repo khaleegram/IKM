@@ -20,23 +20,21 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/lib/firebase/auth/use-user';
-import { useProduct } from '@/lib/firebase/firestore/products';
 import type { ProductDeliveryMethods } from '@/lib/firebase/firestore/products';
-import { updateNorthernProduct } from '@/lib/northern-product-actions';
+import { createNorthernProduct } from '@/lib/northern-product-actions';
 import { getPublicShippingZones } from '@/lib/shipping-actions';
 import { ArrowLeft, Loader2, Save } from 'lucide-react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 
-export default function EditProductPage() {
+export default function NewProductPage() {
   const router = useRouter();
-  const params = useParams();
-  const productId = params.id as string;
   const { toast } = useToast();
   const { user } = useUser();
-  const { data: product, isLoading: isLoadingProduct } = useProduct(productId);
   const [isPending, startTransition] = useTransition();
+  const [createdProductId, setCreatedProductId] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState<string | null>(null);
 
   // Core fields
   const [name, setName] = useState('');
@@ -102,90 +100,6 @@ export default function EditProductPage() {
   const [deliveryMethods, setDeliveryMethods] = useState<ProductDeliveryMethods>({});
   const [hasShippingZones, setHasShippingZones] = useState<boolean | null>(null);
 
-  // Load product data
-  useEffect(() => {
-    if (product) {
-      setName(product.name || '');
-      setDescription(product.description || '');
-      setPrice(product.price?.toString() || '');
-      setCompareAtPrice(product.compareAtPrice?.toString() || '');
-      setStock(product.stock?.toString() || '');
-      setCategory(product.category || '');
-      setStatus(product.status || 'draft');
-
-      // Media
-      if (product.imageUrls && Array.isArray(product.imageUrls)) {
-        setImageUrls(product.imageUrls);
-      } else if (product.imageUrl) {
-        setImageUrls([product.imageUrl]);
-      }
-      setVideoUrl(product.videoUrl);
-      setAudioDescription(product.audioDescription);
-
-      // Category-specific fields
-      if (product.category === 'fragrance') {
-        setFragranceFields({
-          volume: product.volume || '',
-          fragranceType: product.fragranceType || '',
-          container: product.container || '',
-        });
-      } else if (product.category === 'fashion') {
-        setFashionFields({
-          sizeType: product.sizeType || '',
-          abayaLength: product.abayaLength || '',
-          standardSize: product.standardSize || '',
-          setIncludes: product.setIncludes || '',
-          material: product.material || '',
-        });
-      } else if (product.category === 'snacks') {
-        setSnacksFields({
-          packaging: product.packaging || '',
-          quantity: product.quantity || 1,
-          taste: product.taste || '',
-        });
-      } else if (product.category === 'materials') {
-        setMaterialsFields({
-          materialType: product.materialType || '',
-          fabricLength: product.fabricLength || '',
-          quality: product.quality || '',
-          customMaterialType: product.customMaterialType || '',
-        });
-      } else if (product.category === 'skincare') {
-        setSkincareFields({
-          brand: product.skincareBrand || '',
-          type: product.skincareType || '',
-          size: product.skincareSize || '',
-        });
-      } else if (product.category === 'haircare') {
-        setHaircareFields({
-          type: product.haircareType || '',
-          brand: product.haircareBrand || '',
-          size: product.haircareSize || '',
-          packageItems: product.haircarePackageItems || [],
-        });
-      } else if (product.category === 'islamic') {
-        setIslamicFields({
-          type: product.islamicType || '',
-          size: product.islamicSize || '',
-          material: product.islamicMaterial || '',
-        });
-      } else if (product.category === 'electronics') {
-        setElectronicsFields({
-          brand: product.brand || '',
-          model: product.model || '',
-        });
-      }
-
-      // Delivery settings
-      if (product.deliveryFeePaidBy) {
-        setDeliveryFeePaidBy(product.deliveryFeePaidBy);
-      }
-      if (product.deliveryMethods) {
-        setDeliveryMethods(product.deliveryMethods);
-      }
-    }
-  }, [product, productId]);
-
   // Check if seller has shipping zones
   useEffect(() => {
     const checkShippingZones = async () => {
@@ -208,7 +122,7 @@ export default function EditProductPage() {
       toast({
         variant: 'destructive',
         title: 'Not Authenticated',
-        description: 'You must be logged in to update a product.',
+        description: 'You must be logged in to create a product.',
       });
       return;
     }
@@ -250,10 +164,19 @@ export default function EditProductPage() {
       return;
     }
 
+    if (imageUrls.length === 0 && !videoUrl) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Please add at least one photo or video.',
+      });
+      return;
+    }
+
     // Build product data
     const productData: any = {
       name: name.trim(),
-      description: description.trim(),
+      description: description.trim() || undefined,
       price: parseFloat(price),
       compareAtPrice: compareAtPrice ? parseFloat(compareAtPrice) : undefined,
       stock: parseInt(stock),
@@ -263,7 +186,7 @@ export default function EditProductPage() {
       videoUrl,
       audioDescription,
       deliveryFeePaidBy,
-      deliveryMethods,
+      deliveryMethods: Object.keys(deliveryMethods).length > 0 ? deliveryMethods : undefined,
     };
 
     // Add category-specific fields
@@ -310,18 +233,25 @@ export default function EditProductPage() {
 
     startTransition(async () => {
       try {
-        await updateNorthernProduct(productId, productData);
+        const result = await createNorthernProduct(productData);
+        setCreatedProductId(result.productId);
+        setShareLink(result.shareLink);
+        
         toast({
-          title: 'Product Updated!',
-          description: 'Your product has been updated successfully.',
+          title: 'Product Created!',
+          description: 'Your product has been saved successfully.',
         });
-        router.push('/seller/products');
+
+        // Redirect after a short delay
+        setTimeout(() => {
+          router.push('/seller/products');
+        }, 2000);
       } catch (error) {
-        console.error('Error updating product:', error);
+        console.error('Error creating product:', error);
         toast({
           variant: 'destructive',
           title: 'Error',
-          description: (error as Error).message || 'Failed to update product. Please try again.',
+          description: (error as Error).message || 'Failed to create product. Please try again.',
         });
       }
     });
@@ -430,27 +360,6 @@ export default function EditProductPage() {
     }
   };
 
-  if (isLoadingProduct) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!product) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <p className="text-muted-foreground">Product not found</p>
-        <Link href="/seller/products">
-          <Button variant="outline" className="mt-4">
-            Back to Products
-          </Button>
-        </Link>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full">
       <header className="p-4 sm:p-6 bg-background border-b">
@@ -461,15 +370,15 @@ export default function EditProductPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold font-headline">Edit Product</h1>
-            <p className="text-muted-foreground">Update your product listing</p>
+            <h1 className="text-2xl font-bold font-headline">Add New Product</h1>
+            <p className="text-muted-foreground">Create a new product listing</p>
           </div>
         </div>
       </header>
 
       <main className="flex-1 overflow-auto p-4 sm:p-6">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6">
-          {/* Media Section */}
+          {/* Media Section - Priority */}
           <MediaUploader
             images={imageUrls}
             videoUrl={videoUrl}
@@ -481,7 +390,7 @@ export default function EditProductPage() {
           <Card>
             <CardHeader>
               <CardTitle>Product Information</CardTitle>
-              <CardDescription>Update the basic details about your product</CardDescription>
+              <CardDescription>Enter the basic details about your product</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -543,31 +452,20 @@ export default function EditProductPage() {
                   rows={4}
                 />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <select
-                  id="status"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as 'active' | 'draft' | 'inactive')}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                >
-                  <option value="draft">Draft</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
             </CardContent>
           </Card>
 
-          {/* Category - Read-only since changing category would require different fields */}
+          {/* Category Picker */}
           <Card>
             <CardHeader>
-              <CardTitle>Category</CardTitle>
-              <CardDescription>Category cannot be changed when editing</CardDescription>
+              <CardTitle>Category *</CardTitle>
+              <CardDescription>Select the product category</CardDescription>
             </CardHeader>
             <CardContent>
-              <Input value={category} disabled className="bg-muted" />
+              <CategoryPicker
+                selectedCategory={category}
+                onCategorySelect={setCategory}
+              />
             </CardContent>
           </Card>
 
@@ -576,7 +474,7 @@ export default function EditProductPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Category Details</CardTitle>
-                <CardDescription>Update the details specific to this category</CardDescription>
+                <CardDescription>Fill in the details specific to this category</CardDescription>
               </CardHeader>
               <CardContent>
                 {renderCategoryFields()}
@@ -600,7 +498,7 @@ export default function EditProductPage() {
           />
 
           {/* Submit Buttons */}
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Button
               type="submit"
               disabled={isPending}
@@ -610,18 +508,28 @@ export default function EditProductPage() {
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Updating...
+                  Creating...
                 </>
               ) : (
                 <>
                   <Save className="mr-2 h-4 w-4" />
-                  Update Product
+                  Save & Post to Shop
                 </>
               )}
             </Button>
+            {createdProductId && shareLink && (
+              <WhatsAppShareButton
+                productId={createdProductId}
+                productName={name}
+                productImage={imageUrls[0]}
+                productPrice={parseFloat(price)}
+                disabled={isPending}
+              />
+            )}
           </div>
         </form>
       </main>
     </div>
   );
 }
+

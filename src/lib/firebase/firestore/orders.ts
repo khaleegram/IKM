@@ -69,7 +69,7 @@ export interface Order extends DocumentData {
   sellerId: string;
   items: CartItem[];
   total: number;
-  status: 'Processing' | 'Sent' | 'Received' | 'Completed' | 'Cancelled' | 'Disputed';
+  status: 'Processing' | 'AvailabilityCheck' | 'Sent' | 'Received' | 'Completed' | 'Cancelled' | 'Disputed';
   deliveryAddress: string;
   customerInfo: {
     name: string;
@@ -96,6 +96,16 @@ export interface Order extends DocumentData {
   // Shipping
   shippingType?: 'delivery' | 'pickup' | 'contact';
   shippingPrice?: number;
+  deliveryFeePaidBy?: 'seller' | 'buyer';
+  waybillParkId?: string;
+  waybillParkName?: string; // "none" or custom text
+  // Availability check fields (for food/snacks)
+  availabilityStatus?: 'available' | 'not_available' | 'waiting_buyer_response' | 'waiting_restock' | 'cancelled';
+  waitTimeDays?: number;
+  waitTimeExpiresAt?: any; // Timestamp
+  availabilityReason?: string;
+  buyerWaitResponse?: 'accepted' | 'cancelled' | null;
+  refundedAt?: any; // Timestamp when refund was processed
   idempotencyKey?: string; // For preventing duplicate orders
   createdAt: any; // Firestore Timestamp
 }

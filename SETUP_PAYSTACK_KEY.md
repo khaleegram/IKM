@@ -32,7 +32,7 @@ If you want to use the legacy config method (not recommended with your setup):
 
 ```bash
 # Note: Must use 2-part key format (paystack.secret_key, not paystack_secret_key)
-firebase functions:config:set paystack.secret_key="sk_live_a5692b9836dc8cce64e756611711d666e11c7a91"
+firebase functions:config:set paystack.secret_key="sk_live_"
 ```
 
 **But wait!** Your `firebase.json` has `disallowLegacyRuntimeConfig: true`, which means this method won't work.
@@ -51,7 +51,7 @@ If you prefer to use the legacy config method:
 2. Remove or set `disallowLegacyRuntimeConfig: false`
 3. Then use:
    ```bash
-   firebase functions:config:set paystack.secret_key="sk_live_a5692b9836dc8cce64e756611711d666e11c7a91"
+   firebase functions:config:set paystack.secret_key=""
    ```
 
 ---

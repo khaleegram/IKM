@@ -50,6 +50,7 @@ const verifyPaymentSchema = z.object({
   discountCode: z.string().optional(),
   shippingType: z.enum(['delivery', 'pickup', 'contact']).optional(),
   shippingPrice: z.number().optional(),
+  deliveryFeePaidBy: z.enum(['seller', 'buyer']).optional(),
 });
 
 /**
@@ -88,6 +89,7 @@ export const verifyPaymentAndCreateOrder = onRequest(
         discountCode,
         shippingType,
         shippingPrice,
+        deliveryFeePaidBy,
       } = validation.data;
 
       const paystackSecretKey = getPaystackSecretKey(paystackSecret.value());
@@ -158,6 +160,179 @@ export const verifyPaymentAndCreateOrder = onRequest(
         });
       }
 
+      // Handle free orders (₦0 total) - skip payment verification
+      if (total <= 0) {
+        // Validate cart items before processing free order
+        if (!cartItems || cartItems.length === 0) {
+          return sendError(response, 'Invalid cart: Cart is empty', 400);
+        }
+
+        const sellerId = cartItems[0]?.sellerId;
+        if (!sellerId) {
+          return sendError(response, 'Invalid cart: No seller ID found', 400);
+        }
+
+        // Validate all items belong to the same seller
+        const allSameSeller = cartItems.every((item: any) => item.sellerId === sellerId);
+        if (!allSameSeller) {
+          return sendError(response, 'Invalid cart: All items must be from the same seller', 400);
+        }
+
+        // Validate cart items
+        for (const item of cartItems) {
+          if (!item.id || !item.quantity || item.quantity <= 0) {
+            return sendError(response, `Invalid cart item: ${item.name || 'Unknown'}`, 400);
+          }
+          if (!item.price || item.price <= 0) {
+            return sendError(response, `Invalid price for ${item.name}`, 400);
+          }
+        }
+
+        const commissionRate = await getPlatformCommissionRate();
+        const orderRef = firestore.collection('orders').doc();
+
+        // Use transaction for stock management
+        await firestore.runTransaction(async (transaction) => {
+          // Check and update stock
+          const productRefs = cartItems.map((item: any) => 
+            firestore.collection('products').doc(item.id)
+          );
+          
+          const productDocs = await Promise.all(
+            productRefs.map(ref => transaction.get(ref))
+          );
+          
+          for (let i = 0; i < productDocs.length; i++) {
+            const productDoc = productDocs[i];
+            const item = cartItems[i];
+            
+            if (!productDoc.exists) {
+              throw new Error(`Product not found: ${item.name}`);
+            }
+            
+            const productData = productDoc.data();
+            const currentStock = productData?.stock || 0;
+            const requiredQuantity = item.quantity;
+            
+            if (currentStock < requiredQuantity) {
+              throw new Error(`Insufficient stock for ${item.name}. Available: ${currentStock}, Required: ${requiredQuantity}`);
+            }
+            
+            const newStock = Math.max(0, currentStock - requiredQuantity);
+            transaction.update(productRefs[i], {
+              stock: newStock,
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          }
+
+          // Create free order
+          const orderData = {
+            customerId: finalCustomerId!,
+            sellerId: sellerId,
+            items: cartItems.map(({ id, name, price, quantity }: any) => ({
+              productId: id,
+              name,
+              price,
+              quantity,
+            })),
+            total: 0,
+            status: 'Processing',
+            deliveryAddress: deliveryAddress,
+            customerInfo: {
+              ...customerInfo,
+              isGuest: isGuestOrder,
+            },
+            escrowStatus: 'completed', // No escrow needed for free orders
+            paymentReference: reference,
+            idempotencyKey,
+            commissionRate,
+            shippingType: shippingType || 'delivery',
+            shippingPrice: shippingPrice || 0,
+            deliveryFeePaidBy: deliveryFeePaidBy || 'buyer',
+            paymentMethod: 'Free', // Mark as free order
+            createdAt: FieldValue.serverTimestamp(),
+            paystackReference: reference,
+          };
+
+          transaction.set(orderRef, orderData);
+        }).catch((error: any) => {
+          console.error('Transaction failed for free order:', error);
+          throw error;
+        });
+
+        // Increment discount code usage if applied
+        if (discountCode) {
+          try {
+            const discountQuery = await firestore
+              .collection('discount_codes')
+              .where('code', '==', discountCode.toUpperCase())
+              .where('sellerId', '==', sellerId)
+              .limit(1)
+              .get();
+
+            if (!discountQuery.empty) {
+              const discountRef = discountQuery.docs[0].ref;
+              await discountRef.update({
+                uses: FieldValue.increment(1),
+                updatedAt: FieldValue.serverTimestamp(),
+              });
+            }
+          } catch (error) {
+            console.error('Failed to increment discount code usage:', error);
+            // Non-critical - order is already created
+          }
+        }
+
+        // Create payment record marking it as free
+        await firestore.collection('payments').add({
+          orderId: orderRef.id,
+          customerId: finalCustomerId,
+          sellerId: sellerId,
+          amount: 0,
+          reference: reference,
+          idempotencyKey,
+          status: 'completed',
+          method: 'Free', // Mark payment method as "Free"
+          discountCode: discountCode || null,
+          isGuest: isGuestOrder,
+          verifiedAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
+        });
+
+        // Create initial system messages in chat
+        try {
+          const chatCollection = orderRef.collection('chat');
+          
+          await chatCollection.add({
+            orderId: orderRef.id,
+            senderId: 'system',
+            senderType: 'system',
+            message: 'Order placed',
+            isSystemMessage: true,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+
+          await chatCollection.add({
+            orderId: orderRef.id,
+            senderId: 'system',
+            senderType: 'system',
+            message: 'Free order - payment not required',
+            isSystemMessage: true,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        } catch (error) {
+          console.error('Failed to create chat messages:', error);
+          // Non-critical - order is already created
+        }
+
+        return sendResponse(response, {
+          success: true,
+          orderId: orderRef.id,
+          message: 'Free order created successfully',
+        });
+      }
+
+      // Continue with normal payment verification for paid orders
       // Verify with Paystack
       let paystackResult;
       let retries = 0;
@@ -324,6 +499,7 @@ export const verifyPaymentAndCreateOrder = onRequest(
           commissionRate,
           shippingType: shippingType || 'delivery',
           shippingPrice: shippingPrice || 0,
+          deliveryFeePaidBy: deliveryFeePaidBy || 'buyer',
           createdAt: FieldValue.serverTimestamp(),
           paystackReference: reference,
           // CRITICAL: Add payment verification metadata
@@ -1685,6 +1861,294 @@ export const deleteProduct = onRequest(
 });
 
 // ============================================================================
+// NORTHERN PRODUCT FUNCTIONS (Category-Specific Products)
+// ============================================================================
+
+/**
+ * Create Northern product (with all category-specific fields)
+ * Supports: Fragrance, Fashion, Snacks, Materials, Skincare, Haircare, Islamic, Electronics
+ */
+export const createNorthernProduct = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const productData = request.body;
+
+      // Basic validation
+      if (!productData.name || !productData.price || !productData.category) {
+        return sendError(response, 'Name, price, and category are required', 400);
+      }
+
+      // Validate category
+      const validCategories = ['fragrance', 'fashion', 'snacks', 'materials', 'skincare', 'haircare', 'islamic', 'electronics'];
+      if (!validCategories.includes(productData.category)) {
+        return sendError(response, `Invalid category. Must be one of: ${validCategories.join(', ')}`, 400);
+      }
+
+      // Prepare product document
+      const productDoc: any = {
+        name: productData.name,
+        description: productData.description || '',
+        price: parseFloat(productData.price),
+        compareAtPrice: productData.compareAtPrice ? parseFloat(productData.compareAtPrice) : undefined,
+        stock: productData.stock ? parseInt(productData.stock) : 0,
+        category: productData.category,
+        status: productData.status || 'draft',
+        sellerId: auth.uid,
+        views: 0,
+        salesCount: 0,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      // Add media
+      if (productData.imageUrls && Array.isArray(productData.imageUrls) && productData.imageUrls.length > 0) {
+        productDoc.imageUrls = productData.imageUrls;
+        productDoc.imageUrl = productData.imageUrls[0]; // Legacy field
+      }
+      if (productData.videoUrl) {
+        productDoc.videoUrl = productData.videoUrl;
+      }
+      if (productData.audioDescription) {
+        productDoc.audioDescription = productData.audioDescription;
+      }
+
+      // Add category-specific fields
+      if (productData.category === 'fragrance') {
+        if (productData.volume) productDoc.volume = productData.volume;
+        if (productData.fragranceType) productDoc.fragranceType = productData.fragranceType;
+        if (productData.container) productDoc.container = productData.container;
+      }
+
+      if (productData.category === 'fashion') {
+        if (productData.sizeType) productDoc.sizeType = productData.sizeType;
+        if (productData.abayaLength) productDoc.abayaLength = productData.abayaLength;
+        if (productData.standardSize) productDoc.standardSize = productData.standardSize;
+        if (productData.setIncludes) productDoc.setIncludes = productData.setIncludes;
+        if (productData.material) productDoc.material = productData.material;
+      }
+
+      if (productData.category === 'snacks') {
+        if (productData.packaging) productDoc.packaging = productData.packaging;
+        if (productData.quantity) productDoc.quantity = parseInt(productData.quantity);
+        if (productData.taste) productDoc.taste = productData.taste;
+      }
+
+      if (productData.category === 'materials') {
+        if (productData.materialType) productDoc.materialType = productData.materialType;
+        if (productData.fabricLength) productDoc.fabricLength = productData.fabricLength;
+        if (productData.quality) productDoc.quality = productData.quality;
+        if (productData.customMaterialType) productDoc.customMaterialType = productData.customMaterialType;
+      }
+
+      if (productData.category === 'skincare') {
+        if (productData.skincareBrand) productDoc.skincareBrand = productData.skincareBrand;
+        if (productData.skincareType) productDoc.skincareType = productData.skincareType;
+        if (productData.skincareSize) productDoc.skincareSize = productData.skincareSize;
+      }
+
+      if (productData.category === 'haircare') {
+        if (productData.haircareType) productDoc.haircareType = productData.haircareType;
+        if (productData.haircareBrand) productDoc.haircareBrand = productData.haircareBrand;
+        if (productData.haircareSize) productDoc.haircareSize = productData.haircareSize;
+        if (productData.haircarePackageItems && Array.isArray(productData.haircarePackageItems)) {
+          productDoc.haircarePackageItems = productData.haircarePackageItems;
+        }
+      }
+
+      if (productData.category === 'islamic') {
+        if (productData.islamicType) productDoc.islamicType = productData.islamicType;
+        if (productData.islamicSize) productDoc.islamicSize = productData.islamicSize;
+        if (productData.islamicMaterial) productDoc.islamicMaterial = productData.islamicMaterial;
+      }
+
+      if (productData.category === 'electronics') {
+        if (productData.brand) productDoc.brand = productData.brand;
+        if (productData.model) productDoc.model = productData.model;
+      }
+
+      // Add delivery settings
+      if (productData.deliveryFeePaidBy) {
+        productDoc.deliveryFeePaidBy = productData.deliveryFeePaidBy;
+      }
+      if (productData.deliveryMethods) {
+        productDoc.deliveryMethods = productData.deliveryMethods;
+      }
+
+      // Create product
+      const productRef = await firestore.collection('products').add(productDoc);
+
+      // Generate share link (simplified - actual implementation would call the share action)
+      const shareLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://your-app.com'}/product/${productRef.id}`;
+      await productRef.update({ shareLink });
+
+      return sendResponse(response, {
+        success: true,
+        productId: productRef.id,
+        shareLink,
+      });
+    } catch (error: any) {
+      console.error('Error in createNorthernProduct:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Update Northern product
+ */
+export const updateNorthernProduct = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const { productId, ...providedData } = request.body;
+
+      if (!productId) {
+        return sendError(response, 'Product ID is required', 400);
+      }
+
+      const productRef = firestore.collection('products').doc(productId);
+      const productDoc = await productRef.get();
+
+      if (!productDoc.exists) {
+        return sendError(response, 'Product not found', 404);
+      }
+
+      const product = productDoc.data()!;
+      if (product.sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Can only update your own products', 403);
+      }
+
+      const updateData: any = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      // Basic fields
+      if (providedData.name !== undefined) updateData.name = providedData.name;
+      if (providedData.description !== undefined) updateData.description = providedData.description || '';
+      if (providedData.price !== undefined) updateData.price = parseFloat(providedData.price);
+      if (providedData.compareAtPrice !== undefined) {
+        updateData.compareAtPrice = providedData.compareAtPrice ? parseFloat(providedData.compareAtPrice) : null;
+      }
+      if (providedData.stock !== undefined) updateData.stock = parseInt(providedData.stock);
+      if (providedData.status !== undefined) updateData.status = providedData.status;
+      if (providedData.category !== undefined) updateData.category = providedData.category;
+
+      // Media
+      if (providedData.imageUrls !== undefined) {
+        updateData.imageUrls = providedData.imageUrls;
+        updateData.imageUrl = providedData.imageUrls?.[0] || null; // Legacy field
+      }
+      if (providedData.videoUrl !== undefined) {
+        updateData.videoUrl = providedData.videoUrl || null;
+      }
+      if (providedData.audioDescription !== undefined) {
+        updateData.audioDescription = providedData.audioDescription || null;
+      }
+
+      // Category-specific fields
+      const category = providedData.category || product.category;
+
+      if (category === 'fragrance') {
+        if (providedData.volume !== undefined) updateData.volume = providedData.volume;
+        if (providedData.fragranceType !== undefined) updateData.fragranceType = providedData.fragranceType;
+        if (providedData.container !== undefined) updateData.container = providedData.container;
+      }
+
+      if (category === 'fashion') {
+        if (providedData.sizeType !== undefined) updateData.sizeType = providedData.sizeType;
+        if (providedData.abayaLength !== undefined) updateData.abayaLength = providedData.abayaLength;
+        if (providedData.standardSize !== undefined) updateData.standardSize = providedData.standardSize;
+        if (providedData.setIncludes !== undefined) updateData.setIncludes = providedData.setIncludes;
+        if (providedData.material !== undefined) updateData.material = providedData.material;
+      }
+
+      if (category === 'snacks') {
+        if (providedData.packaging !== undefined) updateData.packaging = providedData.packaging;
+        if (providedData.quantity !== undefined) updateData.quantity = parseInt(providedData.quantity);
+        if (providedData.taste !== undefined) updateData.taste = providedData.taste;
+      }
+
+      if (category === 'materials') {
+        if (providedData.materialType !== undefined) updateData.materialType = providedData.materialType;
+        if (providedData.fabricLength !== undefined) updateData.fabricLength = providedData.fabricLength;
+        if (providedData.quality !== undefined) updateData.quality = providedData.quality;
+        if (providedData.customMaterialType !== undefined) {
+          updateData.customMaterialType = providedData.customMaterialType || null;
+        }
+      }
+
+      if (category === 'skincare') {
+        if (providedData.skincareBrand !== undefined) updateData.skincareBrand = providedData.skincareBrand;
+        if (providedData.skincareType !== undefined) updateData.skincareType = providedData.skincareType;
+        if (providedData.skincareSize !== undefined) updateData.skincareSize = providedData.skincareSize;
+      }
+
+      if (category === 'haircare') {
+        if (providedData.haircareType !== undefined) updateData.haircareType = providedData.haircareType;
+        if (providedData.haircareBrand !== undefined) updateData.haircareBrand = providedData.haircareBrand;
+        if (providedData.haircareSize !== undefined) updateData.haircareSize = providedData.haircareSize;
+        if (providedData.haircarePackageItems !== undefined) {
+          updateData.haircarePackageItems = providedData.haircarePackageItems || null;
+        }
+      }
+
+      if (category === 'islamic') {
+        if (providedData.islamicType !== undefined) updateData.islamicType = providedData.islamicType;
+        if (providedData.islamicSize !== undefined) updateData.islamicSize = providedData.islamicSize;
+        if (providedData.islamicMaterial !== undefined) updateData.islamicMaterial = providedData.islamicMaterial;
+      }
+
+      if (category === 'electronics') {
+        if (providedData.brand !== undefined) updateData.brand = providedData.brand;
+        if (providedData.model !== undefined) updateData.model = providedData.model;
+      }
+
+      // Delivery settings
+      if (providedData.deliveryFeePaidBy !== undefined) {
+        updateData.deliveryFeePaidBy = providedData.deliveryFeePaidBy;
+      }
+      if (providedData.deliveryMethods !== undefined) {
+        updateData.deliveryMethods = providedData.deliveryMethods;
+      }
+
+      // Update share link if product name or price changed
+      if (updateData.name || updateData.price) {
+        const shareLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://your-app.com'}/product/${productId}`;
+        updateData.shareLink = shareLink;
+      }
+
+      await productRef.update(updateData);
+
+      return sendResponse(response, {
+        success: true,
+        productId,
+        message: 'Product updated successfully',
+      });
+    } catch (error: any) {
+      console.error('Error in updateNorthernProduct:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
 // SELLER FUNCTIONS - DASHBOARD & ANALYTICS
 // ============================================================================
 
@@ -2886,6 +3350,1273 @@ export const resolveDispute = onRequest(
       });
     } catch (error: any) {
       console.error('Error in resolveDispute:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// SHIPPING ZONE FUNCTIONS
+// ============================================================================
+
+/**
+ * Get shipping zones (public - for checkout)
+ */
+export const getPublicShippingZones = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const sellerId = request.query.sellerId as string || request.body?.sellerId;
+      if (!sellerId) {
+        return sendError(response, 'Seller ID is required', 400);
+      }
+
+      const firestore = admin.firestore();
+      const zonesQuery = await firestore
+        .collection('shipping_zones')
+        .where('sellerId', '==', sellerId)
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      const zones = zonesQuery.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return sendResponse(response, {
+        success: true,
+        zones,
+      });
+    } catch (error: any) {
+      console.error('Error in getPublicShippingZones:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get shipping zones for seller (authenticated)
+ */
+export const getShippingZones = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const sellerId = request.query.sellerId as string || request.body?.sellerId || auth.uid;
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const firestore = admin.firestore();
+      const zonesQuery = await firestore
+        .collection('shipping_zones')
+        .where('sellerId', '==', sellerId)
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      const zones = zonesQuery.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return sendResponse(response, {
+        success: true,
+        zones,
+      });
+    } catch (error: any) {
+      console.error('Error in getShippingZones:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Create shipping zone
+ */
+export const createShippingZone = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const { sellerId, name, rate, states, freeThreshold } = request.body;
+
+      if (!sellerId || !name || rate === undefined) {
+        return sendError(response, 'Seller ID, name, and rate are required', 400);
+      }
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Can only create shipping zones for your own store', 403);
+      }
+
+      const firestore = admin.firestore();
+      const zoneRef = firestore.collection('shipping_zones').doc();
+
+      await zoneRef.set({
+        sellerId,
+        name,
+        rate: parseFloat(rate),
+        states: states || [],
+        freeThreshold: freeThreshold ? parseFloat(freeThreshold) : undefined,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      return sendResponse(response, {
+        success: true,
+        zoneId: zoneRef.id,
+      });
+    } catch (error: any) {
+      console.error('Error in createShippingZone:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Update shipping zone
+ */
+export const updateShippingZone = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const { sellerId, zoneId, name, rate, states, freeThreshold } = request.body;
+
+      if (!sellerId || !zoneId) {
+        return sendError(response, 'Seller ID and zone ID are required', 400);
+      }
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const firestore = admin.firestore();
+      const zoneRef = firestore.collection('shipping_zones').doc(zoneId);
+      const zoneDoc = await zoneRef.get();
+
+      if (!zoneDoc.exists) {
+        return sendError(response, 'Shipping zone not found', 404);
+      }
+
+      const zoneData = zoneDoc.data()!;
+      if (zoneData.sellerId !== sellerId && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Zone does not belong to your store', 403);
+      }
+
+      const updateData: any = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      if (name !== undefined) updateData.name = name;
+      if (rate !== undefined) updateData.rate = parseFloat(rate);
+      if (states !== undefined) updateData.states = states;
+      if (freeThreshold !== undefined) updateData.freeThreshold = freeThreshold ? parseFloat(freeThreshold) : undefined;
+
+      await zoneRef.update(updateData);
+
+      return sendResponse(response, { success: true });
+    } catch (error: any) {
+      console.error('Error in updateShippingZone:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Delete shipping zone
+ */
+export const deleteShippingZone = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const { sellerId, zoneId } = request.body;
+
+      if (!sellerId || !zoneId) {
+        return sendError(response, 'Seller ID and zone ID are required', 400);
+      }
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const firestore = admin.firestore();
+      const zoneRef = firestore.collection('shipping_zones').doc(zoneId);
+      const zoneDoc = await zoneRef.get();
+
+      if (!zoneDoc.exists) {
+        return sendError(response, 'Shipping zone not found', 404);
+      }
+
+      const zoneData = zoneDoc.data()!;
+      if (zoneData.sellerId !== sellerId && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Zone does not belong to your store', 403);
+      }
+
+      await zoneRef.delete();
+
+      return sendResponse(response, { success: true });
+    } catch (error: any) {
+      console.error('Error in deleteShippingZone:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get shipping settings
+ */
+export const getShippingSettings = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const sellerId = request.query.sellerId as string || request.body?.sellerId || auth.uid;
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const firestore = admin.firestore();
+      const storeDoc = await firestore.collection('stores').doc(sellerId).get();
+
+      if (!storeDoc.exists) {
+        return sendResponse(response, {
+          success: true,
+          settings: {},
+        });
+      }
+
+      const storeData = storeDoc.data()!;
+      const settings = {
+        defaultPackagingType: storeData?.shippingSettings?.defaultPackagingType,
+        packagingCost: storeData?.shippingSettings?.packagingCost,
+      };
+
+      return sendResponse(response, {
+        success: true,
+        settings,
+      });
+    } catch (error: any) {
+      console.error('Error in getShippingSettings:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Update shipping settings
+ */
+export const updateShippingSettings = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const { sellerId, defaultPackagingType, packagingCost } = request.body;
+
+      if (!sellerId) {
+        return sendError(response, 'Seller ID is required', 400);
+      }
+
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized', 403);
+      }
+
+      const firestore = admin.firestore();
+      const storeRef = firestore.collection('stores').doc(sellerId);
+      const storeDoc = await storeRef.get();
+
+      if (!storeDoc.exists) {
+        return sendError(response, 'Store not found', 404);
+      }
+
+      const updateData: any = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      const shippingSettings: any = {
+        ...(storeDoc.data()?.shippingSettings || {}),
+      };
+
+      if (defaultPackagingType !== undefined) {
+        shippingSettings.defaultPackagingType = defaultPackagingType;
+      }
+      if (packagingCost !== undefined) {
+        shippingSettings.packagingCost = parseFloat(packagingCost);
+      }
+
+      updateData.shippingSettings = shippingSettings;
+
+      await storeRef.update(updateData);
+
+      return sendResponse(response, { success: true });
+    } catch (error: any) {
+      console.error('Error in updateShippingSettings:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// ORDER AVAILABILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Mark order as not available
+ */
+export const markOrderAsNotAvailable = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const { orderId, waitTimeDays, reason } = request.body;
+
+      if (!orderId || !reason) {
+        return sendError(response, 'Order ID and reason are required', 400);
+      }
+
+      const firestore = admin.firestore();
+      const orderRef = firestore.collection('orders').doc(orderId);
+      const orderDoc = await orderRef.get();
+
+      if (!orderDoc.exists) {
+        return sendError(response, 'Order not found', 404);
+      }
+
+      const order = orderDoc.data()!;
+
+      if (order.sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Only the seller can mark order as not available', 403);
+      }
+
+      if (order.status !== 'Processing') {
+        return sendError(response, `Cannot mark order as not available. Current status: ${order.status}`);
+      }
+
+      let waitTimeExpiresAt = null;
+      if (waitTimeDays) {
+        const expiresDate = new Date();
+        expiresDate.setDate(expiresDate.getDate() + waitTimeDays);
+        waitTimeExpiresAt = expiresDate;
+      }
+
+      await orderRef.update({
+        status: 'AvailabilityCheck',
+        availabilityStatus: waitTimeDays ? 'waiting_buyer_response' : 'not_available',
+        waitTimeDays: waitTimeDays || null,
+        waitTimeExpiresAt: waitTimeExpiresAt ? admin.firestore.Timestamp.fromDate(waitTimeExpiresAt) : null,
+        availabilityReason: reason,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      const chatMessage = waitTimeDays
+        ? `Item not currently available. Seller offers to wait ${waitTimeDays} day${waitTimeDays > 1 ? 's' : ''} for restocking. Reason: ${reason}`
+        : `Item not currently available. Reason: ${reason}`;
+
+      await firestore.collection('orders').doc(orderId).collection('chat').add({
+        orderId,
+        senderId: 'system',
+        senderType: 'system',
+        message: chatMessage,
+        isSystemMessage: true,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      return sendResponse(response, { success: true });
+    } catch (error: any) {
+      console.error('Error in markOrderAsNotAvailable:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Respond to availability check
+ */
+export const respondToAvailabilityCheck = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const { orderId, response: buyerResponse } = request.body;
+
+      if (!orderId || !buyerResponse) {
+        return sendError(response, 'Order ID and response are required', 400);
+      }
+
+      if (!['accepted', 'cancelled'].includes(buyerResponse)) {
+        return sendError(response, 'Response must be either "accepted" or "cancelled"', 400);
+      }
+
+      const firestore = admin.firestore();
+      const orderRef = firestore.collection('orders').doc(orderId);
+      const orderDoc = await orderRef.get();
+
+      if (!orderDoc.exists) {
+        return sendError(response, 'Order not found', 404);
+      }
+
+      const order = orderDoc.data()!;
+
+      if (order.customerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Only the customer can respond to availability check', 403);
+      }
+
+      if (order.status !== 'AvailabilityCheck') {
+        return sendError(response, `Cannot respond to availability check. Current status: ${order.status}`);
+      }
+
+      if (buyerResponse === 'accepted') {
+        await orderRef.update({
+          buyerWaitResponse: 'accepted',
+          availabilityStatus: 'waiting_restock',
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        await firestore.collection('orders').doc(orderId).collection('chat').add({
+          orderId,
+          senderId: 'system',
+          senderType: 'system',
+          message: 'Buyer has accepted the wait time. Order will proceed once item is restocked.',
+          isSystemMessage: true,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+
+        return sendResponse(response, { success: true, action: 'accepted' });
+      } else {
+        // Buyer cancels - process automatic refund
+        const orderTotal = order.total || 0;
+        const paymentReference = order.paymentReference;
+
+        if (!paymentReference) {
+          return sendError(response, 'Payment reference not found. Cannot process refund.', 400);
+        }
+
+        await orderRef.update({
+          status: 'Cancelled',
+          buyerWaitResponse: 'cancelled',
+          availabilityStatus: 'cancelled',
+          escrowStatus: 'refunded',
+          refundedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // Create refund record (actual Paystack refund would be processed separately)
+        await firestore.collection('refunds').add({
+          orderId,
+          paymentReference,
+          amount: orderTotal,
+          reason: 'Item not available - buyer cancelled',
+          refundMethod: 'original_payment',
+          status: 'pending',
+          processedBy: 'system',
+          createdAt: FieldValue.serverTimestamp(),
+        });
+
+        await firestore.collection('transactions').add({
+          orderId,
+          customerId: order.customerId,
+          type: 'refund',
+          amount: orderTotal,
+          description: `Refund for order #${orderId.slice(0, 7)} (item not available)`,
+          status: 'pending',
+          createdAt: FieldValue.serverTimestamp(),
+        });
+
+        await firestore.collection('orders').doc(orderId).collection('chat').add({
+          orderId,
+          senderId: 'system',
+          senderType: 'system',
+          message: `Buyer has cancelled the order. Refund of ₦${orderTotal.toLocaleString()} will be processed within 24-48 hours.`,
+          isSystemMessage: true,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+
+        return sendResponse(response, { success: true, action: 'cancelled', refundAmount: orderTotal });
+      }
+    } catch (error: any) {
+      console.error('Error in respondToAvailabilityCheck:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// PARKS MANAGEMENT FUNCTIONS (ADMIN)
+// ============================================================================
+
+/**
+ * Get all parks (public - no auth required)
+ */
+export const getAllParks = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const firestore = admin.firestore();
+      const parksQuery = await firestore
+        .collection('parks')
+        .orderBy('state', 'asc')
+        .orderBy('city', 'asc')
+        .orderBy('name', 'asc')
+        .get();
+
+      const parks = parksQuery.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return sendResponse(response, {
+        success: true,
+        parks,
+      });
+    } catch (error: any) {
+      console.error('Error in getAllParks:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get parks by state (public)
+ */
+export const getParksByState = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const state = request.query.state as string || request.body?.state;
+      if (!state) {
+        return sendError(response, 'State is required', 400);
+      }
+
+      const firestore = admin.firestore();
+      const parksQuery = await firestore
+        .collection('parks')
+        .where('state', '==', state)
+        .where('isActive', '==', true)
+        .orderBy('city', 'asc')
+        .orderBy('name', 'asc')
+        .get();
+
+      const parks = parksQuery.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return sendResponse(response, {
+        success: true,
+        parks,
+      });
+    } catch (error: any) {
+      console.error('Error in getParksByState:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Create park (admin only)
+ */
+export const createPark = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const { name, city, state, isActive } = request.body;
+
+      if (!name || !city || !state) {
+        return sendError(response, 'Name, city, and state are required', 400);
+      }
+
+      const firestore = admin.firestore();
+      const parkRef = firestore.collection('parks').doc();
+
+      await parkRef.set({
+        name,
+        city,
+        state,
+        isActive: isActive !== undefined ? isActive : true,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      return sendResponse(response, {
+        success: true,
+        parkId: parkRef.id,
+      });
+    } catch (error: any) {
+      console.error('Error in createPark:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Update park (admin only)
+ */
+export const updatePark = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const { parkId, name, city, state, isActive } = request.body;
+
+      if (!parkId) {
+        return sendError(response, 'Park ID is required', 400);
+      }
+
+      const firestore = admin.firestore();
+      const parkRef = firestore.collection('parks').doc(parkId);
+      const parkDoc = await parkRef.get();
+
+      if (!parkDoc.exists) {
+        return sendError(response, 'Park not found', 404);
+      }
+
+      const updateData: any = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      if (name !== undefined) updateData.name = name;
+      if (city !== undefined) updateData.city = city;
+      if (state !== undefined) updateData.state = state;
+      if (isActive !== undefined) updateData.isActive = isActive;
+
+      await parkRef.update(updateData);
+
+      return sendResponse(response, { success: true });
+    } catch (error: any) {
+      console.error('Error in updatePark:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Delete park (admin only)
+ */
+export const deletePark = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const { parkId } = request.body;
+
+      if (!parkId) {
+        return sendError(response, 'Park ID is required', 400);
+      }
+
+      const firestore = admin.firestore();
+      const parkRef = firestore.collection('parks').doc(parkId);
+      const parkDoc = await parkRef.get();
+
+      if (!parkDoc.exists) {
+        return sendError(response, 'Park not found', 404);
+      }
+
+      await parkRef.delete();
+
+      return sendResponse(response, { success: true });
+    } catch (error: any) {
+      console.error('Error in deletePark:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Initialize parks (admin only - one-time setup)
+ */
+export const initializeParks = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      // Check if parks already exist
+      const existingParks = await firestore.collection('parks').limit(1).get();
+      if (!existingParks.empty) {
+        return sendError(response, 'Parks already initialized. Delete existing parks first if you want to reinitialize.', 400);
+      }
+
+      // Default Northern parks data (simplified - in production, import from data file)
+      const NORTHERN_PARKS = [
+        { name: 'Kano Central Park', city: 'Kano', state: 'Kano', isActive: true },
+        { name: 'Kaduna Main Park', city: 'Kaduna', state: 'Kaduna', isActive: true },
+        { name: 'Sokoto Transport Park', city: 'Sokoto', state: 'Sokoto', isActive: true },
+        { name: 'Katsina Central Park', city: 'Katsina', state: 'Katsina', isActive: true },
+        { name: 'Zaria Main Park', city: 'Zaria', state: 'Kaduna', isActive: true },
+        { name: 'Maiduguri Central Park', city: 'Maiduguri', state: 'Borno', isActive: true },
+        { name: 'Gombe Main Park', city: 'Gombe', state: 'Gombe', isActive: true },
+        { name: 'Bauchi Central Park', city: 'Bauchi', state: 'Bauchi', isActive: true },
+        { name: 'Yola Main Park', city: 'Yola', state: 'Adamawa', isActive: true },
+        { name: 'Jos Central Park', city: 'Jos', state: 'Plateau', isActive: true },
+      ];
+
+      // Add all parks
+      const batch = firestore.batch();
+      NORTHERN_PARKS.forEach((park) => {
+        const parkRef = firestore.collection('parks').doc();
+        batch.set(parkRef, {
+          name: park.name,
+          city: park.city,
+          state: park.state,
+          isActive: park.isActive,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      });
+
+      await batch.commit();
+
+      return sendResponse(response, {
+        success: true,
+        count: NORTHERN_PARKS.length,
+        message: `Successfully initialized ${NORTHERN_PARKS.length} parks`,
+      });
+    } catch (error: any) {
+      console.error('Error in initializeParks:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// EARNINGS FUNCTIONS
+// ============================================================================
+
+/**
+ * Calculate seller earnings
+ */
+export const calculateSellerEarnings = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const sellerId = request.query.sellerId as string || request.body?.sellerId || auth.uid;
+
+      // Verify seller owns this request or is admin
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Can only view your own earnings', 403);
+      }
+
+      const firestore = admin.firestore();
+      const commissionRate = await getPlatformCommissionRate();
+
+      let totalEarnings = 0;
+      let totalOrders = 0;
+      let commissionPaid = 0;
+
+      // Try to calculate from transactions collection first
+      const transactionsSnapshot = await firestore.collection('transactions')
+        .where('sellerId', '==', sellerId)
+        .where('type', '==', 'sale')
+        .where('status', '==', 'completed')
+        .get();
+
+      if (!transactionsSnapshot.empty) {
+        transactionsSnapshot.forEach(doc => {
+          const transaction = doc.data();
+          totalEarnings += transaction.amount || 0;
+          commissionPaid += transaction.commission || 0;
+          totalOrders++;
+        });
+      } else {
+        // Fallback: Calculate from orders
+        const ordersSnapshot = await firestore.collection('orders')
+          .where('sellerId', '==', sellerId)
+          .where('status', '==', 'Completed')
+          .get();
+
+        ordersSnapshot.forEach(doc => {
+          const order = doc.data();
+          const orderTotal = order.total || 0;
+          const orderCommissionRate = order.commissionRate || commissionRate;
+          const commission = orderTotal * orderCommissionRate;
+          const sellerEarning = orderTotal - commission;
+
+          totalEarnings += sellerEarning;
+          commissionPaid += commission;
+          totalOrders++;
+        });
+      }
+
+      // Get pending payouts
+      const pendingPayoutsSnapshot = await firestore.collection('payouts')
+        .where('sellerId', '==', sellerId)
+        .where('status', '==', 'pending')
+        .get();
+
+      let pendingPayouts = 0;
+      pendingPayoutsSnapshot.forEach(doc => {
+        const payout = doc.data();
+        pendingPayouts += payout.amount || 0;
+      });
+
+      // Get completed payouts
+      const completedPayoutsSnapshot = await firestore.collection('payouts')
+        .where('sellerId', '==', sellerId)
+        .where('status', '==', 'completed')
+        .get();
+
+      let totalPayouts = 0;
+      completedPayoutsSnapshot.forEach(doc => {
+        const payout = doc.data();
+        totalPayouts += payout.amount || 0;
+      });
+
+      const availableBalance = Math.max(0, totalEarnings - totalPayouts - pendingPayouts);
+
+      return sendResponse(response, {
+        success: true,
+        earnings: {
+          totalEarnings,
+          availableBalance,
+          pendingPayouts,
+          totalPayouts,
+          commissionPaid,
+          totalOrders,
+        },
+      });
+    } catch (error: any) {
+      console.error('Error in calculateSellerEarnings:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get seller transactions
+ */
+export const getSellerTransactions = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const sellerId = request.query.sellerId as string || request.body?.sellerId || auth.uid;
+      const limit = parseInt(request.query.limit as string) || request.body?.limit || 50;
+
+      // Verify seller owns this request or is admin
+      if (sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Can only view your own transactions', 403);
+      }
+
+      const firestore = admin.firestore();
+      const commissionRate = await getPlatformCommissionRate();
+      const transactions: any[] = [];
+
+      // Get sales from orders
+      const ordersSnapshot = await firestore.collection('orders')
+        .where('sellerId', '==', sellerId)
+        .orderBy('createdAt', 'desc')
+        .limit(limit)
+        .get();
+
+      ordersSnapshot.forEach(doc => {
+        const order = doc.data();
+        const orderTotal = order.total || 0;
+        const orderCommissionRate = order.commissionRate || commissionRate;
+        const commission = orderTotal * orderCommissionRate;
+        const sellerEarning = orderTotal - commission;
+
+        if (order.status === 'Completed') {
+          transactions.push({
+            id: `sale_${doc.id}`,
+            type: 'sale',
+            amount: sellerEarning,
+            orderId: doc.id,
+            description: `Sale from order #${doc.id.slice(0, 7)}`,
+            status: 'completed',
+            createdAt: order.createdAt,
+          });
+
+          transactions.push({
+            id: `commission_${doc.id}`,
+            type: 'commission',
+            amount: -commission,
+            orderId: doc.id,
+            description: `Platform commission (${(orderCommissionRate * 100).toFixed(1)}%)`,
+            status: 'completed',
+            createdAt: order.createdAt,
+          });
+        }
+      });
+
+      // Get payout transactions
+      const payoutsSnapshot = await firestore.collection('payouts')
+        .where('sellerId', '==', sellerId)
+        .orderBy('createdAt', 'desc')
+        .limit(limit)
+        .get();
+
+      payoutsSnapshot.forEach(doc => {
+        const payout = doc.data();
+        transactions.push({
+          id: `payout_${doc.id}`,
+          type: 'payout',
+          amount: -payout.amount,
+          payoutId: doc.id,
+          description: `Payout to ${payout.accountName || 'bank account'}`,
+          status: payout.status,
+          createdAt: payout.createdAt,
+        });
+      });
+
+      // Sort by date (most recent first)
+      transactions.sort((a, b) => {
+        const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : new Date(a.createdAt).getTime();
+        const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : new Date(b.createdAt).getTime();
+        return dateB - dateA;
+      });
+
+      return sendResponse(response, {
+        success: true,
+        transactions: transactions.slice(0, limit),
+      });
+    } catch (error: any) {
+      console.error('Error in getSellerTransactions:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// PAYOUT REQUEST FUNCTIONS
+// ============================================================================
+
+/**
+ * Request payout
+ */
+export const requestPayout = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const { amount } = request.body;
+
+      if (!amount || amount <= 0) {
+        return sendError(response, 'Valid amount is required', 400);
+      }
+
+      const firestore = admin.firestore();
+
+      // Get minimum payout amount from settings
+      const settingsDoc = await firestore.collection('platform_settings').doc('platform_settings').get();
+      const minimumPayout = settingsDoc.exists 
+        ? (settingsDoc.data()?.minimumPayoutAmount as number) || 5000
+        : 5000;
+
+      if (amount < minimumPayout) {
+        return sendError(response, `Minimum payout is ₦${minimumPayout.toLocaleString()}`, 400);
+      }
+
+      // Calculate earnings to verify balance
+      const transactionsSnapshot = await firestore.collection('transactions')
+        .where('sellerId', '==', auth.uid)
+        .where('type', '==', 'sale')
+        .where('status', '==', 'completed')
+        .get();
+
+      let totalEarnings = 0;
+      if (!transactionsSnapshot.empty) {
+        transactionsSnapshot.forEach(doc => {
+          const transaction = doc.data();
+          totalEarnings += transaction.amount || 0;
+        });
+      }
+
+      const pendingPayoutsSnapshot = await firestore.collection('payouts')
+        .where('sellerId', '==', auth.uid)
+        .where('status', '==', 'pending')
+        .get();
+
+      let pendingPayouts = 0;
+      pendingPayoutsSnapshot.forEach(doc => {
+        const payout = doc.data();
+        pendingPayouts += payout.amount || 0;
+      });
+
+      const completedPayoutsSnapshot = await firestore.collection('payouts')
+        .where('sellerId', '==', auth.uid)
+        .where('status', '==', 'completed')
+        .get();
+
+      let totalPayouts = 0;
+      completedPayoutsSnapshot.forEach(doc => {
+        const payout = doc.data();
+        totalPayouts += payout.amount || 0;
+      });
+
+      const availableBalance = Math.max(0, totalEarnings - totalPayouts - pendingPayouts);
+
+      if (amount > availableBalance) {
+        return sendError(response, `Insufficient balance. Available: ₦${availableBalance.toLocaleString()}`, 400);
+      }
+
+      // Check if user has payout details
+      const userDoc = await firestore.collection('users').doc(auth.uid).get();
+      if (!userDoc.exists) {
+        return sendError(response, 'User profile not found', 404);
+      }
+
+      const userData = userDoc.data()!;
+      if (!userData.payoutDetails) {
+        return sendError(response, 'Please set up your bank account details first', 400);
+      }
+
+      // Check for existing pending payout
+      if (!pendingPayoutsSnapshot.empty) {
+        return sendError(response, 'You already have a pending payout request. Please wait for it to be processed.', 400);
+      }
+
+      // Get payout processing days from settings
+      const payoutProcessingDays = settingsDoc.exists
+        ? (settingsDoc.data()?.payoutProcessingDays as number) || 3
+        : 3;
+
+      // Calculate expected processing date (business days)
+      const addBusinessDays = (date: Date, days: number): Date => {
+        const result = new Date(date);
+        let addedDays = 0;
+        while (addedDays < days) {
+          result.setDate(result.getDate() + 1);
+          if (result.getDay() !== 0 && result.getDay() !== 6) {
+            addedDays++;
+          }
+        }
+        return result;
+      };
+
+      const requestedDate = new Date();
+      const expectedProcessingDate = addBusinessDays(requestedDate, payoutProcessingDays);
+
+      // Create payout request
+      const payoutRef = await firestore.collection('payouts').add({
+        sellerId: auth.uid,
+        amount: amount,
+        bankName: userData.payoutDetails.bankName,
+        bankCode: userData.payoutDetails.bankCode,
+        accountNumber: userData.payoutDetails.accountNumber,
+        accountName: userData.payoutDetails.accountName,
+        status: 'pending',
+        requestedAt: FieldValue.serverTimestamp(),
+        expectedProcessingDate: admin.firestore.Timestamp.fromDate(expectedProcessingDate),
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      return sendResponse(response, {
+        success: true,
+        payoutId: payoutRef.id,
+      });
+    } catch (error: any) {
+      console.error('Error in requestPayout:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Cancel payout request
+ */
+export const cancelPayoutRequest = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAuth(request.headers.authorization || null);
+      const { payoutId } = request.body;
+
+      if (!payoutId) {
+        return sendError(response, 'Payout ID is required', 400);
+      }
+
+      const firestore = admin.firestore();
+      const payoutDoc = await firestore.collection('payouts').doc(payoutId).get();
+
+      if (!payoutDoc.exists) {
+        return sendError(response, 'Payout not found', 404);
+      }
+
+      const payout = payoutDoc.data()!;
+
+      if (payout.sellerId !== auth.uid && !auth.isAdmin) {
+        return sendError(response, 'Unauthorized: Can only cancel your own payouts', 403);
+      }
+
+      if (payout.status !== 'pending') {
+        return sendError(response, 'Only pending payouts can be cancelled', 400);
+      }
+
+      await firestore.collection('payouts').doc(payoutId).update({
+        status: 'cancelled',
+        cancelledAt: FieldValue.serverTimestamp(),
+      });
+
+      return sendResponse(response, { success: true });
+    } catch (error: any) {
+      console.error('Error in cancelPayoutRequest:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get all payouts (admin only)
+ */
+export const getAllPayouts = onRequest(
+  { secrets: [paystackSecret] },
+  async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const status = request.query.status as string || request.body?.status;
+      let query: admin.firestore.Query = firestore.collection('payouts').orderBy('createdAt', 'desc');
+
+      if (status) {
+        query = query.where('status', '==', status) as any;
+      }
+
+      const snapshot = await query.get();
+
+      // Serialize Firestore Timestamps
+      const serializeTimestamp = (ts: any): any => {
+        if (!ts) return null;
+        if (ts.toDate && typeof ts.toDate === 'function') {
+          return {
+            _seconds: ts.seconds || Math.floor(ts.toMillis() / 1000),
+            _nanoseconds: ts.nanoseconds || 0,
+          };
+        }
+        if (ts._seconds !== undefined) {
+          return { _seconds: ts._seconds, _nanoseconds: ts._nanoseconds || 0 };
+        }
+        return null;
+      };
+
+      const payouts = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const result: any = {
+          id: doc.id,
+          ...data,
+        };
+
+        // Serialize all timestamp fields
+        if (data.createdAt) result.createdAt = serializeTimestamp(data.createdAt);
+        if (data.requestedAt) result.requestedAt = serializeTimestamp(data.requestedAt);
+        if (data.processedAt) result.processedAt = serializeTimestamp(data.processedAt);
+        if (data.cancelledAt) result.cancelledAt = serializeTimestamp(data.cancelledAt);
+        if (data.expectedProcessingDate) result.expectedProcessingDate = serializeTimestamp(data.expectedProcessingDate);
+
+        return result;
+      });
+
+      return sendResponse(response, {
+        success: true,
+        payouts,
+      });
+    } catch (error: any) {
+      console.error('Error in getAllPayouts:', error);
       return sendError(response, error.message || 'Internal server error', 500);
     }
   });

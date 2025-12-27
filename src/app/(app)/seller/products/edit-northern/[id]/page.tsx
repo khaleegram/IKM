@@ -184,7 +184,7 @@ export default function EditProductPage() {
         setDeliveryMethods(product.deliveryMethods);
       }
     }
-  }, [product, productId]);
+  }, [product, productId, router, toast]);
 
   // Check if seller has shipping zones
   useEffect(() => {
@@ -625,3 +625,4 @@ export default function EditProductPage() {
     </div>
   );
 }
+

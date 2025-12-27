@@ -99,7 +99,7 @@ export function ProductRecommendations({ productId, category, price }: ProductRe
                 </h3>
               </Link>
               <div className="flex items-center justify-between">
-                <p className="font-bold text-primary">₦{(product.price || product.initialPrice || 0).toLocaleString()}</p>
+                <p className="font-bold text-primary">₦{(product.price || 0).toLocaleString()}</p>
                 {product.averageRating && (
                   <div className="flex items-center gap-1">
                     <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />

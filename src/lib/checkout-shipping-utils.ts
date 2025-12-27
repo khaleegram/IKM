@@ -6,12 +6,19 @@ import type { ShippingZone } from './shipping-actions';
 /**
  * Calculate final shipping price with free threshold check (client-side helper)
  * This is a pure calculation function that runs on the client
+ * Now also respects deliveryFeePaidBy - if seller pays, shipping is always 0
  */
 export function calculateFinalShippingPrice(
   selectedOption: ShippingOption | null,
   orderSubtotal: number,
-  zones: ShippingZone[]
+  zones: ShippingZone[],
+  deliveryFeePaidBy?: 'seller' | 'buyer'
 ): number {
+  // If seller pays, shipping is always 0
+  if (deliveryFeePaidBy === 'seller') {
+    return 0;
+  }
+
   // If no option selected, pickup selected, or contact selected, shipping is always 0
   if (!selectedOption || selectedOption.type === 'pickup' || selectedOption.type === 'contact') {
     return 0;

@@ -146,7 +146,7 @@ export function ProductComparison({ productIds, onRemove, onClear }: ProductComp
                       <td key={product.id} className="p-2 text-center">
                         {attr === 'Price' && (
                           <span className="font-bold text-primary">
-                            ₦{(product.price || product.initialPrice || 0).toLocaleString()}
+                            ₦{(product.price || 0).toLocaleString()}
                           </span>
                         )}
                         {attr === 'Category' && (

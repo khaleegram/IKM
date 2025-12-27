@@ -37,26 +37,108 @@ export interface ProductVariant {
   }[];
 }
 
+export interface ProductDeliveryMethods {
+  localDispatch?: {
+    enabled: boolean;
+    method?: "keke" | "bike" | "personal";
+    price?: number;
+    negotiable?: boolean;
+  };
+  waybill?: {
+    enabled: boolean;
+    parks?: string[]; // Park IDs like ["naibawa", "mando", "jabi"]
+    feePaidBy?: "seller" | "buyer";
+  };
+  pickup?: {
+    enabled: boolean;
+    location?: string; // "my-shop" or landmark text
+    landmark?: string;
+  };
+}
+
 export interface Product extends DocumentData {
+  // Core (Always Required)
   id?: string;
   name: string;
-  description?: string;
   price: number; // Selling price
   compareAtPrice?: number; // Original price (for showing discounts)
-  stock: number;
-  sku?: string; // Stock Keeping Unit
-  imageUrl?: string;
+  category: string; // fragrance, fashion, snacks, materials, skincare, haircare, islamic, electronics
   sellerId: string;
-  category?: string;
-  status?: 'active' | 'draft' | 'inactive'; // Product status
+  stock: number;
+  sku?: string;
+  
+  // Media (Priority)
+  imageUrl?: string;
+  imageUrls?: string[]; // Multiple images
+  videoUrl?: string; // 15-second video (priority)
+  audioDescription?: string; // Audio file URL (basic recording)
+  
+  // Description
+  description?: string;
+  
+  // Category-Specific Fields (Conditional)
+  
+  // FRAGRANCE fields
+  volume?: string; // "3ml", "6ml", "12ml", "30ml", "50ml", "100ml", "other"
+  fragranceType?: string; // "oil-based", "spray", "incense"
+  container?: string; // "pocket-size", "standard-bottle", "refill-unboxed"
+  
+  // FASHION fields
+  sizeType?: string; // "free-size", "abaya-length", "standard"
+  abayaLength?: string; // "52", "54", "56", "58", "60"
+  standardSize?: string; // "S", "M", "L", "XL", "XXL"
+  setIncludes?: string; // "dress-only", "with-veil", "3-piece-set"
+  material?: string; // "soft-silk", "stiff-cotton", "heavy-premium"
+  
+  // SNACKS fields
+  packaging?: string; // "single-piece", "pack-sachet", "plastic-jar", "bucket"
+  quantity?: number; // 1, 6, 12, 24, or custom
+  taste?: string; // "sweet", "spicy", "crunchy", "soft"
+  
+  // MATERIALS fields
+  fabricLength?: string; // "4-yards", "5-yards", "10-yards"
+  quality?: string; // "super-vip", "standard", "starched"
+  
+  // SKINCARE fields
+  skincareBrand?: string;
+  skincareType?: string; // "face-cream", "soap", "toner", "serum", etc.
+  skincareSize?: string; // "small", "medium", "large", or specific ml/g
+  
+  // HAIRCARE fields
+  haircareType?: string; // "hair-oil", "treatment", "shampoo", "conditioner", etc.
+  haircareBrand?: string;
+  haircareSize?: string; // "small", "medium", "large", or specific ml/g
+  
+  // ISLAMIC fields
+  islamicType?: string; // "prayer-mat", "tasbih", "book", "misbaha", etc.
+  islamicSize?: string; // "small", "medium", "large", "standard"
+  islamicMaterial?: string; // "wool", "cotton", "plastic", "wood", etc.
+  
+  // ELECTRONICS fields
+  brand?: string;
+  model?: string;
+  
+  // Delivery Settings
+  deliveryFeePaidBy?: 'seller' | 'buyer';
+  deliveryMethods?: ProductDeliveryMethods;
+  
+  // Status
+  status?: 'active' | 'draft' | 'inactive';
   isFeatured?: boolean;
-  allowShipping?: boolean; // Whether this product can be shipped (defaults based on seller's shipping zones)
+  allowShipping?: boolean; // Legacy field for backward compatibility
   variants?: ProductVariant[]; // Product variants (size, color, etc.)
+  
+  // WhatsApp Share
+  shareLink?: string; // Generated product link
+  whatsappPreviewImage?: string; // Generated preview image
+  
   // Analytics
   views?: number;
   salesCount?: number;
   averageRating?: number; // Average rating from reviews (1-5)
   reviewCount?: number; // Total number of reviews
+  
+  // Timestamps
   createdAt?: any;
   updatedAt?: any;
 }
@@ -245,12 +327,12 @@ export const usePaginatedProducts = (pageSize: number = 20) => {
           createdAt = { toMillis: () => createdAt.getTime() };
         }
         
-        return { 
-          id: doc.id, 
-          price: data.initialPrice || data.price || 0, 
-          ...data,
-          createdAt 
-        } as Product;
+          return { 
+            id: doc.id, 
+            price: data.price || 0, 
+            ...data,
+            createdAt 
+          } as Product;
       });
 
       if (newProducts.length > 0) {

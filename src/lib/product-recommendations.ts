@@ -24,7 +24,7 @@ export async function getProductRecommendations(
 
   const productData = productDoc.data();
   const productCategory = category || productData?.category;
-  const productPrice = price || productData?.price || productData?.initialPrice || 0;
+  const productPrice = price || productData?.price || 0;
   const priceRange = productPrice * 0.5; // ±50% price range
 
   let query = firestore.collection('products')
@@ -53,7 +53,7 @@ export async function getProductRecommendations(
       }
       
       // Price similarity (closer price = higher score)
-      const priceDiff = Math.abs((p.price || p.initialPrice || 0) - productPrice);
+      const priceDiff = Math.abs((p.price || 0) - productPrice);
       if (priceDiff <= priceRange) {
         score += 10 - (priceDiff / priceRange) * 5;
       }

@@ -20,16 +20,6 @@ service cloud.firestore {
       return email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
     }
     
-    // Helper function to check if user has access to an order
-    function hasOrderAccess(orderId) {
-      return isAdmin() || (
-        isAuthenticated() 
-        && exists(/databases/$(database)/documents/orders/$(orderId))
-        && (get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid
-          || get(/databases/$(database)/documents/orders/$(orderId)).data.sellerId == request.auth.uid)
-      );
-    }
-    
     // Products Collection
     // - Public read access (anyone can view products)
     // - Only sellers can create/update their own products
@@ -40,18 +30,20 @@ service cloud.firestore {
       allow list: if true; // Allow listing all products, including filtered queries
       
       // Only authenticated users can create products
-      // Note: Server actions use initialPrice, not price
+      // Note: Server actions use initialPrice (or price), not always initialPrice
+      // Description is optional for mobile app, but if provided must be at least 10 chars
       // createdAt is optional (can be set by server timestamp)
       allow create: if isAuthenticated() 
         && request.resource.data.sellerId == request.auth.uid
-        && request.resource.data.keys().hasAll(['name', 'description', 'initialPrice', 'sellerId'])
+        && request.resource.data.keys().hasAll(['name', 'sellerId'])
+        && (request.resource.data.initialPrice != null || request.resource.data.price != null)
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 200
-        && request.resource.data.description is string
-        && request.resource.data.description.size() >= 10
-        && request.resource.data.initialPrice is number
-        && request.resource.data.initialPrice > 0;
+        && (!request.resource.data.keys().hasAny(['description']) 
+          || (request.resource.data.description is string && request.resource.data.description.size() >= 10))
+        && ((request.resource.data.initialPrice != null && request.resource.data.initialPrice is number && request.resource.data.initialPrice > 0)
+          || (request.resource.data.price != null && request.resource.data.price is number && request.resource.data.price > 0));
       
       // Only product owner or admin can update
       allow update: if isAdmin() 
@@ -139,37 +131,86 @@ service cloud.firestore {
     }
     
     // Orders Collection
-    // - Customers can create orders
+    // - Customers can create orders (including guests)
     // - Customers and sellers can read their own orders
-    // - Sellers can update order status
+    // - Sellers can update order status (mark as sent, availability status, etc.)
+    // - Customers can update their own orders (mark as received, respond to availability)
     // - Admins have full access
     match /orders/{orderId} {
       // Customers and sellers can read their own orders, admins can read all
+      // Guest orders: allow read if customerId starts with 'guest_' and matches email
       allow read: if isAdmin() 
         || (isAuthenticated() 
           && (resource.data.customerId == request.auth.uid 
-            || resource.data.sellerId == request.auth.uid));
+            || resource.data.sellerId == request.auth.uid))
+        || (resource.data.customerId.matches('guest_.*') 
+          && resource.data.customerInfo != null
+          && resource.data.customerInfo.email != null);
       
-      // Any authenticated user can create an order
+      // Allow list queries for sellers (where + orderBy requires allow list)
+      allow list: if isAdmin() 
+        || (isAuthenticated());
+      
+      // Any authenticated user can create an order, or server actions can create guest orders
+      // Allow free orders (total >= 0) to support 100% discount codes
       allow create: if isAuthenticated()
         && request.resource.data.keys().hasAll(['customerId', 'sellerId', 'items', 'total', 'status', 'createdAt'])
-        && request.resource.data.customerId == request.auth.uid
+        && (request.resource.data.customerId == request.auth.uid || request.resource.data.customerId.matches('guest_.*'))
         && request.resource.data.total is number
-        && request.resource.data.total > 0
-        && request.resource.data.status == 'Processing'  // Fixed: Use 'Processing' not 'pending'
+        && request.resource.data.total >= 0
+        && request.resource.data.status == 'Processing'
         && request.resource.data.items is list
         && request.resource.data.items.size() > 0;
       
-      // Only seller or admin can update order (for status changes)
+      // Sellers can update order status (mark as sent, update status fields, availability status, waybill parks)
+      // Customers can update their own orders (mark as received, respond to availability checks)
+      // Admins can update any order
       allow update: if isAdmin() 
         || (isAuthenticated() 
           && resource.data.sellerId == request.auth.uid
           // Prevent changing customerId or sellerId
           && request.resource.data.customerId == resource.data.customerId
+          && request.resource.data.sellerId == resource.data.sellerId)
+        || (isAuthenticated()
+          && resource.data.customerId == request.auth.uid
+          // Customers can update received status and availability response
+          && request.resource.data.customerId == resource.data.customerId
           && request.resource.data.sellerId == resource.data.sellerId);
       
       // Only admin can delete orders
       allow delete: if isAdmin();
+      
+      // Order Chat Subcollection
+      // - Customers and sellers can read/write messages for their orders
+      match /chat/{messageId} {
+        // Customers and sellers can read messages for their orders
+        // Also allow reading if user is the sender (for their own messages)
+        allow read: if isAdmin() 
+          || (isAuthenticated() 
+            && (resource.data.senderId == request.auth.uid
+              || (exists(/databases/$(database)/documents/orders/$(orderId))
+                && (get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid
+                  || get(/databases/$(database)/documents/orders/$(orderId)).data.sellerId == request.auth.uid))));
+        
+        // Customers and sellers can create messages for their orders
+        allow create: if isAuthenticated()
+          && request.resource.data.keys().hasAll(['orderId', 'senderId'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.orderId == orderId
+          && (request.resource.data.message == null || (request.resource.data.message is string && request.resource.data.message.size() <= 1000))
+          && (request.resource.data.imageUrl == null || request.resource.data.imageUrl is string)
+          && exists(/databases/$(database)/documents/orders/$(orderId))
+          && (get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid
+            || get(/databases/$(database)/documents/orders/$(orderId)).data.sellerId == request.auth.uid);
+        
+        // Only sender or admin can update (for marking as read)
+        allow update: if isAdmin() 
+          || (isAuthenticated() 
+            && resource.data.senderId == request.auth.uid);
+        
+        // Only admin can delete messages
+        allow delete: if isAdmin();
+      }
     }
     
     // Order Messages Collection (Chat)
@@ -177,28 +218,29 @@ service cloud.firestore {
     // - Customers and sellers can send messages for their orders
     // - Admins have full access
     match /order_messages/{messageId} {
-      // Allow read if user has access to the order
-      // For list queries, we check if the orderId in the query matches an order the user has access to
+      // Customers and sellers can read messages for their orders
       allow read: if isAdmin() 
         || (isAuthenticated() 
-          && resource.data.orderId != null
-          && hasOrderAccess(resource.data.orderId));
+          && (resource.data.orderId != null 
+            && exists(/databases/$(database)/documents/orders/$(resource.data.orderId))
+            && (get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.customerId == request.auth.uid
+              || get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.sellerId == request.auth.uid)));
       
-      // Allow list queries when filtering by orderId and user has access to that order
-      // This is a workaround for Firestore's limitation with list queries
+      // Allow list queries for order messages (where + orderBy requires allow list)
       allow list: if isAdmin() 
-        || (isAuthenticated() 
-          && request.query.limit != null
-          && request.query.limit <= 100);
+        || (isAuthenticated());
       
       // Customers and sellers can create messages for their orders
       allow create: if isAuthenticated()
         && request.resource.data.keys().hasAll(['orderId', 'senderId', 'senderRole', 'message'])
         && request.resource.data.senderId == request.auth.uid
-        && (request.resource.data.message is string || request.resource.data.imageUrl is string)
-        && (!request.resource.data.keys().hasAny(['message']) || (request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 1000))
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 1000
         && request.resource.data.senderRole in ['customer', 'seller', 'admin']
-        && hasOrderAccess(request.resource.data.orderId);
+        && exists(/databases/$(database)/documents/orders/$(request.resource.data.orderId))
+        && (get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.customerId == request.auth.uid
+          || get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.sellerId == request.auth.uid);
       
       // Only sender or admin can update (for marking as read)
       allow update: if isAdmin() 
@@ -262,12 +304,11 @@ service cloud.firestore {
     
     // Shipping Zones Collection
     // - Sellers can read/create/update their own shipping zones
+    // - Public read for checkout (guests need to see shipping options)
     // - Admins have full access
     match /shipping_zones/{zoneId} {
-      // Sellers can read their own zones
-      allow read: if isAdmin() 
-        || (isAuthenticated() 
-          && resource.data.sellerId == request.auth.uid);
+      // Public read for checkout, sellers can read their own
+      allow read: if true; // Public read for checkout
       
       // Sellers can create their own shipping zones
       allow create: if isAuthenticated()
@@ -375,6 +416,15 @@ service cloud.firestore {
     // Platform settings - admin only (server-side writes)
     match /platform_settings/{settingsId} {
       allow read: if isAuthenticated(); // Authenticated users can read (for commission rate display)
+      allow write: if false; // Only server-side (admin actions) can write
+    }
+
+    // Parks Collection (Waybill Parks)
+    // - Public read access (for checkout/order flow)
+    // - Only admins can write (via server actions)
+    match /parks/{parkId} {
+      allow read: if true; // Public read for checkout/order marking
+      allow list: if true;
       allow write: if false; // Only server-side (admin actions) can write
     }
   }

@@ -13,6 +13,8 @@ const AUTO_RELEASE_DAYS = 7; // 7 days after "Sent" if no dispute
 const markAsSentSchema = z.object({
   orderId: z.string(),
   photoUrl: z.union([z.string().url(), z.literal(''), z.undefined()]).optional(),
+  waybillParkId: z.string().optional(),
+  waybillParkName: z.string().optional(), // "none" or custom text
 });
 
 /**
@@ -28,7 +30,7 @@ export async function markOrderAsSent(data: unknown) {
     throw new Error('Invalid data');
   }
 
-  const { orderId, photoUrl } = validation.data;
+  const { orderId, photoUrl, waybillParkId, waybillParkName } = validation.data;
   const auth = await requireAuth();
   const firestore = getAdminFirestore();
   
@@ -60,13 +62,23 @@ export async function markOrderAsSent(data: unknown) {
   autoReleaseDate.setDate(autoReleaseDate.getDate() + AUTO_RELEASE_DAYS);
 
   // Update order
-  await orderRef.update({
+  const updateData: any = {
     status: 'Sent',
     sentAt: FieldValue.serverTimestamp(),
     sentPhotoUrl: photoUrl || null,
     escrowStatus: 'held',
     autoReleaseDate: FieldValue.serverTimestamp(), // Will be calculated on read
-  });
+  };
+
+  // Add waybill park info if provided
+  if (waybillParkId) {
+    updateData.waybillParkId = waybillParkId;
+  }
+  if (waybillParkName) {
+    updateData.waybillParkName = waybillParkName;
+  }
+
+  await orderRef.update(updateData);
 
   // Create system message in chat
   const chatMessage = photoUrl

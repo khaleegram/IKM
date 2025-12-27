@@ -199,7 +199,7 @@ function DashboardStats() {
                                         <span className="font-medium">{product.name}</span>
                                     </div>
                                 </TableCell>
-                                <TableCell>₦{product.initialPrice?.toLocaleString()}</TableCell>
+                                <TableCell>₦{product.price?.toLocaleString()}</TableCell>
                                 <TableCell>
                                     <Badge variant={product.stock > 0 ? "support" : "destructive"}>
                                         {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}

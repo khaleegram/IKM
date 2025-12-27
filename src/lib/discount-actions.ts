@@ -150,6 +150,9 @@ export async function applyDiscountCode(data: unknown) {
     discountAmount = Math.min(discount.value, orderTotal); // Can't discount more than order total
   }
 
+  // Allow 100% discounts - free orders (₦0) will skip payment processing
+  // No need to cap discounts anymore
+
   return {
     success: true,
     discountAmount,
@@ -175,10 +178,44 @@ export async function getDiscountCodes(sellerId: string) {
     .orderBy('createdAt', 'desc')
     .get();
 
-  return discountQuery.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  return discountQuery.docs.map(doc => {
+    const data = doc.data();
+    // Serialize Firestore Timestamps to plain objects
+    const result: any = {
+      id: doc.id,
+      ...data,
+    };
+    
+    if (data.createdAt && typeof data.createdAt.toDate === 'function') {
+      result.createdAt = {
+        _seconds: data.createdAt._seconds,
+        _nanoseconds: data.createdAt._nanoseconds,
+      };
+    }
+    
+    if (data.updatedAt && typeof data.updatedAt.toDate === 'function') {
+      result.updatedAt = {
+        _seconds: data.updatedAt._seconds,
+        _nanoseconds: data.updatedAt._nanoseconds,
+      };
+    }
+    
+    if (data.validFrom && typeof data.validFrom.toDate === 'function') {
+      result.validFrom = {
+        _seconds: data.validFrom._seconds,
+        _nanoseconds: data.validFrom._nanoseconds,
+      };
+    }
+    
+    if (data.validUntil && typeof data.validUntil.toDate === 'function') {
+      result.validUntil = {
+        _seconds: data.validUntil._seconds,
+        _nanoseconds: data.validUntil._nanoseconds,
+      };
+    }
+    
+    return result;
+  });
 }
 
 /**

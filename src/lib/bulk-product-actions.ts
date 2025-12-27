@@ -49,7 +49,6 @@ export async function bulkUpdateProducts(formData: FormData) {
 
   switch (updateType) {
     case 'price':
-      updateData.initialPrice = Number(value);
       updateData.price = Number(value);
       break;
     case 'stock':

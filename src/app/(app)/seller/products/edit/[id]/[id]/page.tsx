@@ -105,6 +105,17 @@ export default function EditProductPage() {
   // Load product data
   useEffect(() => {
     if (product) {
+      // Verify it's a Northern category product
+      if (product.category && !NORTHERN_CATEGORIES.includes(product.category)) {
+        toast({
+          variant: 'destructive',
+          title: 'Invalid Product Type',
+          description: 'This product is not a Northern category product. Please use the standard edit page.',
+        });
+        router.push(`/seller/products/edit/${productId}`);
+        return;
+      }
+
       setName(product.name || '');
       setDescription(product.description || '');
       setPrice(product.price?.toString() || '');
@@ -184,7 +195,7 @@ export default function EditProductPage() {
         setDeliveryMethods(product.deliveryMethods);
       }
     }
-  }, [product, productId]);
+  }, [product, productId, router, toast]);
 
   // Check if seller has shipping zones
   useEffect(() => {
@@ -625,3 +636,4 @@ export default function EditProductPage() {
     </div>
   );
 }
+

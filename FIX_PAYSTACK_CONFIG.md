@@ -11,7 +11,7 @@ Added a hardcoded fallback key in `functions/src/utils.ts` to get things working
 ### Step 1: Set the Secret
 ```bash
 firebase functions:secrets:set PAYSTACK_SECRET_KEY
-# When prompted, paste: sk_live_a5692b9836dc8cce64e756611711d666e11c7a91
+# When prompted, paste: sk_live
 ```
 
 ### Step 2: Update Function Definition

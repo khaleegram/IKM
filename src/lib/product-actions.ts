@@ -135,7 +135,16 @@ export async function addProduct(userId: string, data: FormData) {
     // 1. Input Validation
     const rawData: Record<string, any> = {};
     data.forEach((value, key) => {
-        rawData[key] = value;
+        // Parse JSON strings (like deliveryMethods)
+        if (key === 'deliveryMethods' && typeof value === 'string') {
+            try {
+                rawData[key] = JSON.parse(value);
+            } catch {
+                rawData[key] = value;
+            }
+        } else {
+            rawData[key] = value;
+        }
     });
 
     const validation = productSchema.safeParse(rawData);
@@ -179,6 +188,14 @@ export async function addProduct(userId: string, data: FormData) {
         createdAt: new Date(),
         updatedAt: new Date(),
     };
+
+    // Add delivery settings if provided
+    if (rawData.deliveryFeePaidBy) {
+        dataToSave.deliveryFeePaidBy = rawData.deliveryFeePaidBy;
+    }
+    if (rawData.deliveryMethods) {
+        dataToSave.deliveryMethods = rawData.deliveryMethods;
+    }
     
     // Process variants - add IDs to each variant and option
     if (productData.variants && Array.isArray(productData.variants)) {

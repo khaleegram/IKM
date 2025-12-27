@@ -19,16 +19,18 @@ export interface ShippingCalculation {
   message?: string;
   sellerPhone?: string;
   sellerPickupAddress?: string;
+  deliveryFeePaidBy?: 'seller' | 'buyer';
 }
 
 /**
  * Calculate shipping options for a customer based on their state and seller's shipping zones
  * Also checks if products in the cart allow shipping
+ * Now also checks product deliveryMethods for new delivery system
  */
 export async function calculateShippingOptions(
   sellerId: string,
   customerState: string,
-  productIds?: string[] // Optional: product IDs to check allowShipping
+  productIds?: string[] // Optional: product IDs to check allowShipping and deliveryMethods
 ): Promise<ShippingCalculation> {
   const firestore = getAdminFirestore();
   
@@ -38,16 +40,30 @@ export async function calculateShippingOptions(
   // Get seller's shipping zones (public - no auth required for checkout)
   const zones = await getPublicShippingZones(sellerId);
 
-  // Check if any products don't allow shipping
+  // Fetch product data to check deliveryMethods and allowShipping
   let allProductsAllowShipping = true;
+  let productDeliveryMethods: any = null;
+  let deliveryFeePaidBy: 'seller' | 'buyer' = 'buyer';
+  
   if (productIds && productIds.length > 0) {
     const productDocs = await Promise.all(
       productIds.map(id => firestore.collection('products').doc(id).get())
     );
+    
+    // Check allowShipping (legacy)
     allProductsAllowShipping = productDocs.every(doc => {
       const data = doc.data();
       return data?.allowShipping !== false; // Default to true if not set
     });
+    
+    // Check for new deliveryMethods (use first product's settings - all products should have same seller)
+    const firstProduct = productDocs[0]?.data();
+    if (firstProduct?.deliveryMethods) {
+      productDeliveryMethods = firstProduct.deliveryMethods;
+    }
+    if (firstProduct?.deliveryFeePaidBy) {
+      deliveryFeePaidBy = firstProduct.deliveryFeePaidBy;
+    }
   }
 
   // Get seller's store info for pickup address and phone
@@ -103,43 +119,102 @@ export async function calculateShippingOptions(
 
   const options: ShippingOption[] = [];
 
-  // Always offer pickup option if seller has pickup address (shown first, before state selection)
-  if (sellerPickupAddress) {
-    options.push({
-      type: 'pickup',
-      price: 0,
-      name: 'Pickup from Store',
-      description: `Pick up your order from our store location`,
-      pickupAddress: sellerPickupAddress,
-      available: true,
-    });
-  }
-
-  // Only show delivery/contact options if customer has selected a state
-  if (hasState) {
-    // Offer delivery if products allow shipping and there's a matching zone
-    if (allProductsAllowShipping && matchingZone) {
-      // Seller ships to this state - offer delivery
-      // Note: Free shipping will be calculated on checkout based on order total
+  // NEW SYSTEM: Check product deliveryMethods first
+  if (productDeliveryMethods) {
+    // Within City (Local Dispatch)
+    if (productDeliveryMethods.localDispatch?.enabled) {
+      const price = deliveryFeePaidBy === 'seller' ? 0 : 0; // Always 0 for local (seller handles)
       options.push({
         type: 'delivery',
-        price: matchingZone.rate,
-        name: `Delivery to ${customerState}`,
-        description: matchingZone.freeThreshold 
-          ? `Standard delivery. Free shipping for orders over ₦${matchingZone.freeThreshold.toLocaleString()}`
-          : `Standard delivery to ${customerState}`,
-        estimatedDays: 3,
+        price: price,
+        name: 'Within City Delivery',
+        description: deliveryFeePaidBy === 'seller' 
+          ? 'Seller handles delivery. No additional fees.'
+          : 'Local delivery. Seller will contact you for details.',
         available: true,
       });
-    } else if (!matchingZone || !allProductsAllowShipping) {
-      // Delivery not available to this state - offer "Contact Seller" option
+    }
+
+    // Waybill (Inter-state) - uses shipping zones
+    if (productDeliveryMethods.waybill?.enabled && hasState) {
+      if (matchingZone) {
+        const price = deliveryFeePaidBy === 'seller' ? 0 : matchingZone.rate;
+        options.push({
+          type: 'delivery',
+          price: price,
+          name: `Waybill to ${customerState}`,
+          description: matchingZone.freeThreshold && deliveryFeePaidBy === 'buyer'
+            ? `Waybill delivery. Free shipping for orders over ₦${matchingZone.freeThreshold.toLocaleString()}`
+            : deliveryFeePaidBy === 'seller'
+            ? 'Waybill delivery. Seller pays shipping fees.'
+            : `Waybill delivery to ${customerState}`,
+          estimatedDays: 5,
+          available: true,
+        });
+      } else {
+        // No matching zone - show contact option
+        options.push({
+          type: 'contact',
+          price: 0,
+          name: 'Contact Seller for Waybill',
+          description: `Waybill available but no shipping zone set for ${customerState}. Contact seller to arrange.`,
+          available: true,
+        });
+      }
+    }
+
+    // Customer Pickup
+    if (productDeliveryMethods.pickup?.enabled) {
+      const pickupLocation = productDeliveryMethods.pickup.landmark || sellerPickupAddress || 'Store location';
       options.push({
-        type: 'contact',
+        type: 'pickup',
         price: 0,
-        name: 'Contact Seller to Arrange',
-        description: `Chat with the seller to arrange delivery or pickup. You'll be able to discuss details after placing your order.`,
+        name: 'Customer Pickup',
+        description: `Pick up from: ${pickupLocation}`,
+        pickupAddress: pickupLocation,
         available: true,
       });
+    }
+  } else {
+    // LEGACY SYSTEM: Use shipping zones and allowShipping
+    // Always offer pickup option if seller has pickup address (shown first, before state selection)
+    if (sellerPickupAddress) {
+      options.push({
+        type: 'pickup',
+        price: 0,
+        name: 'Pickup from Store',
+        description: `Pick up your order from our store location`,
+        pickupAddress: sellerPickupAddress,
+        available: true,
+      });
+    }
+
+    // Only show delivery/contact options if customer has selected a state
+    if (hasState) {
+      // Offer delivery if products allow shipping and there's a matching zone
+      if (allProductsAllowShipping && matchingZone) {
+        // Seller ships to this state - offer delivery
+        // Note: Free shipping will be calculated on checkout based on order total
+        options.push({
+          type: 'delivery',
+          price: matchingZone.rate,
+          name: `Delivery to ${customerState}`,
+          description: matchingZone.freeThreshold 
+            ? `Standard delivery. Free shipping for orders over ₦${matchingZone.freeThreshold.toLocaleString()}`
+            : `Standard delivery to ${customerState}`,
+          estimatedDays: 3,
+          available: true,
+        });
+      } else if (!matchingZone || !allProductsAllowShipping) {
+        // Delivery not available to this state - offer "Contact Seller" option
+        options.push({
+          type: 'contact',
+          price: 0,
+          name: 'Contact Seller to Arrange',
+          description: `Chat with the seller to arrange delivery or pickup. You'll be able to discuss details after placing your order.`,
+          available: true,
+        });
+      }
     }
   }
 
@@ -159,6 +234,7 @@ export async function calculateShippingOptions(
     message,
     sellerPhone,
     sellerPickupAddress,
+    deliveryFeePaidBy,
   };
 }
 

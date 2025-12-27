@@ -18,6 +18,9 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import {
   Table,
@@ -31,15 +34,18 @@ import { useToast } from "@/hooks/use-toast";
 import { Order, useOrder } from "@/lib/firebase/firestore/orders";
 import { updateOrderStatus } from "@/lib/order-actions";
 import { markOrderAsSent } from "@/lib/order-delivery-actions";
+import { markOrderAsNotAvailable } from "@/lib/order-availability-actions";
+import { getParksByState } from "@/lib/parks-actions";
 import { format } from 'date-fns';
-import { ArrowLeft, Loader2, MoreHorizontal, Send, Truck, Upload, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Loader2, MoreHorizontal, Send, Truck, Upload, X } from "lucide-react";
 import Image from "next/image";
 import { notFound, useParams, useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 const getStatusVariant = (status: Order['status']) => {
     switch (status) {
         case 'Processing': return 'secondary';
+        case 'AvailabilityCheck': return 'destructive';
         case 'Sent': return 'accent';
         case 'Received': return 'support';
         case 'Completed': return 'support';
@@ -56,9 +62,52 @@ export default function OrderDetailPage() {
   const { data: order, isLoading, error } = useOrder(orderId);
   const { toast } = useToast();
   const [showMarkSentDialog, setShowMarkSentDialog] = useState(false);
+  const [showNotAvailableDialog, setShowNotAvailableDialog] = useState(false);
   const [sentPhotoUrl, setSentPhotoUrl] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [selectedParkId, setSelectedParkId] = useState<string>('');
+  const [parks, setParks] = useState<Array<{ id: string; name: string; city: string }>>([]);
+  const [isLoadingParks, setIsLoadingParks] = useState(false);
+  const [buyerState, setBuyerState] = useState<string>('');
+  const [notAvailableReason, setNotAvailableReason] = useState('');
+  const [waitTimeDays, setWaitTimeDays] = useState<number | undefined>(undefined);
 
+  // Extract buyer state from delivery address when dialog opens
+  useEffect(() => {
+    if (showMarkSentDialog && order) {
+      // Check if order is waybill
+      const isWaybill = order.shippingType === 'delivery' && 
+                       order.deliveryAddress && 
+                       !order.deliveryAddress.startsWith('PICKUP:') &&
+                       !order.deliveryAddress.startsWith('CONTACT_SELLER:');
+      
+      if (isWaybill) {
+        // Extract state from delivery address or customer info
+        const state = order.customerInfo?.state || 
+                     (order.deliveryAddress.match(/,\s*([^,]+)\s*State/i)?.[1]) ||
+                     (order.deliveryAddress.match(/(?:State|State:)\s*([^,\n]+)/i)?.[1]);
+        
+        if (state) {
+          setBuyerState(state.trim());
+          // Fetch parks for this state
+          setIsLoadingParks(true);
+          getParksByState(state.trim())
+            .then((parksData) => {
+              setParks(parksData as Array<{ id: string; name: string; city: string }>);
+              setIsLoadingParks(false);
+            })
+            .catch(() => {
+              setIsLoadingParks(false);
+            });
+        }
+      } else {
+        setBuyerState('');
+        setParks([]);
+      }
+    }
+  }, [showMarkSentDialog, order]);
+
+  // Early returns must come AFTER all hooks
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-full">
@@ -87,12 +136,76 @@ export default function OrderDetailPage() {
     }
   }
 
-  const handleMarkAsSent = () => {
+  const handleMarkAsNotAvailable = () => {
+    if (!notAvailableReason.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Reason Required',
+        description: 'Please provide a reason why the item is not available.',
+      });
+      return;
+    }
+
     startTransition(async () => {
       try {
+        await markOrderAsNotAvailable({
+          orderId,
+          reason: notAvailableReason,
+          waitTimeDays: waitTimeDays,
+        });
+        toast({
+          title: 'Order Marked as Not Available',
+          description: waitTimeDays 
+            ? `Buyer has been notified. They can accept to wait ${waitTimeDays} days or cancel for a refund.`
+            : 'Buyer has been notified and can cancel for a refund.',
+        });
+        setShowNotAvailableDialog(false);
+        setNotAvailableReason('');
+        setWaitTimeDays(undefined);
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Failed',
+          description: (error as Error).message,
+        });
+      }
+    });
+  };
+
+  const handleMarkAsSent = () => {
+    // Validate park selection for waybill orders
+    const isWaybill = order?.shippingType === 'delivery' && 
+                     order?.deliveryAddress && 
+                     !order.deliveryAddress.startsWith('PICKUP:') &&
+                     !order.deliveryAddress.startsWith('CONTACT_SELLER:');
+    
+    if (isWaybill && parks.length > 0 && !selectedParkId && !selectedParkId.includes('none')) {
+      toast({
+        variant: "destructive",
+        title: "Park Selection Required",
+        description: "Please select which park you sent the item to, or select 'None' if handled on road.",
+      });
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const parkData: { waybillParkId?: string; waybillParkName?: string } = {};
+        
+        if (isWaybill && parks.length > 0) {
+          if (selectedParkId === 'none') {
+            parkData.waybillParkName = 'none';
+          } else if (selectedParkId) {
+            const selectedPark = parks.find(p => p.id === selectedParkId);
+            parkData.waybillParkId = selectedParkId;
+            parkData.waybillParkName = selectedPark?.name || '';
+          }
+        }
+
         await markOrderAsSent({
           orderId,
           photoUrl: sentPhotoUrl || undefined,
+          ...parkData,
         });
         toast({
           title: "Order Marked as Sent",
@@ -100,6 +213,9 @@ export default function OrderDetailPage() {
         });
         setShowMarkSentDialog(false);
         setSentPhotoUrl(null);
+        setSelectedParkId('');
+        setParks([]);
+        setBuyerState('');
       } catch (error) {
         toast({
           variant: "destructive",
@@ -160,14 +276,25 @@ export default function OrderDetailPage() {
                 </div>
                  <div className="flex items-center gap-2 flex-wrap">
                     {order.status === 'Processing' && (
-                      <Button 
-                        onClick={() => setShowMarkSentDialog(true)}
-                        size="sm"
-                        className="flex-1 sm:flex-initial"
-                      >
-                        <Send className="mr-2 h-4 w-4" />
-                        Mark as Sent
-                      </Button>
+                      <>
+                        <Button 
+                          onClick={() => setShowMarkSentDialog(true)}
+                          size="sm"
+                          className="flex-1 sm:flex-initial"
+                        >
+                          <Send className="mr-2 h-4 w-4" />
+                          Mark as Sent
+                        </Button>
+                        <Button 
+                          onClick={() => setShowNotAvailableDialog(true)}
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 sm:flex-initial"
+                        >
+                          <AlertCircle className="mr-2 h-4 w-4" />
+                          Not Available
+                        </Button>
+                      </>
                     )}
                     <Button variant="outline" size="sm" className="flex-1 sm:flex-initial">
                         Print Invoice
@@ -381,6 +508,40 @@ export default function OrderDetailPage() {
                   {sentPhotoUrl ? 'Change Photo' : 'Upload Photo (Optional)'}
                 </Button>
               </div>
+
+              {/* Park Selection for Waybill Orders */}
+              {order?.shippingType === 'delivery' && 
+               order?.deliveryAddress && 
+               !order.deliveryAddress.startsWith('PICKUP:') &&
+               !order.deliveryAddress.startsWith('CONTACT_SELLER:') && (
+                <div className="space-y-2">
+                  <Label>Waybill Park Selection</Label>
+                  {isLoadingParks ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading parks for {buyerState}...
+                    </div>
+                  ) : parks.length > 0 ? (
+                    <Select value={selectedParkId} onValueChange={setSelectedParkId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select which park you sent to" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {parks.map((park) => (
+                          <SelectItem key={park.id} value={park.id}>
+                            {park.name} - {park.city}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="none">None (Handled on road / Park not listed)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : buyerState ? (
+                    <p className="text-sm text-muted-foreground">
+                      No parks found for {buyerState}. You can select "None" if handled on road.
+                    </p>
+                  ) : null}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowMarkSentDialog(false)}>
@@ -396,6 +557,85 @@ export default function OrderDetailPage() {
                   <>
                     <Send className="mr-2 h-4 w-4" />
                     Mark as Sent
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Mark as Not Available Dialog */}
+        <Dialog open={showNotAvailableDialog} onOpenChange={setShowNotAvailableDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Mark Order as Not Available</DialogTitle>
+              <DialogDescription>
+                Let the buyer know the item is not currently available. You can offer a wait time, or they can cancel for a refund.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="reason">Reason *</Label>
+                <Textarea
+                  id="reason"
+                  placeholder="e.g., Item sold out locally, will restock in 3 days"
+                  value={notAvailableReason}
+                  onChange={(e) => setNotAvailableReason(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="waitTime">Offer Wait Time (Optional)</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  If you can restock, offer how many days the buyer should wait
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    id="waitTime"
+                    placeholder="Days (1-30)"
+                    min="1"
+                    max="30"
+                    value={waitTimeDays || ''}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setWaitTimeDays(isNaN(val) ? undefined : val);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setWaitTimeDays(undefined)}
+                  >
+                    Clear
+                  </Button>
+                </div>
+                {waitTimeDays && (
+                  <p className="text-sm text-muted-foreground">
+                    Buyer can accept to wait {waitTimeDays} day{waitTimeDays > 1 ? 's' : ''} or cancel for refund
+                  </p>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setShowNotAvailableDialog(false);
+                setNotAvailableReason('');
+                setWaitTimeDays(undefined);
+              }}>
+                Cancel
+              </Button>
+              <Button onClick={handleMarkAsNotAvailable} disabled={isPending}>
+                {isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="mr-2 h-4 w-4" />
+                    Mark as Not Available
                   </>
                 )}
               </Button>

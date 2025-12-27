@@ -28,6 +28,7 @@ import { useUser } from "@/lib/firebase/auth/use-user";
 import { Order, useOrdersByCustomer } from "@/lib/firebase/firestore/orders";
 import { updateOrderStatus } from "@/lib/order-actions";
 import { markOrderAsReceived } from "@/lib/order-delivery-actions";
+import { respondToAvailabilityCheck } from "@/lib/order-availability-actions";
 import { format } from 'date-fns';
 import { AlertTriangle, CheckCircle, Eye, FileWarning, Loader2, Package, Search, Upload, X } from "lucide-react";
 import Image from "next/image";
@@ -37,6 +38,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 const getStatusVariant = (status: Order['status']) => {
     switch (status) {
         case 'Processing': return 'secondary';
+        case 'AvailabilityCheck': return 'destructive';
         case 'Sent': return 'accent';
         case 'Received': return 'support';
         case 'Completed': return 'support';
@@ -73,6 +75,7 @@ export default function ProfilePage() {
   }, [user?.uid, toast]);
   const [isCancelling, startCancelTransition] = useTransition();
   const [isMarkingReceived, startMarkReceivedTransition] = useTransition();
+  const [isRespondingToAvailability, startRespondingTransition] = useTransition();
   const [showMarkReceivedDialog, setShowMarkReceivedDialog] = useState(false);
   const [receivedPhotoUrl, setReceivedPhotoUrl] = useState<string | null>(null);
   const [orderToMarkReceived, setOrderToMarkReceived] = useState<Order | null>(null);
@@ -395,6 +398,18 @@ export default function ProfilePage() {
                                 <X className="h-3 w-3" />
                               </Button>
                             )}
+                            {order.status === 'AvailabilityCheck' && !order.buyerWaitResponse && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRespondToAvailability(order, 'cancelled')}
+                                disabled={isRespondingToAvailability}
+                                className="h-6 px-2 text-destructive hover:text-destructive"
+                                title="Cancel & Refund"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                         <p className="text-xs text-muted-foreground">{format(order.createdAt.toDate(), 'MMM dd, yyyy')}</p>
@@ -477,6 +492,44 @@ export default function ProfilePage() {
                                   <X className="h-4 w-4 mr-1" />
                                   Cancel
                                 </Button>
+                              )}
+                              {order.status === 'AvailabilityCheck' && !order.buyerWaitResponse && (
+                                <>
+                                  {order.waitTimeDays ? (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleRespondToAvailability(order, 'accepted')}
+                                        disabled={isRespondingToAvailability}
+                                      >
+                                        <CheckCircle className="mr-2 h-4 w-4" />
+                                        Accept Wait
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleRespondToAvailability(order, 'cancelled')}
+                                        disabled={isRespondingToAvailability}
+                                        className="text-destructive hover:text-destructive"
+                                      >
+                                        <X className="mr-2 h-4 w-4" />
+                                        Cancel
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleRespondToAvailability(order, 'cancelled')}
+                                      disabled={isRespondingToAvailability}
+                                      className="text-destructive hover:text-destructive"
+                                    >
+                                      <X className="mr-2 h-4 w-4" />
+                                      Cancel & Refund
+                                    </Button>
+                                  )}
+                                </>
                               )}
                               <Link href={`/profile/orders/${order.id}`}>
                                 <Button variant="ghost" size="sm">Details</Button>

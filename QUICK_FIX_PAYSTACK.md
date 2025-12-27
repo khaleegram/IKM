@@ -4,7 +4,7 @@
 
 ```bash
 # 1. Set the Paystack key
-firebase functions:config:set paystack.secret_key="sk_live_a5692b9836dc8cce64e756611711d666e11c7a91"
+firebase functions:config:set paystack.secret_key=""
 
 # 2. Verify it's set
 firebase functions:config:get

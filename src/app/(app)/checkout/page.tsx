@@ -509,8 +509,10 @@ export default function CheckoutPage() {
     // Calculate shipping price (check free shipping threshold)
     // If no option selected, pickup selected, or contact selected, shipping is 0
     // Calculate shipping price - only for delivery, not pickup or contact
+    // Respect deliveryFeePaidBy - if seller pays, shipping is 0
+    const deliveryFeePaidBy = shippingCalculation?.deliveryFeePaidBy || 'buyer';
     const shippingPrice = selectedShippingOption && selectedShippingOption.type === 'delivery'
-        ? calculateFinalShippingPrice(selectedShippingOption, totalPrice, zones)
+        ? calculateFinalShippingPrice(selectedShippingOption, totalPrice, zones, deliveryFeePaidBy)
         : 0;
 
     const subtotal = totalPrice;
@@ -593,6 +595,7 @@ export default function CheckoutPage() {
                                 discountCode: appliedDiscount?.code,
                                 shippingType: selectedShippingOption?.type,
                                 shippingPrice: shippingPrice,
+                                deliveryFeePaidBy: deliveryFeePaidBy,
                             });
                             
                             if (result.success) {
@@ -859,6 +862,7 @@ export default function CheckoutPage() {
                                 discountCode: appliedDiscount?.code,
                                 shippingType: selectedShippingOption?.type,
                                 shippingPrice: shippingPrice,
+                                deliveryFeePaidBy: deliveryFeePaidBy,
                             });
                             
                             if (result.success) {
@@ -987,7 +991,7 @@ export default function CheckoutPage() {
     // Always call the hook (React rules) - config should NOT have callbacks
     const initializePayment = usePaystackPayment(paystackConfig);
 
-    const handlePlaceOrder = (e: React.FormEvent) => {
+    const handlePlaceOrder = async (e: React.FormEvent) => {
         e.preventDefault();
         
         // CRITICAL: Prevent duplicate submissions
@@ -1046,16 +1050,6 @@ export default function CheckoutPage() {
             return;
         }
         
-        // CRITICAL: Validate total amount
-        if (total <= 0 || total < 1) {
-            toast({ 
-                variant: 'destructive', 
-                title: 'Invalid Amount', 
-                description: 'Order total must be at least ₦1.' 
-            });
-            return;
-        }
-
         // Guest checkout is allowed - no auth check needed
         if (cartItems.length === 0) {
             toast({ variant: 'destructive', title: 'Empty Cart', description: 'Your cart is empty.' });
@@ -1085,9 +1079,13 @@ export default function CheckoutPage() {
             return;
         }
 
-        // CRITICAL: Validate total amount (minimum 100 kobo = ₦1)
-        if (total <= 0 || total < 1) {
-            toast({ variant: 'destructive', title: 'Invalid Amount', description: 'Order total must be at least ₦1.' });
+        // CRITICAL: Validate total amount - allow ₦0 for free orders (they'll skip payment)
+        if (total < 0) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'Invalid Amount', 
+                description: 'Order total cannot be negative.' 
+            });
             return;
         }
         
@@ -1119,6 +1117,61 @@ export default function CheckoutPage() {
             });
         }
 
+        // If order is free (₦0 total), skip payment and create order directly
+        if (total <= 0) {
+            orderCreationLockRef.current = { isProcessing: true };
+            setIsProcessingOrder(true);
+            
+            try {
+                const freeOrderIdempotencyKey = `free_${Date.now()}_${Math.random()}`;
+                const result = await cloudFunctions.verifyPaymentAndCreateOrder({
+                    reference: `FREE_${Date.now()}`,
+                    idempotencyKey: freeOrderIdempotencyKey,
+                    cartItems,
+                    total: 0,
+                    deliveryAddress: selectedShippingOption?.type === 'pickup' 
+                        ? `PICKUP: ${selectedShippingOption.pickupAddress || shippingCalculation?.sellerPickupAddress || 'Store location'}`
+                        : selectedShippingOption?.type === 'contact'
+                        ? `CONTACT_SELLER: Buyer will arrange delivery/pickup via chat`
+                        : formState.address,
+                    customerInfo: {
+                        name: `${formState.firstName} ${formState.lastName}`,
+                        email: formState.email,
+                        phone: formState.phone,
+                        state: formState.state,
+                        firstName: formState.firstName,
+                        lastName: formState.lastName,
+                    },
+                    discountCode: appliedDiscount?.code,
+                    shippingType: selectedShippingOption?.type,
+                    shippingPrice: shippingPrice,
+                    deliveryFeePaidBy: shippingCalculation?.deliveryFeePaidBy,
+                });
+                
+                toast({
+                    title: 'Order Placed!',
+                    description: "Thank you for your purchase. Redirecting...",
+                });
+                clearCart();
+                clearPaymentState();
+                if (!user) clearGuestDeliveryInfo();
+                
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                router.push(user ? '/profile' : '/?orderSuccess=true');
+            } catch (error) {
+                console.error('Error creating free order:', error);
+                toast({
+                    variant: 'destructive',
+                    title: 'Error',
+                    description: error instanceof Error ? error.message : 'Failed to create order. Please try again.',
+                });
+            } finally {
+                setIsProcessingOrder(false);
+                orderCreationLockRef.current = { isProcessing: false };
+            }
+            return; // Exit early, don't proceed to payment flow
+        }
+
         if (typeof initializePayment !== 'function') {
             toast({ 
                 variant: 'destructive', 
@@ -1128,7 +1181,7 @@ export default function CheckoutPage() {
             return;
         }
 
-        // Create payment attempt BEFORE opening modal
+        // Create payment attempt BEFORE opening modal (only for paid orders)
         const paymentRef = currentPayment?.reference || generateReference();
         if (!currentPayment) {
             createPaymentAttempt(
@@ -1210,6 +1263,7 @@ export default function CheckoutPage() {
                             discountCode: appliedDiscount?.code,
                             shippingType: selectedShippingOption?.type,
                             shippingPrice: shippingPrice,
+                            deliveryFeePaidBy: shippingCalculation?.deliveryFeePaidBy,
                         });
                         
                         if (result.success) {
