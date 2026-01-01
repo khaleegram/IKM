@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useState, useTransition } from 'react';
+import { Suspense, useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signInWithEmailAndPassword, User } from 'firebase/auth';
@@ -14,7 +14,7 @@ import { useFirebase } from '@/firebase/provider';
 import { DynamicLogo } from '@/components/DynamicLogo';
 import { Home, ArrowLeft } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginContent() {
   const { auth } = useFirebase();
   const { toast } = useToast();
   const router = useRouter();
@@ -146,5 +146,17 @@ export default function LoginPage() {
         </Card>
       </main>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

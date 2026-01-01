@@ -19,12 +19,12 @@ import type { Product } from '@/lib/firebase/firestore/products';
 import { usePaginatedProducts } from '@/lib/firebase/firestore/products';
 import { Grid3x3, List, Loader2, Search, SlidersHorizontal, Star, Tag, TrendingUp, X, Zap } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type SortOption = 'newest' | 'oldest' | 'price-low' | 'price-high' | 'rating' | 'name' | 'popular';
 type ViewMode = 'grid' | 'list';
 
-export default function AllProductsPage() {
+function AllProductsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: products, isLoading: isLoadingProducts, isLoadingMore, loadMore, hasMore } = usePaginatedProducts(20);
@@ -535,5 +535,13 @@ export default function AllProductsPage() {
           )}
         </div>
       </section>
+  );
+}
+
+export default function AllProductsPage() {
+  return (
+    <Suspense fallback={<ProductGridSkeleton count={12} />}>
+      <AllProductsContent />
+    </Suspense>
   );
 }

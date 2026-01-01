@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import Image from 'next/image';
 import Link from 'next/link';
 import { useCart } from '@/lib/cart-context';
-import { useProduct } from '@/lib/firebase/firestore/products';
+import { useProduct, useAllProducts } from '@/lib/firebase/firestore/products';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Product } from '@/lib/firebase/firestore/products';
 

@@ -12,9 +12,9 @@ import { User, signInWithEmailAndPassword } from 'firebase/auth';
 import { ArrowLeft, Home, ShoppingBag } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { Suspense, useState, useTransition } from 'react';
 
-export default function BuyerLoginPage() {
+function BuyerLoginContent() {
   const { auth } = useFirebase();
   const { toast } = useToast();
   const router = useRouter();
@@ -181,6 +181,18 @@ export default function BuyerLoginPage() {
         </Card>
       </main>
     </div>
+  );
+}
+
+export default function BuyerLoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    }>
+      <BuyerLoginContent />
+    </Suspense>
   );
 }
 
