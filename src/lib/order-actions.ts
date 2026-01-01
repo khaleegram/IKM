@@ -1,9 +1,9 @@
 'use server';
 
+import { requireAuth } from '@/lib/auth-utils';
 import { getAdminFirestore } from '@/lib/firebase/admin';
-import { revalidatePath } from 'next/cache';
-import { requireOwnerOrAdmin, requireAuth } from '@/lib/auth-utils';
 import type { Order } from '@/lib/firebase/firestore/orders';
+import { revalidatePath } from 'next/cache';
 
 /**
  * Order Status State Machine
@@ -13,6 +13,7 @@ type OrderStatus = Order['status'];
 
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   'Processing': ['Sent', 'Cancelled'],
+  'AvailabilityCheck': ['Sent', 'Cancelled'],
   'Sent': ['Received', 'Cancelled', 'Disputed'],
   'Received': ['Completed'], // Customer confirms receipt
   'Completed': [], // Final state
@@ -28,7 +29,11 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
  * 3. Domain Logic (State Machine)
  * 4. Firestore Write
  */
-export async function updateOrderStatus(orderId: string, newStatus: OrderStatus) {
+export async function updateOrderStatus(
+  orderId: string, 
+  newStatus: OrderStatus,
+  parkInfo?: { waybillParkId?: string; waybillParkName?: string }
+) {
   // 1. Input Validation
   if (!orderId || !newStatus) {
     throw new Error('Order ID and status are required');
@@ -85,10 +90,22 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus)
   }
 
   // 4. Firestore Write
-  await orderRef.update({
+  const updateData: any = {
     status: newStatus,
     updatedAt: new Date(),
-  });
+  };
+
+  // Include park fields if provided and status is 'Sent'
+  if (newStatus === 'Sent' && parkInfo) {
+    if (parkInfo.waybillParkId !== undefined) {
+      updateData.waybillParkId = parkInfo.waybillParkId || null;
+    }
+    if (parkInfo.waybillParkName !== undefined) {
+      updateData.waybillParkName = parkInfo.waybillParkName || null;
+    }
+  }
+
+  await orderRef.update(updateData);
 
   // 5. Update earnings if order is completed (earnings are now handled in markOrderAsReceived)
   // This is kept for backward compatibility but new flow uses markOrderAsReceived

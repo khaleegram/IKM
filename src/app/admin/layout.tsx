@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Users, LogOut, BarChart2, Loader2, ShieldCheck, Palette, DollarSign, AlertTriangle, Settings, MapPin } from "lucide-react";
+import { LayoutDashboard, Package, Users, LogOut, BarChart2, Loader2, ShieldCheck, Palette, DollarSign, AlertTriangle, Settings, MapPin, Lock } from "lucide-react";
 import { SidebarProvider, Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset } from "@/components/ui/sidebar";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useUser } from "@/lib/firebase/auth/use-user";
@@ -73,11 +73,14 @@ export default function AdminLayout({
   const navItems = [
     { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/users", label: "Users", icon: Users },
+    { href: "/admin/products", label: "Products", icon: Package },
     { href: "/admin/orders", label: "Orders", icon: BarChart2 },
+    { href: "/admin/reports", label: "Reports", icon: BarChart2 },
     { href: "/admin/disputes", label: "Disputes", icon: AlertTriangle },
     { href: "/admin/payouts", label: "Payouts", icon: DollarSign },
     { href: "/admin/parks", label: "Parks", icon: MapPin },
     { href: "/admin/branding", label: "Branding", icon: Palette },
+    { href: "/admin/security", label: "Security", icon: Lock },
     { href: "/admin/settings", label: "Settings", icon: Settings },
   ];
 

@@ -703,7 +703,7 @@ export const updateOrderStatus = functions.https.onRequest(async (request, respo
       }
 
       const auth = await requireAuth(request.headers.authorization || null);
-      const { orderId, newStatus } = request.body;
+      const { orderId, newStatus, waybillParkId, waybillParkName } = request.body;
 
       if (!orderId || !newStatus) {
         return sendError(response, 'Order ID and status are required');
@@ -753,10 +753,23 @@ export const updateOrderStatus = functions.https.onRequest(async (request, respo
         );
       }
 
-      await orderRef.update({
+      // Build update object - include park fields if provided
+      const updateData: any = {
         status: newStatus,
         updatedAt: FieldValue.serverTimestamp(),
-      });
+      };
+
+      // Only include park fields if status is 'Sent' and fields are provided
+      if (newStatus === 'Sent') {
+        if (waybillParkId !== undefined) {
+          updateData.waybillParkId = waybillParkId || null;
+        }
+        if (waybillParkName !== undefined) {
+          updateData.waybillParkName = waybillParkName || null;
+        }
+      }
+
+      await orderRef.update(updateData);
 
       return sendResponse(response, {
         success: true,
@@ -3895,7 +3908,10 @@ export const respondToAvailabilityCheck = onRequest(
  * Get all parks (public - no auth required)
  */
 export const getAllParks = onRequest(
-  { secrets: [paystackSecret] },
+  { 
+    secrets: [paystackSecret],
+    invoker: 'public'  // Make it publicly accessible
+  },
   async (request, response) => {
   return corsHandler(request, response, async () => {
     try {
@@ -3906,6 +3922,7 @@ export const getAllParks = onRequest(
       const firestore = admin.firestore();
       const parksQuery = await firestore
         .collection('parks')
+        .where('isActive', '==', true)  // Filter to only active parks
         .orderBy('state', 'asc')
         .orderBy('city', 'asc')
         .orderBy('name', 'asc')
@@ -3931,7 +3948,10 @@ export const getAllParks = onRequest(
  * Get parks by state (public)
  */
 export const getParksByState = onRequest(
-  { secrets: [paystackSecret] },
+  { 
+    secrets: [paystackSecret],
+    invoker: 'public'  // Make it publicly accessible
+  },
   async (request, response) => {
   return corsHandler(request, response, async () => {
     try {
@@ -3947,7 +3967,7 @@ export const getParksByState = onRequest(
       const firestore = admin.firestore();
       const parksQuery = await firestore
         .collection('parks')
-        .where('state', '==', state)
+        .where('state', '==', state.trim())  // Trim to handle whitespace
         .where('isActive', '==', true)
         .orderBy('city', 'asc')
         .orderBy('name', 'asc')
@@ -4617,6 +4637,358 @@ export const getAllPayouts = onRequest(
       });
     } catch (error: any) {
       console.error('Error in getAllPayouts:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+// ============================================================================
+// SECURITY & ADMIN FUNCTIONS
+// ============================================================================
+
+/**
+ * Get access logs (admin only)
+ */
+export const getAccessLogs = onRequest(async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const limit = parseInt(request.query.limit as string) || 100;
+      const startAfter = request.query.startAfter as string;
+
+      let query: admin.firestore.Query = firestore.collection('access_logs')
+        .orderBy('timestamp', 'desc')
+        .limit(limit);
+
+      if (startAfter) {
+        const startAfterDoc = await firestore.collection('access_logs').doc(startAfter).get();
+        if (startAfterDoc.exists) {
+          query = query.startAfter(startAfterDoc);
+        }
+      }
+
+      const snapshot = await query.get();
+      const logs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate?.() || doc.data().timestamp,
+      }));
+
+      return sendResponse(response, { success: true, logs });
+    } catch (error: any) {
+      console.error('Error in getAccessLogs:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get failed login attempts (admin only)
+ */
+export const getFailedLogins = onRequest(async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const limit = parseInt(request.query.limit as string) || 50;
+
+      const snapshot = await firestore.collection('access_logs')
+        .where('action', '==', 'failed_login')
+        .orderBy('timestamp', 'desc')
+        .limit(limit)
+        .get();
+
+      const logs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate?.() || doc.data().timestamp,
+      }));
+
+      return sendResponse(response, { success: true, logs });
+    } catch (error: any) {
+      console.error('Error in getFailedLogins:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get API keys (admin only)
+ */
+export const getApiKeys = onRequest(async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const snapshot = await firestore.collection('api_keys')
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      const keys = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,
+        lastUsedAt: doc.data().lastUsedAt?.toDate?.() || doc.data().lastUsedAt,
+        expiresAt: doc.data().expiresAt?.toDate?.() || doc.data().expiresAt,
+      }));
+
+      return sendResponse(response, { success: true, keys });
+    } catch (error: any) {
+      console.error('Error in getApiKeys:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Create API key (admin only)
+ */
+export const createApiKey = onRequest(async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      const auth = await requireAdmin(request.headers.authorization || null);
+      const { name, scopes, rateLimit, expiresInDays } = request.body;
+
+      if (!name || !scopes || !Array.isArray(scopes) || scopes.length === 0) {
+        return sendError(response, 'Name and at least one scope are required', 400);
+      }
+
+      const firestore = admin.firestore();
+      const crypto = require('crypto');
+      
+      // Generate API key
+      const apiKey = `ikm_${crypto.randomBytes(32).toString('hex')}`;
+      const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+
+      const expiresAt = expiresInDays
+        ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
+        : undefined;
+
+      const docRef = firestore.collection('api_keys').doc();
+      await docRef.set({
+        name,
+        keyHash,
+        keyPrefix: apiKey.substring(0, 8),
+        scopes,
+        rateLimit: rateLimit || null,
+        expiresAt,
+        isActive: true,
+        createdBy: auth.uid,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      return sendResponse(response, {
+        success: true,
+        id: docRef.id,
+        apiKey, // Return full key only once
+      });
+    } catch (error: any) {
+      console.error('Error in createApiKey:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Revoke API key (admin only)
+ */
+export const revokeApiKey = onRequest(async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const { apiKeyId } = request.body;
+
+      if (!apiKeyId) {
+        return sendError(response, 'API key ID is required', 400);
+      }
+
+      const firestore = admin.firestore();
+      await firestore.collection('api_keys').doc(apiKeyId).update({
+        isActive: false,
+        revokedAt: FieldValue.serverTimestamp(),
+      });
+
+      return sendResponse(response, { success: true });
+    } catch (error: any) {
+      console.error('Error in revokeApiKey:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get security settings (admin only)
+ */
+export const getSecuritySettings = onRequest(async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const doc = await firestore.collection('security_settings').doc('settings').get();
+
+      if (doc.exists) {
+        return sendResponse(response, { success: true, settings: doc.data() });
+      }
+
+      // Return defaults
+      const defaults = {
+        passwordMinLength: 8,
+        passwordRequireUppercase: true,
+        passwordRequireLowercase: true,
+        passwordRequireNumbers: true,
+        passwordRequireSpecialChars: false,
+        twoFactorEnabled: false,
+        sessionTimeoutMinutes: 60,
+        maxLoginAttempts: 5,
+        lockoutDurationMinutes: 30,
+        ipWhitelist: [],
+        ipBlacklist: [],
+        emailVerificationRequired: false,
+        accountLockoutEnabled: true,
+      };
+
+      return sendResponse(response, { success: true, settings: defaults });
+    } catch (error: any) {
+      console.error('Error in getSecuritySettings:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Update security settings (admin only)
+ */
+export const updateSecuritySettings = onRequest(async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const settings = request.body;
+
+      if (!settings) {
+        return sendError(response, 'Settings are required', 400);
+      }
+
+      const firestore = admin.firestore();
+      await firestore.collection('security_settings').doc('settings').set({
+        ...settings,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      return sendResponse(response, { success: true });
+    } catch (error: any) {
+      console.error('Error in updateSecuritySettings:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get audit trail (admin only)
+ */
+export const getAuditTrail = onRequest(async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+      const firestore = admin.firestore();
+
+      const limit = parseInt(request.query.limit as string) || 100;
+      const startAfter = request.query.startAfter as string;
+      const resourceType = request.query.resourceType as string;
+      const userId = request.query.userId as string;
+
+      let query: admin.firestore.Query = firestore.collection('audit_trail')
+        .orderBy('timestamp', 'desc')
+        .limit(limit);
+
+      if (resourceType && resourceType !== 'all') {
+        query = query.where('resourceType', '==', resourceType) as any;
+      }
+
+      if (userId) {
+        query = query.where('userId', '==', userId) as any;
+      }
+
+      if (startAfter) {
+        const startAfterDoc = await firestore.collection('audit_trail').doc(startAfter).get();
+        if (startAfterDoc.exists) {
+          query = query.startAfter(startAfterDoc);
+        }
+      }
+
+      const snapshot = await query.get();
+      const logs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate?.() || doc.data().timestamp,
+      }));
+
+      return sendResponse(response, { success: true, logs });
+    } catch (error: any) {
+      console.error('Error in getAuditTrail:', error);
+      return sendError(response, error.message || 'Internal server error', 500);
+    }
+  });
+});
+
+/**
+ * Get Firestore rules (admin only)
+ */
+export const getFirestoreRules = onRequest(async (request, response) => {
+  return corsHandler(request, response, async () => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return sendError(response, 'Method not allowed', 405);
+      }
+
+      await requireAdmin(request.headers.authorization || null);
+
+      // Note: In production, use Firebase Management API to fetch actual rules
+      // For now, return a placeholder
+      return sendResponse(response, {
+        success: true,
+        rules: '// Firestore rules would be fetched from Firebase Management API\n// Use Firebase Console or CLI to view/update rules',
+        version: '1',
+        lastDeployed: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error('Error in getFirestoreRules:', error);
       return sendError(response, error.message || 'Internal server error', 500);
     }
   });

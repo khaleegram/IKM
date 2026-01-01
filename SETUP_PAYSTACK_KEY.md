@@ -51,7 +51,7 @@ If you prefer to use the legacy config method:
 2. Remove or set `disallowLegacyRuntimeConfig: false`
 3. Then use:
    ```bash
-   firebase functions:config:set paystack.secret_key=""
+   firebase functions:config:set paystack.secret_key=""v
    ```
 
 ---

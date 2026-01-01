@@ -26,13 +26,26 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
   const settingsDoc = await firestore.collection('platform_settings').doc(SETTINGS_DOC_ID).get();
   
   if (settingsDoc.exists) {
-    return {
+    const data = settingsDoc.data();
+    
+    // Convert Firestore Timestamps to plain objects for serialization
+    const serialized: any = {
       id: settingsDoc.id,
-      ...settingsDoc.data(),
-    } as PlatformSettings;
+      ...data,
+    };
+    
+    // Convert Timestamp objects to Date objects or ISO strings
+    if (data?.updatedAt) {
+      serialized.updatedAt = data.updatedAt.toDate ? data.updatedAt.toDate() : data.updatedAt;
+    }
+    if (data?.createdAt) {
+      serialized.createdAt = data.createdAt.toDate ? data.createdAt.toDate() : data.createdAt;
+    }
+    
+    return serialized as PlatformSettings;
   }
   
-  // Return default settings
+  // Return default settings (without FieldValue which can't be serialized)
   return {
     id: SETTINGS_DOC_ID,
     platformCommissionRate: 0.05, // 5%
@@ -42,9 +55,9 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
     platformFee: 0,
     currency: 'NGN',
     payoutProcessingDays: 3, // Default: 3 business days
-    updatedAt: FieldValue.serverTimestamp(),
+    updatedAt: new Date(),
     updatedBy: 'system',
-    createdAt: FieldValue.serverTimestamp(),
+    createdAt: new Date(),
   };
 }
 

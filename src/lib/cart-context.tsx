@@ -93,7 +93,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
 
-    // Check stock availability
+    // Check stock availability BEFORE updating state
     const currentStock = product.stock || 0;
     setCartItems(prevItems => {
       const existingItem = prevItems.find(item => item.id === product.id);
@@ -101,38 +101,57 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       const newQuantity = currentQuantity + quantity;
 
       if (newQuantity > currentStock) {
-        toast({
-          variant: "destructive",
-          title: "Insufficient Stock",
-          description: `Only ${currentStock} item(s) available in stock.`,
-        });
         setAddingToCart(false);
+        // Defer toast call to avoid updating during render
+        setTimeout(() => {
+          toast({
+            variant: "destructive",
+            title: "Insufficient Stock",
+            description: `Only ${currentStock} item(s) available in stock.`,
+          });
+        }, 0);
         return prevItems;
       }
 
       if (existingItem) {
         // Update quantity of existing item
-        return prevItems.map(item =>
+        const updatedItems = prevItems.map(item =>
           item.id === product.id ? { ...item, quantity: newQuantity } : item
         );
+        // Defer toast call to avoid updating during render
+        setTimeout(() => {
+          toast({
+            title: "Added to cart",
+            description: `${product.name} has been added to your cart.`,
+          });
+        }, 0);
+        setAddingToCart(false);
+        return updatedItems;
       } else {
         // Add new item to cart
-        return [...prevItems, { ...product, quantity }];
+        const updatedItems = [...prevItems, { ...product, quantity }];
+        // Defer toast call to avoid updating during render
+        setTimeout(() => {
+          toast({
+            title: "Added to cart",
+            description: `${product.name} has been added to your cart.`,
+          });
+        }, 0);
+        setAddingToCart(false);
+        return updatedItems;
       }
     });
-    toast({
-        title: "Added to cart",
-        description: `${product.name} has been added to your cart.`,
-    });
-    setAddingToCart(false);
   };
 
   const removeFromCart = (productId: string) => {
     setCartItems(prevItems => prevItems.filter(item => item.id !== productId));
-     toast({
+    // Defer toast call to avoid updating during render
+    setTimeout(() => {
+      toast({
         title: "Removed from cart",
         description: `The item has been removed from your cart.`,
-    });
+      });
+    }, 0);
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
@@ -142,11 +161,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       setCartItems(prevItems => {
         const item = prevItems.find(i => i.id === productId);
         if (item && item.stock && quantity > item.stock) {
-          toast({
-            variant: "destructive",
-            title: "Insufficient Stock",
-            description: `Only ${item.stock} item(s) available in stock.`,
-          });
+          // Defer toast call to avoid updating during render
+          setTimeout(() => {
+            toast({
+              variant: "destructive",
+              title: "Insufficient Stock",
+              description: `Only ${item.stock} item(s) available in stock.`,
+            });
+          }, 0);
           return prevItems;
         }
         return prevItems.map(item =>
