@@ -3,7 +3,6 @@
 import { EmptyState } from '@/components/empty-state';
 import { ProductGridSkeleton } from '@/components/loading-skeleton';
 import { ProductCard } from '@/components/product-card';
-import { StoreShareButton } from '@/components/stores/StoreShareButton';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -102,19 +101,10 @@ export function SellerStoreContent({ sellerId }: { sellerId: string }) {
               {store.storeName}
             </h1>
             {store.storeDescription && (
-              <p className="text-white/90 text-sm sm:text-base max-w-2xl drop-shadow mb-4">
+              <p className="text-white/90 text-sm sm:text-base max-w-2xl drop-shadow">
                 {store.storeDescription}
               </p>
             )}
-            <div className="mt-4 flex justify-center">
-              <div className="bg-white/95 backdrop-blur-sm rounded-md px-4 py-2">
-                <StoreShareButton
-                  sellerId={sellerId}
-                  storeName={store.storeName}
-                  storeDescription={store.storeDescription}
-                />
-              </div>
-            </div>
           </div>
         </div>
       )}

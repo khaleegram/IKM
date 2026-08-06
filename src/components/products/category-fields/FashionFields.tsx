@@ -1,8 +1,10 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
 interface FashionFieldsProps {
@@ -11,11 +13,13 @@ interface FashionFieldsProps {
   standardSize?: string;
   setIncludes?: string;
   material?: string;
+  tailoringNotes?: string;
   onSizeTypeChange: (sizeType: string) => void;
   onAbayaLengthChange: (length: string) => void;
   onStandardSizeChange: (size: string) => void;
   onSetIncludesChange: (set: string) => void;
   onMaterialChange: (material: string) => void;
+  onTailoringNotesChange?: (notes: string) => void;
 }
 
 const ABAYA_LENGTHS = ['52', '54', '56', '58', '60'];
@@ -39,11 +43,13 @@ export function FashionFields({
   standardSize,
   setIncludes,
   material,
+  tailoringNotes,
   onSizeTypeChange,
   onAbayaLengthChange,
   onStandardSizeChange,
   onSetIncludesChange,
   onMaterialChange,
+  onTailoringNotesChange,
 }: FashionFieldsProps) {
   return (
     <div className="space-y-4">
@@ -161,6 +167,20 @@ export function FashionFields({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Tailoring Notes */}
+      <div className="space-y-2">
+        <Label>Tailoring Notes/Instructions</Label>
+        <p className="text-xs text-muted-foreground mb-2">
+          Add any custom tailoring instructions, measurement notes, or special requirements for this abaya
+        </p>
+        <Textarea
+          placeholder="e.g., Custom length 58cm, add extra fabric for sleeves, specific hem style..."
+          value={tailoringNotes || ''}
+          onChange={(e) => onTailoringNotesChange?.(e.target.value)}
+          rows={4}
+        />
       </div>
     </div>
   );

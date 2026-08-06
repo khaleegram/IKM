@@ -69,7 +69,7 @@ export interface Order extends DocumentData {
   sellerId: string;
   items: CartItem[];
   total: number;
-  status: 'Processing' | 'AvailabilityCheck' | 'Sent' | 'Received' | 'Completed' | 'Cancelled' | 'Disputed';
+  status: 'Processing' | 'PendingConfirmation' | 'AvailabilityCheck' | 'Sent' | 'Received' | 'Completed' | 'Cancelled' | 'Disputed';
   deliveryAddress: string;
   customerInfo: {
     name: string;

@@ -12,7 +12,8 @@ import { revalidatePath } from 'next/cache';
 type OrderStatus = Order['status'];
 
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  'Processing': ['Sent', 'Cancelled'],
+  'Processing': ['PendingConfirmation', 'Sent', 'Cancelled'],
+  'PendingConfirmation': ['Sent', 'Cancelled'], // Seller confirms order
   'AvailabilityCheck': ['Sent', 'Cancelled'],
   'Sent': ['Received', 'Cancelled', 'Disputed'],
   'Received': ['Completed'], // Customer confirms receipt
@@ -39,7 +40,7 @@ export async function updateOrderStatus(
     throw new Error('Order ID and status are required');
   }
 
-  const validStatuses: OrderStatus[] = ['Processing', 'Sent', 'Received', 'Completed', 'Cancelled', 'Disputed'];
+  const validStatuses: OrderStatus[] = ['Processing', 'PendingConfirmation', 'AvailabilityCheck', 'Sent', 'Received', 'Completed', 'Cancelled', 'Disputed'];
   if (!validStatuses.includes(newStatus)) {
     throw new Error(`Invalid status: ${newStatus}`);
   }

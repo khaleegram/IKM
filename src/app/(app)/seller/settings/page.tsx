@@ -8,13 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Share2, Trash2 } from "lucide-react";
 // Removed useFirebase - all writes now go through server actions
 import { BUSINESS_CATEGORIES, getCategoryById } from "@/lib/data/business-categories";
 import { NIGERIAN_STATES, getLGAsForState } from "@/lib/data/nigerian-locations";
 import { useUser } from "@/lib/firebase/auth/use-user";
 import { useStoreByUserId } from "@/lib/firebase/firestore/stores";
 import { useUserProfile } from "@/lib/firebase/firestore/users";
+import { formatStoreShareMessage, generateWhatsAppShareUrl, getAbsoluteUrl } from '@/lib/share-actions';
 import { updateStoreSettings } from "@/lib/store-actions";
 import { addDeliveryLocationAction, deleteDeliveryLocationAction, updateUserProfileAction } from "@/lib/user-actions";
 import Image from "next/image";
@@ -48,6 +49,10 @@ export default function SellerSettingsPage() {
 
     // Business type
     const [businessType, setBusinessType] = useState('');
+    
+    // Store type
+    const [storeType, setStoreType] = useState<'retail' | 'artisan'>('retail');
+    const [canChangeStoreType, setCanChangeStoreType] = useState(true);
 
     // Policies
     const [shippingPolicy, setShippingPolicy] = useState('');
@@ -122,6 +127,13 @@ export default function SellerSettingsPage() {
             
             // Business type
             setBusinessType(store.businessType || '');
+            
+            // Store type
+            const currentStoreType = store.storeType || 'retail';
+            setStoreType(currentStoreType);
+            
+            // Check if store type can be changed (will be checked on submit)
+            setCanChangeStoreType(true);
             
             // Policies
             if (store.storePolicies) {
@@ -235,6 +247,14 @@ export default function SellerSettingsPage() {
                     storeName,
                     storeDescription
                 });
+                
+                // Update store type separately via updateStoreSettings
+                if (store && storeType !== (store.storeType || 'retail')) {
+                    const formData = new FormData();
+                    formData.append('storeType', storeType);
+                    await updateStoreSettings(authUser.uid, formData);
+                }
+                
                 toast({
                     title: "Settings Saved!",
                     description: `Your Store Profile settings have been updated.`,
@@ -539,9 +559,30 @@ export default function SellerSettingsPage() {
     return (
     <div className="flex flex-col h-full">
       <header className="p-4 sm:p-6 bg-background border-b">
-        <div>
-          <h1 className="text-2xl font-bold font-headline">Store Settings</h1>
-          <p className="text-muted-foreground">Manage your store's profile, integrations, and delivery options.</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold font-headline">Store Settings</h1>
+            <p className="text-muted-foreground">Manage your store's profile, integrations, and delivery options.</p>
+          </div>
+          {store && authUser?.uid && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const storeLink = getAbsoluteUrl(`/store/${authUser.uid}`);
+                const shareText = formatStoreShareMessage(store.storeName, store.storeDescription);
+                const whatsappUrl = generateWhatsAppShareUrl(shareText, storeLink);
+                window.open(whatsappUrl, '_blank');
+                toast({
+                  title: 'Opening WhatsApp',
+                  description: 'Share your store with thumbnail preview',
+                });
+              }}
+              className="w-full sm:w-auto"
+            >
+              <Share2 className="mr-2 h-4 w-4" />
+              Share Store to WhatsApp
+            </Button>
+          )}
         </div>
       </header>
       <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
@@ -593,6 +634,55 @@ export default function SellerSettingsPage() {
                     <div>
                         <Label htmlFor="storeDescription">Store Description</Label>
                         <Textarea id="storeDescription" value={storeDescription} onChange={(e) => setStoreDescription(e.target.value)} rows={3} />
+                    </div>
+                    <div>
+                        <Label>Store Type</Label>
+                        <div className="mt-2 space-y-3">
+                            <div className="flex items-center space-x-2">
+                                <input
+                                    type="radio"
+                                    id="retail-settings"
+                                    name="storeType"
+                                    value="retail"
+                                    checked={storeType === 'retail'}
+                                    onChange={(e) => setStoreType(e.target.value as 'retail' | 'artisan')}
+                                    disabled={!canChangeStoreType}
+                                    className="h-4 w-4"
+                                />
+                                <label htmlFor="retail-settings" className="text-sm font-medium leading-none cursor-pointer">
+                                    Retail Store
+                                </label>
+                            </div>
+                            <p className="text-xs text-muted-foreground ml-6">
+                                For shops selling multiple products with inventory management
+                            </p>
+                            <div className="flex items-center space-x-2">
+                                <input
+                                    type="radio"
+                                    id="artisan-settings"
+                                    name="storeType"
+                                    value="artisan"
+                                    checked={storeType === 'artisan'}
+                                    onChange={(e) => setStoreType(e.target.value as 'retail' | 'artisan')}
+                                    disabled={!canChangeStoreType}
+                                    className="h-4 w-4"
+                                />
+                                <label htmlFor="artisan-settings" className="text-sm font-medium leading-none cursor-pointer">
+                                    Artisan/Creator Store
+                                </label>
+                            </div>
+                            <p className="text-xs text-muted-foreground ml-6">
+                                For creators selling handmade items or custom packages
+                            </p>
+                        </div>
+                        {!canChangeStoreType && (
+                            <p className="text-xs text-muted-foreground mt-2 text-amber-600">
+                                Cannot change store type. Contact support to change.
+                            </p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-2">
+                            Changing store type may affect your existing inventory. Please ensure your store is empty before switching.
+                        </p>
                     </div>
                 </CardContent>
                 <CardFooter className="flex justify-end">

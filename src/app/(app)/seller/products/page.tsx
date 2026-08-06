@@ -1,28 +1,6 @@
 
 'use client';
 
-import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Plus, MoreHorizontal, FileWarning, Package, Loader2, Trash2, Edit, Search, Filter, X, CheckSquare, Square, Copy } from "lucide-react";
-import Image from 'next/image';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,13 +10,35 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { useProductsBySeller, deleteProduct } from '@/lib/firebase/firestore/products';
+} from "@/components/ui/alert-dialog";
+import { Badge } from '@/components/ui/badge';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useFirebase } from '@/firebase/provider';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useMemo, useTransition } from 'react';
 import { PRODUCT_CATEGORIES, getCategoryLabel } from '@/lib/constants/categories';
+import { deleteProduct, useProductsBySeller } from '@/lib/firebase/firestore/products';
 import { duplicateProduct } from '@/lib/product-actions';
+import { formatProductShareMessage, generateWhatsAppShareUrl, getAbsoluteUrl } from '@/lib/share-actions';
+import { CheckSquare, Copy, Edit, FileWarning, Loader2, MoreHorizontal, Package, Plus, Search, Share2, Square, Trash2, X } from "lucide-react";
+import Image from 'next/image';
+import Link from 'next/link';
+import { useMemo, useState, useTransition } from 'react';
 
 
 export default function ProductsPage() {
@@ -202,6 +202,17 @@ export default function ProductsPage() {
       }
     });
   }
+
+  const handleShareToWhatsApp = (product: typeof filteredProducts[0]) => {
+    const productLink = getAbsoluteUrl(`/product/${product.id}`);
+    const shareText = formatProductShareMessage(product.name, product.price || 0);
+    const whatsappUrl = generateWhatsAppShareUrl(shareText, productLink);
+    window.open(whatsappUrl, '_blank');
+    toast({
+      title: 'Opening WhatsApp',
+      description: 'Share this product with thumbnail preview',
+    });
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -427,6 +438,9 @@ export default function ProductsPage() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleDuplicate(product.id!)} disabled={isDuplicating}>
                                   <Copy className="mr-2 h-4 w-4" /> {isDuplicating ? 'Duplicating...' : 'Duplicate'}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleShareToWhatsApp(product)}>
+                                  <Share2 className="mr-2 h-4 w-4" /> Share to WhatsApp
                                 </DropdownMenuItem>
                                 <DropdownMenuItem>View Performance</DropdownMenuItem>
                                 <DropdownMenuSeparator />

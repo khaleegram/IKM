@@ -94,12 +94,17 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
     const sellerId = cartItems[0].sellerId;
     const commissionRate = await getPlatformCommissionRate();
     
+    // Check store type to determine initial order status
+    const storeDoc = await firestore.collection('stores').doc(sellerId).get();
+    const storeType = storeDoc.data()?.storeType || 'retail';
+    const initialStatus = storeType === 'artisan' ? 'PendingConfirmation' : 'Processing';
+    
     const orderData: Omit<Order, 'id' | 'createdAt'> = {
       customerId: finalCustomerId,
       sellerId: sellerId,
       items: cartItems.map(({ id, name, price, quantity }: CartItem) => ({ productId: id, name, price, quantity })),
       total: 0,
-      status: 'Processing',
+      status: initialStatus,
       deliveryAddress: deliveryAddress,
       customerInfo: {
         ...customerInfo,
@@ -282,12 +287,17 @@ export async function verifyPaymentAndCreateOrder(data: unknown) {
   const sellerId = cartItems[0].sellerId;
   const commissionRate = await getPlatformCommissionRate();
   
+  // Check store type to determine initial order status
+  const storeDoc = await firestore.collection('stores').doc(sellerId).get();
+  const storeType = storeDoc.data()?.storeType || 'retail';
+  const initialStatus = storeType === 'artisan' ? 'PendingConfirmation' : 'Processing';
+  
   const orderData: Omit<Order, 'id' | 'createdAt'> = {
     customerId: finalCustomerId,
     sellerId: sellerId,
     items: cartItems.map(({ id, name, price, quantity }: CartItem) => ({ productId: id, name, price, quantity })),
     total: total,
-    status: 'Processing',
+    status: initialStatus,
     deliveryAddress: deliveryAddress,
     customerInfo: {
       ...customerInfo,

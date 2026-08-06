@@ -10,10 +10,16 @@ interface HaircareFieldsProps {
   brand?: string;
   size?: string;
   packageItems?: string[]; // Array of selected items in package
+  expiryDate?: string; // Expiry date (ISO string or formatted date)
+  batchNumber?: string; // Batch/lot number
+  naturalChemicalType?: string; // "natural", "chemical", "mixed"
   onTypeChange: (type: string) => void;
   onBrandChange: (brand: string) => void;
   onSizeChange: (size: string) => void;
   onPackageItemsChange: (items: string[]) => void;
+  onExpiryDateChange?: (date: string) => void;
+  onBatchNumberChange?: (batch: string) => void;
+  onNaturalChemicalTypeChange?: (type: string) => void;
 }
 
 const TYPE_OPTIONS = [
@@ -43,6 +49,12 @@ const PACKAGE_ITEMS = [
   { value: 'cream', label: 'Hair Cream' },
   { value: 'gel', label: 'Hair Gel' },
   { value: 'accessories', label: 'Hair Accessories' },
+];
+
+const NATURAL_CHEMICAL_OPTIONS = [
+  { value: 'natural', label: 'Natural' },
+  { value: 'chemical', label: 'Chemical' },
+  { value: 'mixed', label: 'Mixed (Natural + Chemical)' },
 ];
 
 export function HaircareFields({

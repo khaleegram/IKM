@@ -127,6 +127,7 @@ const storeSetupSchema = z.object({
     city: z.string().min(1, "City is required"),
     address: z.string().optional(),
     businessType: z.string().min(1, "Business type is required"),
+    storeType: z.enum(['retail', 'artisan']).optional().default('retail'),
     shippingPolicy: z.string().optional(),
     returnsPolicy: z.string().optional(),
     refundsPolicy: z.string().optional(),
@@ -184,6 +185,8 @@ const storeUpdateSchema = z.object({
     metaTitle: z.string().optional(),
     metaDescription: z.string().optional(),
     metaKeywords: z.string().optional(),
+    // Store type
+    storeType: z.enum(['retail', 'artisan']).optional(),
 });
 
 /**
@@ -216,6 +219,7 @@ export async function completeStoreSetup(userId: string, data: FormData) {
         city,
         address,
         businessType,
+        storeType,
         shippingPolicy,
         returnsPolicy,
         refundsPolicy,
@@ -277,6 +281,7 @@ export async function completeStoreSetup(userId: string, data: FormData) {
             ...(address && { address }),
         },
         businessType,
+        storeType: storeType || 'retail', // Default to 'retail' for backward compatibility
         onboardingCompleted: hasRequiredFields,
         ...(storeLogoUrl && { storeLogoUrl }),
         ...(storeBannerUrl && { storeBannerUrl }),
@@ -396,6 +401,38 @@ export async function updateStoreSettings(userId: string, data: FormData) {
     
     const storeRef = storesQuery.docs[0].ref;
     const existingData = storesQuery.docs[0].data() || {};
+    const currentStoreType = existingData.storeType || 'retail';
+
+    // Handle store type change with guardrails
+    if (validation.data.storeType !== undefined && validation.data.storeType !== currentStoreType) {
+        const newStoreType = validation.data.storeType;
+        
+        if (currentStoreType === 'retail') {
+            // Check if store has products
+            const productsSnapshot = await firestore.collection('products')
+                .where('sellerId', '==', userId)
+                .limit(1)
+                .get();
+            if (!productsSnapshot.empty) {
+                throw new Error('Cannot switch to artisan store: You have existing products. Please contact support to change your store type.');
+            }
+        } else if (currentStoreType === 'artisan') {
+            // Check if store has items or packages
+            const itemsSnapshot = await firestore.collection('stores').doc(storeRef.id)
+                .collection('items')
+                .limit(1)
+                .get();
+            const packagesSnapshot = await firestore.collection('stores').doc(storeRef.id)
+                .collection('packages')
+                .limit(1)
+                .get();
+            if (!itemsSnapshot.empty || !packagesSnapshot.empty) {
+                throw new Error('Cannot switch to retail store: You have existing items/packages. Please contact support to change your store type.');
+            }
+        }
+        
+        updateData.storeType = newStoreType;
+    }
 
     // Upload images if provided
     let storeLogoUrl: string | undefined = existingData.storeLogoUrl;
@@ -411,6 +448,37 @@ export async function updateStoreSettings(userId: string, data: FormData) {
 
     // Build update data - only update provided fields
     const updateData: any = {};
+
+    // Handle store type change with guardrails (moved before other updates)
+    if (validation.data.storeType !== undefined && validation.data.storeType !== currentStoreType) {
+        const newStoreType = validation.data.storeType;
+        
+        if (currentStoreType === 'retail') {
+            // Check if store has products
+            const productsSnapshot = await firestore.collection('products')
+                .where('sellerId', '==', userId)
+                .limit(1)
+                .get();
+            if (!productsSnapshot.empty) {
+                throw new Error('Cannot switch to artisan store: You have existing products. Please contact support to change your store type.');
+            }
+        } else if (currentStoreType === 'artisan') {
+            // Check if store has items or packages
+            const itemsSnapshot = await firestore.collection('stores').doc(storeRef.id)
+                .collection('items')
+                .limit(1)
+                .get();
+            const packagesSnapshot = await firestore.collection('stores').doc(storeRef.id)
+                .collection('packages')
+                .limit(1)
+                .get();
+            if (!itemsSnapshot.empty || !packagesSnapshot.empty) {
+                throw new Error('Cannot switch to retail store: You have existing items/packages. Please contact support to change your store type.');
+            }
+        }
+        
+        updateData.storeType = newStoreType;
+    }
 
     if (validation.data.storeName !== undefined && validation.data.storeName !== '') {
         updateData.storeName = validation.data.storeName.trim();

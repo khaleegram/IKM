@@ -1,9 +1,9 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Share2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getAbsoluteUrl, generateWhatsAppShareUrl, formatStoreShareMessage } from '@/lib/share-actions';
+import { formatStoreShareMessage, generateWhatsAppShareUrl, getAbsoluteUrl } from '@/lib/share-actions';
+import { Share2 } from 'lucide-react';
 
 interface StoreShareButtonProps {
   sellerId: string;
@@ -24,10 +24,10 @@ export function StoreShareButton({
     // Generate absolute store link
     const storeLink = getAbsoluteUrl(`/store/${sellerId}`);
     
-    // Format share message
-    const shareText = formatStoreShareMessage(storeName, storeDescription, storeLink);
+    // Format share message (without URL - URL is added separately)
+    const shareText = formatStoreShareMessage(storeName, storeDescription);
     
-    // Generate WhatsApp share URL
+    // Generate WhatsApp share URL (this adds the URL to the message)
     const whatsappUrl = generateWhatsAppShareUrl(shareText, storeLink);
     
     // Open WhatsApp with share text

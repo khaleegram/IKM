@@ -24,18 +24,18 @@ export function generateWhatsAppShareUrl(text: string, url: string): string {
 }
 
 /**
- * Format product share message for WhatsApp
+ * Format product share message for WhatsApp (without URL - URL is added separately)
  */
-export function formatProductShareMessage(productName: string, price: number, url: string): string {
-  return `🛍️ ${productName}\n\n💰 ₦${price.toLocaleString()}\n\n${url}`;
+export function formatProductShareMessage(productName: string, price: number): string {
+  return `🛍️ ${productName}\n\n💰 ₦${price.toLocaleString()}`;
 }
 
 /**
- * Format store share message for WhatsApp
+ * Format store share message for WhatsApp (without URL - URL is added separately)
  */
-export function formatStoreShareMessage(storeName: string, description: string | undefined, url: string): string {
+export function formatStoreShareMessage(storeName: string, description: string | undefined): string {
   const desc = description ? `\n${description}` : '';
-  return `🏪 ${storeName}${desc}\n\n${url}`;
+  return `🏪 ${storeName}${desc}`;
 }
 
 /**

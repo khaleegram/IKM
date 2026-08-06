@@ -1,26 +1,22 @@
 'use client';
 
-import { Button } from "@/components/ui/button";
-import { ShoppingCart, Store } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { useProduct } from "@/lib/firebase/firestore/products";
-import React from "react";
-import { useCart } from "@/lib/cart-context";
-import { useUserProfile } from "@/lib/firebase/firestore/users";
-import { ProductReviews } from "@/components/product-reviews";
 import { ProductImageGallery } from "@/components/product-image-gallery";
-import { Star, Heart, Share2 } from "lucide-react";
-import { useIsInWishlist } from "@/lib/firebase/firestore/wishlist";
-import { addToWishlist, removeFromWishlist } from "@/lib/wishlist-actions";
+import { ProductReviews } from "@/components/product-reviews";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useTransition, useEffect } from "react";
+import { useCart } from "@/lib/cart-context";
 import { useUser } from "@/lib/firebase/auth/use-user";
+import { useProduct } from "@/lib/firebase/firestore/products";
+import { useUserProfile } from "@/lib/firebase/firestore/users";
+import { useIsInWishlist } from "@/lib/firebase/firestore/wishlist";
 import { trackProductView } from "@/lib/product-analytics-actions";
 import { shareProduct } from "@/lib/share-actions";
-import { recordRecentlyViewedProduct } from "@/lib/recently-viewed-actions";
-import { WhatsAppShareButton } from "@/components/products/WhatsAppShareButton";
+import { addToWishlist, removeFromWishlist } from "@/lib/wishlist-actions";
+import { Heart, Share2, ShoppingCart, Star, Store } from "lucide-react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { useEffect, useTransition } from "react";
 
 interface ProductDetailContentProps {
   productId: string;
@@ -145,14 +141,6 @@ export function ProductDetailContent({ productId }: ProductDetailContentProps) {
                                     </Button>
                                 </div>
                             </div>
-                            {product && (
-                                <WhatsAppShareButton
-                                    productId={productId}
-                                    productName={product.name}
-                                    productImage={product.imageUrls?.[0] || product.imageUrl}
-                                    productPrice={product.price}
-                                />
-                            )}
                         </div>
                         {sellerProfile && (
                              <Link href={`/store/${product.sellerId}`} className="mt-4">

@@ -1,19 +1,31 @@
 
 'use client';
 
-import { Product } from '@/lib/firebase/firestore/products';
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { Product } from '@/lib/firebase/firestore/products';
+import { ArtisanItem, ArtisanPackage } from '@/lib/firebase/firestore/stores';
+import { ReactNode, createContext, useContext, useEffect, useState } from 'react';
 
-export interface CartItem extends Product {
+/**
+ * Cart Item using snapshot approach
+ * Snapshot price and name at add-to-cart time to protect from mid-checkout edits
+ */
+export interface CartItem {
+  refType: 'product' | 'item' | 'package'; // What type of thing this is
+  refId: string; // ID of the product/item/package
+  storeId: string; // Which store it came from
+  titleSnapshot: string; // Name at time of add-to-cart
+  priceSnapshot: number; // Price at time of add-to-cart
   quantity: number;
+  photo?: string; // Photo for display
+  // For packages, we don't expand to show included items in cart
 }
 
 interface CartContextType {
   cartItems: CartItem[];
-  addToCart: (product: Product, quantity?: number) => void;
-  removeFromCart: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  addToCart: (item: Product | ArtisanItem | ArtisanPackage, storeId: string, quantity?: number) => void;
+  removeFromCart: (refId: string, refType?: 'product' | 'item' | 'package') => void;
+  updateQuantity: (refId: string, quantity: number, refType?: 'product' | 'item' | 'package') => void;
   clearCart: () => void;
   cartCount: number;
   totalPrice: number;
@@ -81,60 +93,143 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     return () => clearTimeout(timeoutId);
   }, [cartItems]);
 
-  const addToCart = (product: Product, quantity = 1) => {
+  const addToCart = (item: Product | ArtisanItem | ArtisanPackage, storeId: string, quantity = 1) => {
     setAddingToCart(true);
-    if (!product.id) {
-        toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Product information is missing.",
-        });
-        setAddingToCart(false);
-        return;
-    }
+    
+    // Determine item type and extract data
+    let refType: 'product' | 'item' | 'package';
+    let refId: string;
+    let title: string;
+    let price: number;
+    let photo: string | undefined;
+    
+    if ('sellerId' in item && 'stock' in item) {
+      // Product
+      refType = 'product';
+      refId = item.id!;
+      title = item.name;
+      price = item.price;
+      photo = item.imageUrl;
+      
+      // Check stock availability for products
+      const currentStock = item.stock || 0;
+      setCartItems(prevItems => {
+        const existingItem = prevItems.find(ci => ci.refId === refId && ci.refType === 'product');
+        const currentQuantity = existingItem ? existingItem.quantity : 0;
+        const newQuantity = currentQuantity + quantity;
 
-    // Check stock availability BEFORE updating state
-    const currentStock = product.stock || 0;
+        if (newQuantity > currentStock) {
+          setAddingToCart(false);
+          setTimeout(() => {
+            toast({
+              variant: "destructive",
+              title: "Insufficient Stock",
+              description: `Only ${currentStock} item(s) available in stock.`,
+            });
+          }, 0);
+          return prevItems;
+        }
+
+        if (existingItem) {
+          const updatedItems = prevItems.map(ci =>
+            ci.refId === refId && ci.refType === 'product' 
+              ? { ...ci, quantity: newQuantity } 
+              : ci
+          );
+          setTimeout(() => {
+            toast({
+              title: "Added to cart",
+              description: `${title} has been added to your cart.`,
+            });
+          }, 0);
+          setAddingToCart(false);
+          return updatedItems;
+        } else {
+          const cartItem: CartItem = {
+            refType: 'product',
+            refId,
+            storeId,
+            titleSnapshot: title,
+            priceSnapshot: price,
+            quantity,
+            photo,
+          };
+          const updatedItems = [...prevItems, cartItem];
+          setTimeout(() => {
+            toast({
+              title: "Added to cart",
+              description: `${title} has been added to your cart.`,
+            });
+          }, 0);
+          setAddingToCart(false);
+          return updatedItems;
+        }
+      });
+      return;
+    } else if ('itemIds' in item) {
+      // ArtisanPackage
+      refType = 'package';
+      refId = item.id!;
+      title = item.name;
+      price = item.price;
+      photo = item.photo;
+    } else {
+      // ArtisanItem
+      refType = 'item';
+      refId = item.id!;
+      title = item.name;
+      price = item.price;
+      photo = item.photo;
+      
+      // Check availability for artisan items
+      if (!item.available) {
+        setAddingToCart(false);
+        setTimeout(() => {
+          toast({
+            variant: "destructive",
+            title: "Item Unavailable",
+            description: `${title} is currently unavailable.`,
+          });
+        }, 0);
+        return;
+      }
+    }
+    
+    // For artisan items and packages
     setCartItems(prevItems => {
-      const existingItem = prevItems.find(item => item.id === product.id);
+      const existingItem = prevItems.find(ci => ci.refId === refId && ci.refType === refType);
       const currentQuantity = existingItem ? existingItem.quantity : 0;
       const newQuantity = currentQuantity + quantity;
 
-      if (newQuantity > currentStock) {
-        setAddingToCart(false);
-        // Defer toast call to avoid updating during render
-        setTimeout(() => {
-          toast({
-            variant: "destructive",
-            title: "Insufficient Stock",
-            description: `Only ${currentStock} item(s) available in stock.`,
-          });
-        }, 0);
-        return prevItems;
-      }
-
       if (existingItem) {
-        // Update quantity of existing item
-        const updatedItems = prevItems.map(item =>
-          item.id === product.id ? { ...item, quantity: newQuantity } : item
+        const updatedItems = prevItems.map(ci =>
+          ci.refId === refId && ci.refType === refType
+            ? { ...ci, quantity: newQuantity }
+            : ci
         );
-        // Defer toast call to avoid updating during render
         setTimeout(() => {
           toast({
             title: "Added to cart",
-            description: `${product.name} has been added to your cart.`,
+            description: `${title} has been added to your cart.`,
           });
         }, 0);
         setAddingToCart(false);
         return updatedItems;
       } else {
-        // Add new item to cart
-        const updatedItems = [...prevItems, { ...product, quantity }];
-        // Defer toast call to avoid updating during render
+        const cartItem: CartItem = {
+          refType,
+          refId,
+          storeId,
+          titleSnapshot: title,
+          priceSnapshot: price,
+          quantity,
+          photo,
+        };
+        const updatedItems = [...prevItems, cartItem];
         setTimeout(() => {
           toast({
             title: "Added to cart",
-            description: `${product.name} has been added to your cart.`,
+            description: `${title} has been added to your cart.`,
           });
         }, 0);
         setAddingToCart(false);
@@ -143,8 +238,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  const removeFromCart = (productId: string) => {
-    setCartItems(prevItems => prevItems.filter(item => item.id !== productId));
+  const removeFromCart = (refId: string, refType?: 'product' | 'item' | 'package') => {
+    setCartItems(prevItems => {
+      if (refType) {
+        return prevItems.filter(item => !(item.refId === refId && item.refType === refType));
+      }
+      return prevItems.filter(item => item.refId !== refId);
+    });
     // Defer toast call to avoid updating during render
     setTimeout(() => {
       toast({
@@ -154,25 +254,20 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }, 0);
   };
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const updateQuantity = (refId: string, quantity: number, refType?: 'product' | 'item' | 'package') => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(refId, refType);
     } else {
       setCartItems(prevItems => {
-        const item = prevItems.find(i => i.id === productId);
-        if (item && item.stock && quantity > item.stock) {
-          // Defer toast call to avoid updating during render
-          setTimeout(() => {
-            toast({
-              variant: "destructive",
-              title: "Insufficient Stock",
-              description: `Only ${item.stock} item(s) available in stock.`,
-            });
-          }, 0);
-          return prevItems;
-        }
-        return prevItems.map(item =>
-          item.id === productId ? { ...item, quantity } : item
+        const item = prevItems.find(i => 
+          i.refId === refId && (refType ? i.refType === refType : true)
+        );
+        // Note: Stock checking for products should be done before calling this
+        // For snapshot approach, we use the snapshot price/name, not current values
+        return prevItems.map(ci =>
+          ci.refId === refId && (refType ? ci.refType === refType : true)
+            ? { ...ci, quantity }
+            : ci
         );
       });
     }
@@ -184,7 +279,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const cartCount = cartItems.reduce((count, item) => count + item.quantity, 0);
-  const totalPrice = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
+  const totalPrice = cartItems.reduce((total, item) => total + item.priceSnapshot * item.quantity, 0);
 
   return (
     <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, updateQuantity, clearCart, cartCount, totalPrice, isAddingToCart }}>

@@ -26,10 +26,10 @@ export function WhatsAppShareButton({
     // Generate absolute product link
     const productLink = getAbsoluteUrl(`/product/${productId}`);
     
-    // Format share message
-    const shareText = formatProductShareMessage(productName, productPrice, productLink);
+    // Format share message (without URL - URL is added separately)
+    const shareText = formatProductShareMessage(productName, productPrice);
     
-    // Generate WhatsApp share URL
+    // Generate WhatsApp share URL (this adds the URL to the message)
     const whatsappUrl = generateWhatsAppShareUrl(shareText, productLink);
     
     // Open WhatsApp with share text

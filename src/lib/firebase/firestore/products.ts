@@ -83,12 +83,14 @@ export interface Product extends DocumentData {
   fragranceType?: string; // "oil-based", "spray", "incense"
   container?: string; // "pocket-size", "standard-bottle", "refill-unboxed"
   
-  // FASHION fields
+  // FASHION/ABAYA fields
   sizeType?: string; // "free-size", "abaya-length", "standard"
   abayaLength?: string; // "52", "54", "56", "58", "60"
   standardSize?: string; // "S", "M", "L", "XL", "XXL"
   setIncludes?: string; // "dress-only", "with-veil", "3-piece-set"
   material?: string; // "soft-silk", "stiff-cotton", "heavy-premium"
+  tailoringNotes?: string; // Custom tailoring instructions/notes
+  variants?: ProductVariant[]; // Size/color variants for abayas
   
   // SNACKS fields
   packaging?: string; // "single-piece", "pack-sachet", "plastic-jar", "bucket"
@@ -96,8 +98,19 @@ export interface Product extends DocumentData {
   taste?: string; // "sweet", "spicy", "crunchy", "soft"
   
   // MATERIALS fields
-  fabricLength?: string; // "4-yards", "5-yards", "10-yards"
-  quality?: string; // "super-vip", "standard", "starched"
+  materialType?: string; // "shadda", "atiku", "cotton", "silk", "linen", "custom"
+  customMaterialType?: string; // Custom material name if materialType is "custom"
+  fabricLength?: string; // "4-yards", "5-yards", "10-yards" (legacy listing option)
+  quality?: string; // "super-vip", "standard", "starched" (legacy)
+  fabricLengthYards?: number; // Available yards/meters/rolls (for inventory tracking)
+  unit?: 'yards' | 'meters' | 'rolls'; // Unit of measurement
+  color?: string; // Material color
+  pattern?: string; // Pattern type (plain, floral, geometric, etc.)
+  grade?: string; // Quality grade (premium, standard-a, standard-b, economy)
+  supplier?: string; // Supplier/market name
+  lotNumber?: string; // Lot/batch number for tracking
+  wholesalePrice?: number; // Wholesale price per unit
+  retailPrice?: number; // Retail price per unit
   
   // SKINCARE fields
   skincareBrand?: string;
@@ -105,9 +118,13 @@ export interface Product extends DocumentData {
   skincareSize?: string; // "small", "medium", "large", or specific ml/g
   
   // HAIRCARE fields
-  haircareType?: string; // "hair-oil", "treatment", "shampoo", "conditioner", etc.
+  haircareType?: string; // "hair-oil", "treatment", "shampoo", "conditioner", "package-deal", etc.
   haircareBrand?: string;
   haircareSize?: string; // "small", "medium", "large", or specific ml/g
+  expiryDate?: string; // Expiry date (ISO string or formatted date)
+  batchNumber?: string; // Batch/lot number for tracking
+  packageItems?: string[]; // Array of items included in package deals (e.g., ["oil", "shampoo", "conditioner"])
+  naturalChemicalType?: string; // "natural", "chemical", "mixed"
   
   // ISLAMIC fields
   islamicType?: string; // "prayer-mat", "tasbih", "book", "misbaha", etc.

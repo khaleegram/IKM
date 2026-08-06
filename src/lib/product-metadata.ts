@@ -71,7 +71,7 @@ export async function generateProductMetadata(product: Product): Promise<Metadat
       title: product.name,
       description: description,
       url: productUrl,
-      type: 'product',
+      type: 'website',
       images: absoluteImageUrl ? [
         {
           url: absoluteImageUrl,
@@ -80,9 +80,6 @@ export async function generateProductMetadata(product: Product): Promise<Metadat
           alt: product.name,
         }
       ] : [],
-      ...(product.price && {
-        // WhatsApp doesn't support product metadata directly, but we can add it for other platforms
-      }),
     },
     twitter: {
       card: 'summary_large_image',

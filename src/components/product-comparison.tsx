@@ -1,17 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { X, ShoppingCart, Star, Package, TrendingUp } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from '@/components/ui/skeleton';
+import { useCart } from '@/lib/cart-context';
+import type { Product } from '@/lib/firebase/firestore/products';
+import { useAllProducts } from '@/lib/firebase/firestore/products';
+import { Package, ShoppingCart, Star, X } from "lucide-react";
 import Image from 'next/image';
 import Link from 'next/link';
-import { useCart } from '@/lib/cart-context';
-import { useProduct, useAllProducts } from '@/lib/firebase/firestore/products';
-import { Skeleton } from '@/components/ui/skeleton';
-import type { Product } from '@/lib/firebase/firestore/products';
+import { useEffect, useState } from 'react';
 
 interface ProductComparisonProps {
   productIds: string[];

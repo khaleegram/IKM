@@ -1,18 +1,18 @@
 
 'use client';
 
-import Link from 'next/link';
+import { DynamicLogo } from '@/components/DynamicLogo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Suspense, useState, useTransition } from 'react';
-import { useToast } from '@/hooks/use-toast';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { signInWithEmailAndPassword, User } from 'firebase/auth';
 import { useFirebase } from '@/firebase/provider';
-import { DynamicLogo } from '@/components/DynamicLogo';
-import { Home, ArrowLeft } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { User, signInWithEmailAndPassword } from 'firebase/auth';
+import { ArrowLeft, Home } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState, useTransition } from 'react';
 
 function LoginContent() {
   const { auth } = useFirebase();

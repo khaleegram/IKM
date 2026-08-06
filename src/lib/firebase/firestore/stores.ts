@@ -83,7 +83,41 @@ export interface StoreProfile extends DocumentData {
     status?: 'pending' | 'verified' | 'failed';
     lastCheckedAt?: any;
   }[];
+  // Store type
+  storeType?: 'retail' | 'artisan'; // Default: 'retail' for backward compatibility
+  // DO NOT add items[] or packages[] here - use subcollections instead
   onboardingCompleted?: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+/**
+ * Artisan Item Interface
+ * Stored in subcollection: stores/{storeId}/items/{itemId}
+ */
+export interface ArtisanItem extends DocumentData {
+  id?: string;
+  storeId: string; // Reference to store
+  name: string;
+  photo: string;
+  price: number;
+  available: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+/**
+ * Artisan Package Interface
+ * Stored in subcollection: stores/{storeId}/packages/{packageId}
+ */
+export interface ArtisanPackage extends DocumentData {
+  id?: string;
+  storeId: string; // Reference to store
+  name: string;
+  photo?: string;
+  itemIds: string[]; // References to item IDs (soft dependency)
+  price: number; // Manual price (auto-calculated as default, but editable)
+  available: boolean;
   createdAt?: any;
   updatedAt?: any;
 }
